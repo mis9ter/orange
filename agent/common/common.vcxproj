@@ -72,8 +72,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)$(ConfigurationName)$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$(ConfigurationName)\TEMP$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
     <TargetName>yagent.common</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -84,8 +84,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)$(ConfigurationName)$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$(ConfigurationName)\TEMP$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
     <TargetName>yagent.common</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

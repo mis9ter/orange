@@ -70,14 +70,16 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
-    <OutDir>$(SolutionDir)_build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)_build\$(ConfigurationName)\TEMP\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\um;$(IncludePath)</IncludePath>
     <EnableInf2cat>false</EnableInf2cat>
   </PropertyGroup>
