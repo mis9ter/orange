@@ -1,0 +1,2 @@
+﻿C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Microsoft\VC\v160\Microsoft.CppBuild.targets(467,5): warning MSB8028: 중간 디렉터리(Release\)에 다른 프로젝트(DelOldFolders.vcxproj)에서 공유하는 파일이 포함되어 있습니다.  이로 인해 잘못된 정리 및 다시 빌드 동작이 수행될 수 있습니다.
+LINK : fatal error LNK1104: 'D:\STORAGE\ONEDRIVE\WORK\ORANGE\src\agent\Release\DelOldFiles.exe' 파일을 열 수 없습니다.

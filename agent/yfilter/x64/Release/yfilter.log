@@ -1,0 +1,28 @@
+﻿  Building 'yfilter' with toolset 'WindowsKernelModeDriver10.0' and the 'Desktop' target platform.
+C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\Common7\IDE\VC\VCTargets\Microsoft.CppBuild.targets(402,5): warning MSB8038: 스펙터 완화가 사용하도록 설정되어 있지만 스펙터 완화된 라이브러리를 찾을 수 없습니다. Visual Studio 워크로드에 스펙터 완화된 라이브러리가 포함되어 있는지 확인하세요. 자세한 내용은 https://aka.ms/Ofhn4c를 참조하세요.
+  Stamping x64\Release\yfilter.inf [Version] section with DriverVer=04/12/2020,23.52.49.308
+D:\STORAGE\ONEDRIVE\WORK\ORANGE\src\agent\yfilter\yfilter.inf(70-70): warning 1205: Section [MiniFilter.DriverFiles] referenced from DelFiles and CopyFiles directive.
+  Config.cpp
+  Instance.cpp
+  main.cpp
+  minifilter.cpp
+  port.cpp
+  Process.cpp
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(384): error C2065: 'PROCESS_TERMINATE': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(426): error C2065: 'PROCESS_TERMINATE': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(427): error C2065: 'PROCESS_CREATE_THREAD': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(428): error C2065: 'PROCESS_SET_SESSIONID': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(429): error C2065: 'PROCESS_VM_OPERATION': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(430): error C2065: 'PROCESS_VM_READ': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(431): error C2065: 'PROCESS_VM_WRITE': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(433): error C2065: 'PROCESS_CREATE_PROCESS': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(434): error C2065: 'PROCESS_SET_QUOTA': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(435): error C2065: 'PROCESS_SET_INFORMATION': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(436): error C2065: 'PROCESS_QUERY_INFORMATION': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(437): error C2065: 'PROCESS_SUSPEND_RESUME': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(438): error C2065: 'PROCESS_QUERY_LIMITED_INFORMATION': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(439): error C2065: 'PROCESS_SET_LIMITED_INFORMATION': 선언되지 않은 식별자입니다.
+d:\storage\onedrive\work\orange\src\agent\yfilter\process.cpp(626): error C2065: 'PROCESS_TERMINATE': 선언되지 않은 식별자입니다.
+  Registry.cpp
+  Util.cpp
+  코드를 생성하고 있습니다...
