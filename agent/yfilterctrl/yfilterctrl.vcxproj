@@ -98,11 +98,11 @@
     <IntDir>$(SolutionDir)$(ConfigurationName)\TEMP\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
   </PropertyGroup>

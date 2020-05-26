@@ -171,6 +171,9 @@ public:
 	{
 		bool	bRet	= false;
 		HRESULT	hResult	= S_FALSE;
+
+		Log("%s PPORT_INFO=%p, pPortName=%ws, dwThreadCount=%d", 
+			__FUNCTION__, p, pPortName, dwThreadCount);
 		__try
 		{
 			if( NULL == p )	__leave;
@@ -184,7 +187,7 @@ public:
 					__FUNCTION__, GetLastError());
 				__leave;
 			}
-			Log("%s connected from %ws", __FUNCTION__, p->szName);
+			Log("%s connected to %ws", __FUNCTION__, p->szName);
 			p->pClass			= this;
 			p->hInit			= CreateEvent(NULL, FALSE, FALSE, NULL);
 			p->hShutdown		= CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -215,16 +218,9 @@ public:
 	}
 	void	DestroyPortInfo(PPORT_INFO p)
 	{
-		if (p->hPort && INVALID_HANDLE_VALUE != p->hPort)
-		{
-			Log("%s disconnected from %ws", __FUNCTION__, p->szName);
-			CloseHandle(p->hPort);
-		}
-		if (p->hCompletion && INVALID_HANDLE_VALUE != p->hCompletion)
-		{
-			CloseHandle(p->hCompletion);
-		}
-		SetEvent(p->hShutdown);
+		Log("%s PPORT_INFO=%p", __FUNCTION__, p);
+		if( NULL == p )	return;
+		PostQueuedCompletionStatus(p->hCompletion, 0, NULL, NULL);
 		if (p->hThreads && p->dwThreadCount)
 		{
 			for (DWORD i = 0; i < p->dwThreadCount; i++)
@@ -233,6 +229,17 @@ public:
 				CloseHandle(p->hThreads[i]);
 			}
 		}
+		if (p->hPort && INVALID_HANDLE_VALUE != p->hPort)
+		{
+			Log("%s disconnected from %ws", __FUNCTION__, p->szName);
+			CloseHandle(p->hPort);
+		}
+		SetEvent(p->hShutdown);
+		if (p->hCompletion && INVALID_HANDLE_VALUE != p->hCompletion)
+		{
+			CloseHandle(p->hCompletion);
+		}		
+	
 		if (p->hShutdown)	CloseHandle(p->hShutdown);
 		if( p->hInit )		CloseHandle(p->hInit);
 		ZeroMemory(p, sizeof(PORT_INFO));
@@ -249,7 +256,7 @@ public:
 			{
 				__leave;
 			}
-			if (CreatePortInfo(&m_driver.command, DRIVER_EVENT_PORT, 1, EventThread))
+			if (CreatePortInfo(&m_driver.event, DRIVER_EVENT_PORT, 1, EventThread))
 			{
 
 			}
@@ -306,9 +313,8 @@ private:
 			ULONG_PTR		pCompletionKey;
 
 			bRet = GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
+			p->pClass->Log("%s %d dwBytes=%d", __FUNCTION__, bRet, dwBytes);
 			if (false == bRet || 0 == dwBytes)	break;
-
-			p->pClass->Log("%s dwBytes=%d", __FUNCTION__, dwBytes);
 
 		}
 		p->pClass->Log("%s end", __FUNCTION__);
@@ -330,7 +336,7 @@ private:
 			ULONG_PTR		pCompletionKey;
 
 			bRet	=  GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
-			p->pClass->Log("%s bRet=%d, dwBytes=%d", __FUNCTION__, bRet, dwBytes);
+			p->pClass->Log("%s %d dwBytes=%d", __FUNCTION__, bRet, dwBytes);
 			if( false == bRet || 0 == dwBytes )	break;
 
 			

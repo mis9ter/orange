@@ -81,6 +81,7 @@ public:
 	}
 	bool	Start()
 	{
+		Log(__FUNCTION__);
 		if (NULL == m_pInstance)	return false;
 		return m_pInstance->Start();
 	}

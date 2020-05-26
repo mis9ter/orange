@@ -70,7 +70,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -78,7 +78,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)$(Platform)\</OutDir>
+    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\um;$(IncludePath)</IncludePath>
     <EnableInf2cat>false</EnableInf2cat>
@@ -120,6 +120,7 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"</Co
     <ClCompile Include="Config.cpp" />
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Driver.cpp" />
+    <ClCompile Include="Message.cpp" />
     <ClCompile Include="minifilter.cpp" />
     <ClCompile Include="Misc.cpp" />
     <ClCompile Include="ObjectTable.cpp" />

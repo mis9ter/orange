@@ -16,10 +16,9 @@ CAgent::~CAgent()
 bool	CAgent::Install()
 {
 	wchar_t		szPath[AGENT_PATH_SIZE];
-	GetModuleFileName(NULL, szPath, sizeof(szPath));
-	wchar_t		*p	= wcsrchr(szPath, L'\\');
-	if (p)		*(p + 1)	= NULL;
-	StringCbCat(p, sizeof(szPath) - wcslen(szPath), DRIVER_FILE_NAME);
+	YAgent::GetModulePath(szPath, sizeof(szPath));
+	StringCbCat(szPath, sizeof(szPath), L"\\");
+	StringCbCat(szPath, sizeof(szPath), DRIVER_FILE_NAME);
 	CFilterCtrl::Install(DRIVER_SERVICE_NAME, szPath, false);
 	return true;
 }
@@ -29,6 +28,7 @@ void	CAgent::Uninstall()
 }
 bool	CAgent::Start(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 {
+	Log(__FUNCTION__);
 	wchar_t		szPath[AGENT_PATH_SIZE];
 	GetModuleFileName(NULL, szPath, sizeof(szPath));
 	wchar_t* p = wcsrchr(szPath, L'\\');

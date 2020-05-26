@@ -10,6 +10,9 @@
 #include "CDialog.h"
 #include "CException.h"
 
+#include "yagent.common.h"
+#pragma comment(lib, "yagent.common.lib")
+
 typedef std::function<void(HANDLE hShutdown, void * pCallbackPtr)>	PFUNC_AGENT_RUNLOOP;
 
 class CAgent

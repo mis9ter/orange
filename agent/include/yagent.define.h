@@ -22,6 +22,13 @@
 
 namespace YFilter
 {
+	namespace Message
+	{
+		enum Category {
+			Event,
+			Command
+		};
+	};
 	namespace Object
 	{
 		enum Mode {

@@ -19,17 +19,22 @@ typedef struct CONFIG
 	PFLT_FILTER						pFilter;
 	RTL_OSVERSIONINFOEXW			version;
 	PDEVICE_OBJECT					pDeviceObject;
-	struct
-	{
-		//	클라이언트 구조체가 하나란 것은 동시에 1대의 앱만 연결이 가능하다는 것.
-		PFLT_PORT					pPort;
-		HANDLE						hProcessId;
-		KSPIN_LOCK					lock;
-	} client;
 	struct {
 		PFLT_PORT					pCommand;
 		PFLT_PORT					pEvent;
 	} server;
+	struct
+	{
+		KSPIN_LOCK					lock;
+		struct {
+			PFLT_PORT				pCommand;
+			HANDLE					hProcess;
+		} ;
+		struct {
+			PFLT_PORT				pEvent;
+			HANDLE					hProcess;
+		};
+	} client;
 
 	UNICODE_STRING					registry;
 	UNICODE_STRING					name;

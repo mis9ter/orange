@@ -63,7 +63,7 @@ int     main()
            IN	PVOID	ptr
            ) {
            CAgent * pAgent  = (CAgent *)ptr;
-           pAgent->Start(NULL, AgentRunLoop);
+           pAgent->Start(pAgent, AgentRunLoop);
        });
        dialog.AddMessageCallback(IDC_BUTTON_SHUTDOWN, [](
            IN	HWND	hWnd,
@@ -74,6 +74,7 @@ int     main()
            ) {
            CAgent* pAgent = (CAgent*)ptr;
            pAgent->Shutdown();
+           PostQuitMessage(0);
        });
        dialog.MessagePump([](IN HANDLE hShutdown, IN HWND hWnd, IN PVOID ptr) {
            while (WAIT_TIMEOUT == WaitForSingleObject(hShutdown, 100))

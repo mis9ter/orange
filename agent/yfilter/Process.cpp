@@ -127,7 +127,7 @@ public:
 				{
 					auto	p = (PPROCESS_ENTRY)RtlGetElementGenericTable(&m_table, i);
 					UNREFERENCED_PARAMETER(p);
-					__dlog("  [%d] %p %10d", i, p, p->handle);
+					//__dlog("  [%d] %p %10d", i, p, p->handle);
 				}
 			}
 			Unlock(irql);
@@ -215,7 +215,7 @@ public:
 					{
 						auto	p = (PPROCESS_ENTRY)RtlGetElementGenericTable(&m_table, i);
 						UNREFERENCED_PARAMETER(p);
-						__dlog("  [%d] %p %10d", i, p, p->handle);
+						//__dlog("  [%d] %p %10d", i, p, p->handle);
 					}
 				}
 				bRet = true;
