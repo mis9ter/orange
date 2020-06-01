@@ -107,6 +107,7 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"</Co
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\CUnicodeString.h" />
     <ClInclude Include="..\include\driver.checker.h" />
     <ClInclude Include="..\include\driver.common.h" />
     <ClInclude Include="..\include\driver.memory.h" />

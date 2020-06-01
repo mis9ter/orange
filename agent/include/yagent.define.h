@@ -1,9 +1,9 @@
 ﻿#pragma once
 
-#define AGENT_SERVICE_NAME		L"orange"
+#define AGENT_SERVICE_NAME		L"xagent"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
-#define AGENT_LOG_NAME			L"yagent.log"
+#define AGENT_LOG_NAME			L"xagent.log"
 #define	AGENT_PATH_SIZE			1024
 #define AGENT_NAME_SIZE			64
 #define DRIVER_SERVICE_NAME		L"yfilter"
@@ -25,8 +25,14 @@ namespace YFilter
 	namespace Message
 	{
 		enum Category {
-			Event,
-			Command
+			Command,
+			Event
+		};
+		enum Type {
+			ProcessStart,
+			ProcessStop,
+			ThreadStart,
+			ThreadStop,
 		};
 	};
 	namespace Object
@@ -104,3 +110,27 @@ namespace YFilter
 		return pUnknown;
 	}
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//	도라이버-에이전트 정보 구조체
+/////////////////////////////////////////////////////////////////////////////////////////
+#define MESSAGE_MAX_SIZE		(64 * 1024)		//	커널에서 전달 예상되는 최대 크기
+typedef struct {
+	YFilter::Message::Category	category;		//
+	YFilter::Message::Type		type;			//	
+	ULONG						size;			//	MESSAGE_HEADER + 알파
+} MESSAGE_HEADER;
+
+typedef struct MESSAGE_PROCESS
+{
+	DWORD			dwProcessId;
+	DWORD			dwParentProcessId;
+	wchar_t			szPath[AGENT_PATH_SIZE];
+	wchar_t			szCommand[AGENT_PATH_SIZE];
+} MESSAGE_PROCESS, *PMESSAGE_PROCESS;
+
+typedef struct MESSAGE_HEADER_PROCESS
+{
+	MESSAGE_HEADER	header;
+	MESSAGE_PROCESS	data;
+} MESSAGE_HEADER_PROCESS;

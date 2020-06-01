@@ -12,7 +12,9 @@ typedef struct PROCESS_ENTRY
 	PVOID				key;
 } PROCESS_ENTRY, *PPROCESS_ENTRY;
 
-typedef void (*PProcessTableCallback)(PPROCESS_ENTRY pEntry);
+typedef void (*PProcessTableCallback)(
+	IN PPROCESS_ENTRY		pEntry		//	삭제 대상 엔트리 
+);
 
 class CProcessTable
 {
@@ -188,11 +190,14 @@ public:
 		return bRet;
 	}
 	bool		Remove(IN HANDLE h, IN bool bLock, 
-					PProcessTableCallback pCallback)
+					PProcessTableCallback pCallback, 
+					PPROCESS_ENTRY * ppEntry)
 	{
-		//__dlog("%s %10d IRQL=%d", __FUNCTION__, h, KeGetCurrentIrql());
 		if (false == IsPossible() )
+		{
+			__dlog("%s %10d IRQL=%d", __FUNCTION__, h, KeGetCurrentIrql());
 			return false;
+		}
 
 		bool			bRet = false;
 		PROCESS_ENTRY	entry	= {0,};
@@ -204,8 +209,14 @@ public:
 		if (pEntry)
 		{
 			if( pCallback )	pCallback(pEntry);
-			//PrintProcessEntry(__FUNCTION__, pEntry);
-			FreeEntryData(pEntry);
+			if( ppEntry ) {
+				//	ppEntry 가 지정된 경우 pEntry를 ppEntry로 넘겨주고 
+				//	pEntry를 해제하지 않음. 
+				if( ppEntry )	
+					*ppEntry	= pEntry;
+				else
+					FreeEntryData(pEntry);
+			}
 			if (RtlDeleteElementGenericTable(&m_table, pEntry))
 			{	
 				if( true )
@@ -228,6 +239,7 @@ public:
 		else
 		{
 			//__dlog("%10d not existing");
+			if( pCallback ) pCallback(&entry);
 		}
 		if( bLock )	Unlock(irql);
 		return bRet;
@@ -393,7 +405,7 @@ bool			RegisterProcess(IN HANDLE h)
 }
 bool			DeregisterProcess(IN HANDLE h)
 {
-	return g_process.Remove(h, true, NULL);
+	return g_process.Remove(h, true, NULL, NULL);
 }
 NTSTATUS		KillProcess(HANDLE pid)
 {
@@ -830,8 +842,21 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 
 			if( CreateInfo->ImageFileName )
 			{
-				__log("RUN %d %d %wZ %wZ", ProcessId, CreateInfo->ParentProcessId, CreateInfo->ImageFileName, CreateInfo->CommandLine);
-				ProcessTable()->Add(ProcessId, CreateInfo->ParentProcessId, CreateInfo->ImageFileName, CreateInfo->CommandLine);
+				__log("PROCESS_START PID=%d PPID=%d SIZE=%d",
+					ProcessId, CreateInfo->ParentProcessId, sizeof(MESSAGE_PROCESS));
+				ProcessTable()->Add(ProcessId, CreateInfo->ParentProcessId, 
+					CreateInfo->ImageFileName, CreateInfo->CommandLine);
+				MESSAGE_HEADER_PROCESS	msg;
+				msg.header.category		= YFilter::Message::Category::Event;
+				msg.header.type			= YFilter::Message::Type::ProcessStart;
+				msg.header.size			= sizeof(msg);
+				msg.data.dwProcessId		= (DWORD)ProcessId;
+				msg.data.dwParentProcessId= (DWORD)CreateInfo->ParentProcessId;
+				RtlStringCbCopyUnicodeString(msg.data.szPath, sizeof(msg.data.szPath), CreateInfo->ImageFileName);
+				RtlStringCbCopyUnicodeString(msg.data.szCommand, sizeof(msg.data.szCommand), CreateInfo->CommandLine);
+				__log("%ws", msg.data.szPath);
+				__log("%ws", msg.data.szCommand);
+				SendMessage(&Config()->client.event, &msg, sizeof(msg), NULL, NULL);
 			}
 			else
 			{
@@ -840,12 +865,40 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		}
 		else
 		{
-			ProcessTable()->Remove(ProcessId, true, [](PPROCESS_ENTRY pEntry) {
+			PPROCESS_ENTRY	pEntry	= NULL;
+			UNICODE_STRING	null	= {0,};
+			if (ProcessTable()->Remove(ProcessId, true, [](PPROCESS_ENTRY pEntry) {
+				UNREFERENCED_PARAMETER(pEntry);
+			}, &pEntry))
+			{
+				//	이전 생성 정보를 기록해둔 상태.			
 				if (pEntry)
 				{
-					__dlog("Remove    : %d", (int)pEntry->handle);
+					
 				}
-			});
+			}
+			__log("PROCESS_STOP  PID=%d PPID=%d\n%wZ\n%wZ",
+				(int)ProcessId, pEntry? pEntry->parent:0, 
+				pEntry? &pEntry->path:&null, 
+				pEntry? &pEntry->command:&null);
+			MESSAGE_HEADER_PROCESS	msg;
+			//RtlZeroMemory(&msg, sizeof(msg));
+			msg.header.category = YFilter::Message::Category::Event;
+			msg.header.type = YFilter::Message::Type::ProcessStop;
+			msg.header.size = sizeof(msg);
+			msg.data.dwProcessId			= (DWORD)ProcessId;
+			msg.data.dwParentProcessId	= (DWORD)(pEntry? pEntry->parent : 0);
+			if( pEntry )
+			{
+				RtlStringCbCopyUnicodeString(msg.data.szPath, sizeof(msg.data.szPath), &pEntry->path);
+				RtlStringCbCopyUnicodeString(msg.data.szCommand, sizeof(msg.data.szCommand), &pEntry->command);
+			}
+			for( int i = 0 ; i < 3 ; i++ )
+			{
+				if( STATUS_SUCCESS == SendMessage(&Config()->client.event, &msg, sizeof(msg), 
+						NULL, NULL) ) break;
+			}
+			if( pEntry )	ProcessTable()->FreeEntryData(pEntry);
 		}
 	}
 }

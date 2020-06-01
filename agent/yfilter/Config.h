@@ -11,6 +11,14 @@ typedef NTSTATUS(NTAPI* FN_NtQueryInformationThread)(
 	ULONG           ThreadInformationLength,
 	PULONG          ReturnLength
 	);
+
+typedef struct FLT_CLIENT_PORT
+{
+	KSPIN_LOCK						lock;
+	HANDLE							hProcess;
+	PFLT_PORT						pPort;
+} FLT_CLIENT_PORT, *PFLT_CLIENT_PORT;
+
 typedef struct CONFIG
 {
 	bool							bRun;
@@ -25,15 +33,9 @@ typedef struct CONFIG
 	} server;
 	struct
 	{
-		KSPIN_LOCK					lock;
-		struct {
-			PFLT_PORT				pCommand;
-			HANDLE					hProcess;
-		} ;
-		struct {
-			PFLT_PORT				pEvent;
-			HANDLE					hProcess;
-		};
+		//	포트별 Connect/Disconnect/Send/Recv 동기화 필요
+		FLT_CLIENT_PORT				command;
+		FLT_CLIENT_PORT				event;
 	} client;
 
 	UNICODE_STRING					registry;

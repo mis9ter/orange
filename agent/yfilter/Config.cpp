@@ -28,8 +28,9 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		RtlZeroMemory(pConfig, sizeof(CONFIG));
 		pConfig->version.dwOSVersionInfoSize	= sizeof(pConfig->version);
 		RtlGetVersion((RTL_OSVERSIONINFOW *)&pConfig->version);
-		KeInitializeSpinLock(&pConfig->client.lock);
 
+		KeInitializeSpinLock(&pConfig->client.command.lock);
+		KeInitializeSpinLock(&pConfig->client.event.lock);
 		GetSystemRootPath(&pConfig->systemRootPath);
 		__log("%-30s %wZ", "systemRootPath", &pConfig->systemRootPath);
 		if (CMemory::AllocateUnicodeString(NonPagedPoolNx, &pConfig->registry, pRegistryPath))

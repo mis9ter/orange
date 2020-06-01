@@ -1,8 +1,55 @@
 ﻿#pragma once
 
 #define CUNICODE_MAX_STRING_SIZE	1024
+#define CBUFFER_MAX_SIZE			1024
 
+class CBuffer
+{
+	const	ULONG		memory_tag = 'CWSB';
 
+public:
+	CBuffer(IN size_t cbSize = CBUFFER_MAX_SIZE)
+		:
+		m_pBuffer((char *)CMemory::Allocate(NonPagedPoolNx, cbSize, memory_tag)),
+		m_cbSize(cbSize)
+	{
+
+		if (m_pBuffer)	RtlZeroMemory(m_pBuffer, m_cbSize);
+		else			m_cbSize = 0;
+	}
+	~CBuffer()
+	{
+		Clear();
+	}
+	void	Clear()
+	{
+		if (m_pBuffer)	CMemory::Free(m_pBuffer);
+		m_pBuffer = NULL, m_cbSize = 0;
+	}
+	operator char *()
+	{
+		return	m_pBuffer;
+	}
+	operator const char*()
+	{
+		return	m_pBuffer;
+	}
+	operator PVOID()
+	{
+		return m_pBuffer;
+	}
+	operator size_t()
+	{
+		return m_cbSize;
+	}
+	size_t	CbSize()
+	{
+		return m_cbSize;
+	}
+private:
+	char *			m_pBuffer;
+	size_t			m_cbSize;
+};
 class CWSTRBuffer
 {
 	const	ULONG		memory_tag = 'CWSB';

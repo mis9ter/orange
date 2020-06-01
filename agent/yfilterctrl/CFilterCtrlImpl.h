@@ -8,15 +8,33 @@
 
 #pragma comment(lib, "FltLib.lib")
 
+#define MESSAGE_DATA_SIZE	(MESSAGE_MAX_SIZE - sizeof(OVERLAPPED) - sizeof(FILTER_MESSAGE_HEADER) - sizeof(MESSAGE_HEADER))
+
+typedef struct FILTER_MESSAGE : 
+	OVERLAPPED
+{
+	FILTER_MESSAGE_HEADER	_header;
+	MESSAGE_HEADER			header;
+	MESSAGE_PROCESS			data;
+} FILTER_MESSAGE, *PFILTER_MESSAGE;
+#define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(MESSAGE_HEADER) + sizeof(MESSAGE_PROCESS))
+
+typedef struct FILTER_REPLY_MESSAGE
+{
+	FILTER_REPLY_HEADER		_header;
+	bool					bRet;
+} FILTER_REPLY_MESSAGE, *PFILTER_REPLY_MESSAGE;
+
 class CFilterCtrlImpl;
 typedef struct {
-	WCHAR		szName[100];
-	HANDLE		hCompletion;
-	HANDLE		hInit;
-	HANDLE		hShutdown;
-	HANDLE		hPort;
-	DWORD		dwThreadCount;
-	HANDLE *	hThreads;
+	WCHAR			szName[100];
+	HANDLE			hCompletion;
+	HANDLE			hInit;
+	HANDLE			hShutdown;
+	HANDLE			hPort;
+	DWORD			dwThreadCount;
+	HANDLE *		hThreads;
+	FILTER_MESSAGE	message;
 	CFilterCtrlImpl	*pClass;
 } PORT_INFO, *PPORT_INFO;
 
@@ -309,12 +327,13 @@ private:
 		{
 			bool			bRet;
 			DWORD			dwBytes;
-			LPOVERLAPPED	pOverlapped;
+			LPOVERLAPPED	pOverlapped	= NULL;
 			ULONG_PTR		pCompletionKey;
 
 			bRet = GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
-			p->pClass->Log("%s %d dwBytes=%d", __FUNCTION__, bRet, dwBytes);
-			if (false == bRet || 0 == dwBytes)	break;
+			p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pOverlapped=%p", 
+				__FUNCTION__, bRet, dwBytes, pCompletionKey, pOverlapped);
+			if (false == bRet || NULL == pCompletionKey)	break;
 
 		}
 		p->pClass->Log("%s end", __FUNCTION__);
@@ -326,21 +345,73 @@ private:
 		PPORT_INFO		p = (PPORT_INFO)ptr;
 
 		WaitForSingleObject(p->hInit, 30 * 1000);
-		bool			bLoop = true;
 		p->pClass->Log("%s begin", __FUNCTION__);
-		while (bLoop)
+
+		PFILTER_MESSAGE		pMessage	= &p->message;
+		bool				bRet	= true;
+		DWORD				dwBytes;
+		ULONG_PTR			pCompletionKey;
+		DWORD				dwError;
+
+		HRESULT	hr;
+
+		while (true)
 		{
-			bool			bRet;
-			DWORD			dwBytes;
-			LPOVERLAPPED	pOverlapped;
-			ULONG_PTR		pCompletionKey;
+			ZeroMemory(pMessage, sizeof(OVERLAPPED));
+			hr = FilterGetMessage(p->hPort, &p->message._header,
+				MESSAGE_GET_SIZE,
+				dynamic_cast<LPOVERLAPPED>(&p->message));
+			if (HRESULT_FROM_WIN32(ERROR_IO_PENDING) != hr)
+			{
+				//	[TODO] 실패인데.. 이를 어쩌나. 
+				p->pClass->Log("%s FilterGetMessage()=%08x", __FUNCTION__, hr);
+				break;
+			}
 
-			bRet	=  GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
-			p->pClass->Log("%s %d dwBytes=%d", __FUNCTION__, bRet, dwBytes);
-			if( false == bRet || 0 == dwBytes )	break;
-
-			
-
+			bRet	= GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, 
+							(LPOVERLAPPED *)&pMessage, INFINITE);
+			dwError	= GetLastError();
+			if( (false == bRet && ERROR_INSUFFICIENT_BUFFER != dwError) || 
+				NULL == pCompletionKey )	{
+				p->pClass->Log("%s break condition", __FUNCTION__);
+				p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pMessage=%p, error code=%d",
+					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
+				break;
+			}
+			p->pClass->Log("HEADER: category=%d, type=%d, size=%d", 
+				pMessage->header.category, pMessage->header.type, pMessage->header.size);
+			if (YFilter::Message::Category::Event == pMessage->header.category)
+			{
+				switch (pMessage->header.type)
+				{
+					case YFilter::Message::Type::ProcessStart:
+						if (pMessage->header.size == sizeof(MESSAGE_HEADER) + sizeof(MESSAGE_PROCESS))
+						{
+							PMESSAGE_PROCESS	pData	= &pMessage->data;
+							p->pClass->Log("PROCESS_START:%d", pData->dwProcessId);
+							_putts(pData->szPath);
+							_putts(pData->szCommand);
+						}
+						else
+						{
+							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(MESSAGE_PROCESS));
+						}
+						break;
+					case YFilter::Message::Type::ProcessStop:
+						if (pMessage->header.size == sizeof(MESSAGE_HEADER) + sizeof(MESSAGE_PROCESS))
+						{
+							PMESSAGE_PROCESS	pData = &pMessage->data;
+							p->pClass->Log("PROCESS_STOP:%d", pData->dwProcessId);
+							_putts(pData->szPath);
+							_putts(pData->szCommand);
+						}
+						else
+						{
+							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(MESSAGE_PROCESS));
+						}
+						break;
+				}
+			}		
 		}
 		p->pClass->Log("%s end", __FUNCTION__);
 		return 0;

@@ -205,6 +205,14 @@ bool			IsRegisteredProcess(IN HANDLE);
 bool			RegisterProcess(IN HANDLE h);
 bool			DeregisterProcess(IN HANDLE h);
 
+/////////////////////////////////////////////////////////////////////////////////////////
+//	도라이버-앱 간 통신
+/////////////////////////////////////////////////////////////////////////////////////////
+NTSTATUS	SendMessage(
+	IN PFLT_CLIENT_PORT p,
+	IN PVOID pSendData, IN ULONG nSendDataSize,
+	OUT PVOID pRecvData, OUT ULONG* pnRecvDataSize);
+
 
 EXTERN_C_START
 
@@ -320,7 +328,6 @@ NTSTATUS	EventMessage
 	_In_ ULONG OutputBufferSize,
 	_Out_ PULONG ReturnOutputBufferLength
 );
-NTSTATUS	SendMessage(IN LPVOID pData, IN size_t nDataSize);
 
 
 EXTERN_C_END

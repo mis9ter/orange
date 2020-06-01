@@ -237,6 +237,9 @@ Return Value:
 		}
 		if (Config()->pFilter)
 		{
+			CAutoReleaseSpinLock(&Config()->client.event.lock);
+			CAutoReleaseSpinLock(&Config()->client.command.lock);
+
 			DestroyFilterPort(&Config()->server.pCommand, DRIVER_COMMAND_PORT);
 			DestroyFilterPort(&Config()->server.pEvent, DRIVER_EVENT_PORT);
 			//	FltCloseCommunicationPort를 하지 않고 FltUnregisterFilter를 하면 어떤일이 벌어지게?
