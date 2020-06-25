@@ -15,9 +15,13 @@ Environment:
 --*/
 #include "yfilter.h"
 
-ULONG_PTR	OperationStatusCtx = 1;
-ULONG		gTraceFlags = 0;
-
+ULONG_PTR		OperationStatusCtx = 1;
+ULONG			gTraceFlags = 0;
+CThreadPool		g_messageThreadPool;
+CThreadPool *	MessageThreadPool()
+{
+	return &g_messageThreadPool;
+}
 /*************************************************************************
     MiniFilter initialization and unload routines.
 *************************************************************************/
@@ -127,6 +131,8 @@ Return Value:
 
 	__try
 	{
+		MessageThreadPool()->Create(2);
+		SetMessageThreadCallback(NULL);
 		if (false == CreateConfig(pRegistryPath)) {
 			status = STATUS_FAILED_DRIVER_ENTRY;
 			__leave;
@@ -251,6 +257,7 @@ Return Value:
 			Config()->pFilter = NULL;
 		}
 		DestroyConfig();
+		MessageThreadPool()->Destroy();
 		if ((FLT_FILTER_UNLOAD_FLAGS)-1 != Flags)
 		{
 			//	Load 실패로 Unload가 수행되는 경우엔 로그 출력하지 않음. 

@@ -17,6 +17,7 @@
 #include "yagent.define.h"
 #include "driver.common.h"
 #include "Config.h"
+#include "CThreadPool.h"
 
 #pragma comment(lib, "ntstrsafe.lib")
 #pragma comment(lib, "fltmgr.lib")
@@ -190,10 +191,18 @@ NTSTATUS	GetProcessImagePathByProcessId
 	size_t							nBufferSize,
 	PULONG							pNeedSize
 );
+HANDLE		GetParentProcessId(IN	HANDLE	pProcessId);
 NTSTATUS	GetProcessImagePathByProcessId
 (
 	HANDLE				pProcessId,
 	PUNICODE_STRING		*pStr
+);
+NTSTATUS	GetProcessInfoByProcessId
+(
+	IN	HANDLE			pProcessId,
+	OUT HANDLE			*pParentProcessId,
+	OUT	PUNICODE_STRING	*pImageFileName,
+	OUT PUNICODE_STRING	*pCommandLine			//	지금은 하지마.
 );
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -209,10 +218,17 @@ bool			DeregisterProcess(IN HANDLE h);
 //	도라이버-앱 간 통신
 /////////////////////////////////////////////////////////////////////////////////////////
 NTSTATUS	SendMessage(
+	IN PCSTR pCause, 
 	IN PFLT_CLIENT_PORT p,
 	IN PVOID pSendData, IN ULONG nSendDataSize,
 	OUT PVOID pRecvData, OUT ULONG* pnRecvDataSize);
-
+NTSTATUS	SendMessage(
+	IN	PCSTR				pCause,
+	IN	PFLT_CLIENT_PORT	p,
+	IN	PVOID pSendData, IN ULONG nSendDataSize
+);
+CThreadPool*	MessageThreadPool();
+void			SetMessageThreadCallback(PVOID pCallbackPtr);
 
 EXTERN_C_START
 

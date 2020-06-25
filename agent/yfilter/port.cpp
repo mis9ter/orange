@@ -214,10 +214,27 @@ Return Value:
 	return status;
 }
 NTSTATUS	SendMessage(
-	IN PFLT_CLIENT_PORT p,
-	IN PVOID pSendData, IN ULONG nSendDataSize,
-	OUT PVOID pRecvData, OUT ULONG* pnRecvDataSize)
+	IN	PCSTR				pCause,
+	IN	PFLT_CLIENT_PORT	p,
+	IN	PVOID pSendData, IN ULONG nSendDataSize
+)
 {
+	/*
+		응답 필요 없으니 그냥 보내라. 
+		하지만 내부적으로는 늘 응답을 받는 구조로 되어 있다. 	
+	*/
+	FILTER_REPLY_DATA	reply	= {0,};
+	ULONG				nSize	= sizeof(FILTER_REPLY_DATA);
+	return SendMessage(pCause, p, pSendData, nSendDataSize, &reply, &nSize);
+}
+NTSTATUS	SendMessage(
+	IN	PCSTR				pCause,
+	IN	PFLT_CLIENT_PORT	p,
+	IN	PVOID pSendData,	IN ULONG nSendDataSize,
+	OUT	PVOID pRecvData,	OUT ULONG* pnRecvDataSize
+)
+{
+	//__log(__FUNCTION__);
 	NTSTATUS	status	= STATUS_UNSUCCESSFUL;
 	if (KeGetCurrentIrql() > APC_LEVEL) {
 		__dlog("%s ERROR KeGetCurrentIrql()=%d", __FUNCTION__, KeGetCurrentIrql());
@@ -233,24 +250,43 @@ NTSTATUS	SendMessage(
 	CAutoReleaseSpinLock(&p->lock);
 	{
 		LARGE_INTEGER	timeout;
-		timeout.QuadPart	= DRIVER_MESSAGE_TIMEOUT;
+		timeout.QuadPart	= 0; //3 * 1000 * 1000 * 10;
 		__try
 		{
 			if (NULL == p->pPort) 
 			{
-				__log("%s ERROR p->pPort=%p", __FUNCTION__, p->pPort);
+				//__log("%s ERROR p->pPort=%p", __FUNCTION__, p->pPort);
 				__leave;
 			}
+			//__log("%s FltSendMessage %p(%d) %p(%d)", __FUNCTION__, 
+			//	pSendData, nSendDataSize, pSendData, pnRecvDataSize? *pnRecvDataSize:0);
 			status = FltSendMessage(Config()->pFilter,
 				&p->pPort,
 				pSendData, nSendDataSize,
-				pRecvData, pnRecvDataSize,
-				&timeout);
+				pRecvData, pnRecvDataSize, &timeout);
+			STATUS_BUFFER_OVERFLOW;
+			STATUS_TIMEOUT;
 			if (STATUS_SUCCESS == status)
 			{
+				if (pRecvData && pnRecvDataSize)
+				{
+					__log("%s pRecvData=%p, *pnRecvDataSize=%d", __FUNCTION__,
+						pRecvData, *pnRecvDataSize);
+				}
 				__leave;
 			}
-			__log("%s ERROR FltSendMessage()=%x", __FUNCTION__, status);
+			else if (STATUS_TIMEOUT == status)
+			{
+				if (0 == timeout.QuadPart)
+				{
+					__leave;
+				}
+				else
+				{
+					
+				}
+			}
+			__log("%s ERROR FltSendMessage(%s)=%x", __FUNCTION__, pCause ? pCause : "", status);
 		}
 		__finally
 		{

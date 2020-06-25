@@ -10,32 +10,32 @@
 
 #define MESSAGE_DATA_SIZE	(MESSAGE_MAX_SIZE - sizeof(OVERLAPPED) - sizeof(FILTER_MESSAGE_HEADER) - sizeof(MESSAGE_HEADER))
 
-typedef struct FILTER_MESSAGE : 
+typedef struct YFILTER_MESSAGE : 
 	OVERLAPPED
 {
 	FILTER_MESSAGE_HEADER	_header;
-	MESSAGE_HEADER			header;
-	MESSAGE_PROCESS			data;
-} FILTER_MESSAGE, *PFILTER_MESSAGE;
-#define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(MESSAGE_HEADER) + sizeof(MESSAGE_PROCESS))
+	YFILTER_MESSAGE_HEADER	header;
+	YFILTER_MESSAGE_PROCESS	data;
+} YFILTER_MESSAGE, *PYFILTER_MESSAGE;
+#define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS))
 
-typedef struct FILTER_REPLY_MESSAGE
+typedef struct YFILTER_REPLY
 {
 	FILTER_REPLY_HEADER		_header;
-	bool					bRet;
-} FILTER_REPLY_MESSAGE, *PFILTER_REPLY_MESSAGE;
+	YFILTER_REPLY_DATA		data;
+} YFILTER_REPLY, * PYFILTER_REPLY;
 
 class CFilterCtrlImpl;
 typedef struct {
-	WCHAR			szName[100];
-	HANDLE			hCompletion;
-	HANDLE			hInit;
-	HANDLE			hShutdown;
-	HANDLE			hPort;
-	DWORD			dwThreadCount;
-	HANDLE *		hThreads;
-	FILTER_MESSAGE	message;
-	CFilterCtrlImpl	*pClass;
+	WCHAR				szName[100];
+	HANDLE				hCompletion;
+	HANDLE				hInit;
+	HANDLE				hShutdown;
+	HANDLE				hPort;
+	DWORD				dwThreadCount;
+	HANDLE *			hThreads;
+	YFILTER_MESSAGE		message;
+	CFilterCtrlImpl		*pClass;
 } PORT_INFO, *PPORT_INFO;
 
 class CFilterCtrlImpl	
@@ -347,11 +347,13 @@ private:
 		WaitForSingleObject(p->hInit, 30 * 1000);
 		p->pClass->Log("%s begin", __FUNCTION__);
 
-		PFILTER_MESSAGE		pMessage	= &p->message;
+		PYFILTER_MESSAGE	pMessage	= &p->message;
 		bool				bRet	= true;
 		DWORD				dwBytes;
 		ULONG_PTR			pCompletionKey;
 		DWORD				dwError;
+
+		YFILTER_REPLY		reply;
 
 		HRESULT	hr;
 
@@ -378,42 +380,95 @@ private:
 					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
 				break;
 			}
-			p->pClass->Log("HEADER: category=%d, type=%d, size=%d", 
-				pMessage->header.category, pMessage->header.type, pMessage->header.size);
+			//p->pClass->Log("HEADER: category=%d, type=%d, size=%d", 
+			//	pMessage->header.category, pMessage->header.type, pMessage->header.size);
+			reply.data.bRet			= false;
 			if (YFilter::Message::Category::Event == pMessage->header.category)
 			{
 				switch (pMessage->header.type)
 				{
 					case YFilter::Message::Type::ProcessStart:
-						if (pMessage->header.size == sizeof(MESSAGE_HEADER) + sizeof(MESSAGE_PROCESS))
+						if (pMessage->header.size == sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS))
 						{
-							PMESSAGE_PROCESS	pData	= &pMessage->data;
+							PYFILTER_MESSAGE_PROCESS	pData	= &pMessage->data;
 							p->pClass->Log("PROCESS_START:%d", pData->dwProcessId);
-							_putts(pData->szPath);
-							_putts(pData->szCommand);
+							p->pClass->Log("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+								pData->uuid.Data1, pData->uuid.Data2, pData->uuid.Data3,
+								pData->uuid.Data4[0], pData->uuid.Data4[1], pData->uuid.Data4[2], pData->uuid.Data4[3],
+								pData->uuid.Data4[4], pData->uuid.Data4[5], pData->uuid.Data4[6], pData->uuid.Data4[7]);
+
+							p->pClass->Log("%ws", pData->szPath);
+							p->pClass->Log("%ws", pData->szCommand);
+							p->pClass->Log("%s", TEXTLINE);
+							reply.data.bRet = true;
 						}
 						else
 						{
-							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(MESSAGE_PROCESS));
+							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(YFILTER_MESSAGE_PROCESS));
 						}
 						break;
 					case YFilter::Message::Type::ProcessStop:
-						if (pMessage->header.size == sizeof(MESSAGE_HEADER) + sizeof(MESSAGE_PROCESS))
+						if (pMessage->header.size == sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS))
 						{
-							PMESSAGE_PROCESS	pData = &pMessage->data;
+							PYFILTER_MESSAGE_PROCESS	pData = &pMessage->data;
+							if ( pData->dwProcessId)
+							{
+								//	드라이버에서 생성을 감지했던 프로세스
+								
+							}
+							else
+							{
+								//	드라이버 로드전에 이미 생성되었던 프로세스
+							}
 							p->pClass->Log("PROCESS_STOP:%d", pData->dwProcessId);
-							_putts(pData->szPath);
-							_putts(pData->szCommand);
+							p->pClass->Log("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+								pData->uuid.Data1, pData->uuid.Data2, pData->uuid.Data3,
+								pData->uuid.Data4[0], pData->uuid.Data4[1], pData->uuid.Data4[2], pData->uuid.Data4[3],
+								pData->uuid.Data4[4], pData->uuid.Data4[5], pData->uuid.Data4[6], pData->uuid.Data4[7]);
+							p->pClass->Log("%ws", pData->szPath);
+							p->pClass->Log("%ws", pData->szCommand);
+							p->pClass->Log("%s", TEXTLINE);
+							reply.data.bRet = true;
 						}
 						else
 						{
-							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(MESSAGE_PROCESS));
+							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, 
+								sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS));
 						}
 						break;
 				}
 			}		
+			/*		
+				FilterReplyMessage의 데이터 크기 부분 참고.
+				https://docs.microsoft.com/en-us/windows/win32/api/fltuser/nf-fltuser-filterreplymessage
+				Given this structure, 
+				it might seem obvious that the caller of FilterReplyMessage would set the dwReplyBufferSize parameter 
+				to sizeof(REPLY_STRUCT) and the ReplyLength parameter of FltSendMessage to the same value. 
+				However, because of structure padding idiosyncrasies, 
+				sizeof(REPLY_STRUCT) might be larger than sizeof(FILTER_REPLY_HEADER) + sizeof(MY_STRUCT). 
+				If this is the case, FltSendMessage returns STATUS_BUFFER_OVERFLOW.
+
+				Therefore, we recommend that you call FilterReplyMessage and FltSendMessage 
+				(leveraging the above example) by setting dwReplyBufferSize and ReplyLength 
+				both to sizeof(FILTER_REPLY_HEADER) + sizeof(MY_STRUCT) instead of sizeof(REPLY_STRUCT). 
+				This ensures that any extra padding at the end of the REPLY_STRUCT structure is ignored.
+			*/
+			reply._header.Status = 0;
+			reply._header.MessageId = pMessage->_header.MessageId;
+			hr	= FilterReplyMessage(p->hPort, (PFILTER_REPLY_HEADER)&reply,
+					sizeof(FILTER_REPLY_HEADER) + sizeof(YFILTER_REPLY_DATA));
+			if (SUCCEEDED(hr) || ERROR_IO_PENDING == hr || ERROR_FLT_NO_WAITER_FOR_REPLY == hr)
+			{
+
+			}
+			else
+			{
+				p->pClass->Log("FilterReplyMessage=%08x", hr);
+			}
+			ERROR_MORE_DATA;
 		}
 		p->pClass->Log("%s end", __FUNCTION__);
 		return 0;
 	}
 };
+#include <fltWinError.h>

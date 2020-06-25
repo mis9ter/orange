@@ -1,5 +1,11 @@
 ﻿#pragma once
 
+#include <guiddef.h>
+#ifndef UUID
+typedef GUID UUID;
+#endif UUID
+
+
 #define AGENT_SERVICE_NAME		L"xagent"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
@@ -15,10 +21,18 @@
 #define DRIVER_ALTITUDE			(385200)			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
 #define DRIVER_STRING_ALTITUDE	L"385200"			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
 #define DRIVER_MAX_MESSAGE_SIZE			4096
-#define DRIVER_MESSAGE_TIMEOUT			(30000000)
+
+#define GUID_STRING_SIZE		36
+#define NANOSECONDS(nanos) (((signed __int64)(nanos)) / 100L)
+#define MICROSECONDS(micros) (((signed __int64)(micros)) * NANOSECONDS(1000L))
+#define MILLISECONDS(milli) (((signed __int64)(milli)) * MICROSECONDS(1000L))
+#define SECONDS(seconds) (((signed __int64)(seconds)) * MILLISECONDS(1000L))
+
+#define DRIVER_MESSAGE_TIMEOUT			(3000000000)
 
 #define SAFEBOOT_REG_MINIMAL	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Minimal"
 #define SAFEBOOT_REG_NETWORK	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Network"
+#define TEXTLINE				"--------------------------------------------------------------------------------"
 
 namespace YFilter
 {
@@ -119,18 +133,26 @@ typedef struct {
 	YFilter::Message::Category	category;		//
 	YFilter::Message::Type		type;			//	
 	ULONG						size;			//	MESSAGE_HEADER + 알파
-} MESSAGE_HEADER;
+} YFILTER_MESSAGE_HEADER;
 
-typedef struct MESSAGE_PROCESS
+typedef struct YFILTER_MESSAGE_PROCESS
 {
-	DWORD			dwProcessId;
-	DWORD			dwParentProcessId;
-	wchar_t			szPath[AGENT_PATH_SIZE];
-	wchar_t			szCommand[AGENT_PATH_SIZE];
-} MESSAGE_PROCESS, *PMESSAGE_PROCESS;
+	YFilter::Message::Type	type;				//	메세지 유형
+	bool					bCreationSaved;		//	생성 정보의 기저장 여부
+	DWORD					dwProcessId;
+	DWORD					dwParentProcessId;
+	UUID					uuid;
+	wchar_t					szPath[AGENT_PATH_SIZE];
+	wchar_t					szCommand[AGENT_PATH_SIZE];
+} YFILTER_MESSAGE_PROCESS, *PYFILTER_MESSAGE_PROCESS;
 
-typedef struct MESSAGE_HEADER_PROCESS
+typedef struct YFILTER_MESSAGE_DATA
 {
-	MESSAGE_HEADER	header;
-	MESSAGE_PROCESS	data;
-} MESSAGE_HEADER_PROCESS;
+	YFILTER_MESSAGE_HEADER	header;
+	YFILTER_MESSAGE_PROCESS	data;
+} YFILTER_MESSAGE_DATA, *PYFILTER_MESSAGE_DATA;
+
+typedef struct YFILTER_REPLY_DATA
+{
+	bool					bRet;
+} FILTER_REPLY_DATA;

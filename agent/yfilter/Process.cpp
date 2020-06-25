@@ -2,18 +2,22 @@
 #include <wdm.h>
 
 #define	USE_OBJECT_CALLBACK	0
-
+#define TAG_PROCESS			'corp'
 typedef struct PROCESS_ENTRY
 {
 	HANDLE				handle;
 	HANDLE				parent;
+	UUID				uuid;
 	UNICODE_STRING		path;
 	UNICODE_STRING		command;
 	PVOID				key;
+	bool				bFree;		//	해제 대상
 } PROCESS_ENTRY, *PPROCESS_ENTRY;
 
 typedef void (*PProcessTableCallback)(
-	IN PPROCESS_ENTRY		pEntry		//	삭제 대상 엔트리 
+	IN bool					bCreationSaved,	//	생성이 감지되어 저장된 정보 여부
+	IN PPROCESS_ENTRY		pEntry,			//	대상 엔트리 
+	IN PVOID				pCallbackPtr
 );
 
 class CProcessTable
@@ -62,7 +66,8 @@ public:
 			__dlog("  command.Length  %d", p->command.Length);
 		}
 	}
-	bool		Add(IN HANDLE PID, IN HANDLE PPID, IN PCUNICODE_STRING pPath, IN PCUNICODE_STRING pCommand)
+	bool		Add(IN HANDLE PID, IN HANDLE PPID, 
+					IN UUID * pUuid, IN PCUNICODE_STRING pPath, IN PCUNICODE_STRING pCommand)
 	{
 		if (false == IsPossible())	return false;
 		BOOLEAN			bRet = false;
@@ -79,8 +84,9 @@ public:
 		RtlZeroMemory(&entry, sizeof(PROCESS_ENTRY));
 		entry.handle	= PID;
 		entry.parent	= PPID;
-		entry.key = (PVOID)4;
-
+		entry.key		= (PVOID)4;
+		entry.bFree		= false;
+		if( pUuid )		RtlCopyMemory(&entry.uuid, pUuid, sizeof(entry.uuid));
 		CWSTRBuffer		procPath;
 
 		__try
@@ -122,6 +128,7 @@ public:
 			//	If no matching element is found, but the new element cannot be inserted
 			//	(for example, because the AllocateRoutine fails), RtlInsertElementGenericTable returns NULL.
 			//	if( bRet && pEntry ) PrintProcessEntry(__FUNCTION__, pEntry);
+			if( pEntry )	pEntry->bFree	= true;
 			nCount	= RtlNumberGenericTableElements(&m_table);
 			if( true )
 			{
@@ -155,6 +162,7 @@ public:
 	}
 	bool		IsExisting(
 		IN	HANDLE					h,
+		IN	PVOID					pCallbackPtr= NULL,
 		IN	PProcessTableCallback	pCallback	= NULL
 	)
 	{
@@ -172,9 +180,7 @@ public:
 		if (p) 
 		{
 			if( pCallback )	{
-				__log("%s calling callback", __FUNCTION__);
-				pCallback((PPROCESS_ENTRY)p);
-				__log("%s called  callback", __FUNCTION__);
+				pCallback(true, (PPROCESS_ENTRY)p, pCallbackPtr);
 			}
 			else
 			{
@@ -189,16 +195,16 @@ public:
 		Unlock(irql);
 		return bRet;
 	}
-	bool		Remove(IN HANDLE h, IN bool bLock, 
-					PProcessTableCallback pCallback, 
-					PPROCESS_ENTRY * ppEntry)
+	bool		Remove(IN HANDLE h, 
+					IN bool bLock, 
+					IN PVOID pCallbackPtr,
+					PProcessTableCallback pCallback)
 	{
 		if (false == IsPossible() )
 		{
 			__dlog("%s %10d IRQL=%d", __FUNCTION__, h, KeGetCurrentIrql());
 			return false;
 		}
-
 		bool			bRet = false;
 		PROCESS_ENTRY	entry	= {0,};
 		ULONG			nCount	= 0;
@@ -208,15 +214,8 @@ public:
 		PPROCESS_ENTRY	pEntry = (PPROCESS_ENTRY)RtlLookupElementGenericTable(&m_table, &entry);
 		if (pEntry)
 		{
-			if( pCallback )	pCallback(pEntry);
-			if( ppEntry ) {
-				//	ppEntry 가 지정된 경우 pEntry를 ppEntry로 넘겨주고 
-				//	pEntry를 해제하지 않음. 
-				if( ppEntry )	
-					*ppEntry	= pEntry;
-				else
-					FreeEntryData(pEntry);
-			}
+			if( pCallback )	pCallback(true, pEntry, pCallbackPtr);
+			FreeEntryData(pEntry);
 			if (RtlDeleteElementGenericTable(&m_table, pEntry))
 			{	
 				if( true )
@@ -239,7 +238,7 @@ public:
 		else
 		{
 			//__dlog("%10d not existing");
-			if( pCallback ) pCallback(&entry);
+			if( pCallback ) pCallback(false, &entry, pCallbackPtr);
 		}
 		if( bLock )	Unlock(irql);
 		return bRet;
@@ -401,7 +400,7 @@ bool			IsRegisteredProcess(IN HANDLE h)
 }
 bool			RegisterProcess(IN HANDLE h)
 {
-	return g_process.Add(h, NULL, NULL, NULL);
+	return g_process.Add(h, NULL, NULL, NULL, NULL);
 }
 bool			DeregisterProcess(IN HANDLE h)
 {
@@ -804,6 +803,24 @@ inline	bool	IsGenianInstaller(IN PCWSTR pProcPath)
 	}
 	return false;
 }
+PCWSTR	Uuid2String(IN UUID* p, OUT PWSTR pStr, IN ULONG nStrSize)
+{
+	/*
+	typedef struct _GUID {
+		unsigned long  Data1;
+		unsigned short Data2;
+		unsigned short Data3;
+		unsigned char  Data4[8];
+	} GUID;
+	*/
+	if( NULL == p )	return NULL;
+	RtlStringCbPrintfW(pStr, nStrSize, 
+		L"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		p->Data1, p->Data2, p->Data3, 
+		p->Data4[0], p->Data4[1], p->Data4[2], p->Data4[3], 
+		p->Data4[4], p->Data4[5], p->Data4[6], p->Data4[7]);
+	return pStr;
+}
 void	__stdcall	ProcessNotifyCallbackRoutineEx(
 	_Inout_		PEPROCESS Process,
 	_In_		HANDLE ProcessId,
@@ -818,10 +835,20 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		__function_log;
 
 	CFltObjectReference		filter(Config()->pFilter);
+	//FILTER_REPLY_DATA		reply;
+	//ULONG					nReplySize = 0;
+
 	if (filter.Reference())
 	{
 		if (CreateInfo)
 		{
+			CreateInfo->FileOpenNameAvailable;	
+			//	[TODO] 이거 뭐지?
+			//	A Boolean value that specifies whether 
+			//	the ImageFileName member contains the exact file name 
+			//	that is used to open the process executable file.
+
+
 			//	[TODO] 자체 보호로 인해 업데이트, 설치가 되지 않는다면?
 			//	\??\C:\Users\TigerJ\APPDATA\LOCAL\TEMP\$GNPACK_3B99496A$\Installer.exe
 			//	이와 같은 경로로 실행되면 우리 회사의 설치본이 동작한 것이므로 
@@ -840,23 +867,28 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 			CUnicodeString		procPath(CreateInfo->ImageFileName, PagedPool);
 			CUnicodeString		command(CreateInfo->CommandLine, PagedPool);
 
-			if( CreateInfo->ImageFileName )
+			if( CreateInfo->FileOpenNameAvailable )
 			{
-				__log("PROCESS_START PID=%d PPID=%d SIZE=%d",
-					ProcessId, CreateInfo->ParentProcessId, sizeof(MESSAGE_PROCESS));
+				YFILTER_MESSAGE_DATA	msg;
+				RtlZeroMemory(&msg, sizeof(msg));
+
+				ExUuidCreate(&msg.data.uuid);
+				//__log("PROCESS_START PID=%d PPID=%d SIZE=%d",
+				//	ProcessId, CreateInfo->ParentProcessId, sizeof(MESSAGE_PROCESS));
 				ProcessTable()->Add(ProcessId, CreateInfo->ParentProcessId, 
-					CreateInfo->ImageFileName, CreateInfo->CommandLine);
-				MESSAGE_HEADER_PROCESS	msg;
-				msg.header.category		= YFilter::Message::Category::Event;
-				msg.header.type			= YFilter::Message::Type::ProcessStart;
-				msg.header.size			= sizeof(msg);
+					&msg.data.uuid, CreateInfo->ImageFileName, CreateInfo->CommandLine);
+				msg.header.category			= YFilter::Message::Category::Event;
+				msg.header.type				= YFilter::Message::Type::ProcessStart;
+				msg.header.size				= sizeof(msg);
+				msg.data.type				= YFilter::Message::Type::ProcessStart;
+				msg.data.bCreationSaved		= true;
 				msg.data.dwProcessId		= (DWORD)ProcessId;
-				msg.data.dwParentProcessId= (DWORD)CreateInfo->ParentProcessId;
+				msg.data.dwParentProcessId	= (DWORD)CreateInfo->ParentProcessId;
 				RtlStringCbCopyUnicodeString(msg.data.szPath, sizeof(msg.data.szPath), CreateInfo->ImageFileName);
 				RtlStringCbCopyUnicodeString(msg.data.szCommand, sizeof(msg.data.szCommand), CreateInfo->CommandLine);
-				__log("%ws", msg.data.szPath);
-				__log("%ws", msg.data.szCommand);
-				SendMessage(&Config()->client.event, &msg, sizeof(msg), NULL, NULL);
+				//__log("%ws", msg.data.szPath);
+				//__log("%ws", msg.data.szCommand);
+				SendMessage("PROCESS_START", &Config()->client.event, &msg, sizeof(msg));
 			}
 			else
 			{
@@ -865,40 +897,85 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		}
 		else
 		{
-			PPROCESS_ENTRY	pEntry	= NULL;
-			UNICODE_STRING	null	= {0,};
-			if (ProcessTable()->Remove(ProcessId, true, [](PPROCESS_ENTRY pEntry) {
-				UNREFERENCED_PARAMETER(pEntry);
-			}, &pEntry))
+			UNICODE_STRING	null		= {0,};
+			PYFILTER_MESSAGE_DATA		pMsg	= NULL;
+			pMsg	= (PYFILTER_MESSAGE_DATA)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE_DATA), TAG_PROCESS);
+			if( pMsg )
 			{
-				//	이전 생성 정보를 기록해둔 상태.			
-				if (pEntry)
+				RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE_DATA));
+				pMsg->header.category = YFilter::Message::Category::Event;
+				pMsg->header.type = YFilter::Message::Type::ProcessStop;
+				pMsg->header.size = sizeof(YFILTER_MESSAGE_DATA);
+				pMsg->data.type = YFilter::Message::Type::ProcessStop;
+				pMsg->data.bCreationSaved	= false;
+				pMsg->data.dwProcessId = (DWORD)ProcessId;
+				pMsg->data.dwParentProcessId = 0;
+				pMsg->data.szCommand[0]	= NULL;
+				pMsg->data.szPath[0]		= NULL;
+				if (ProcessTable()->Remove(ProcessId, true, pMsg, [](
+					bool bCreationSaved, PPROCESS_ENTRY pEntry, PVOID pCallbackPtr
+					)
+					{
+						//	이 람다 함수 안은 DISPATCH_LEVEL 입니다.
+						//	락을 걸고 있거든요.
+						PASSIVE_LEVEL;
+						PYFILTER_MESSAGE_DATA	pMsg = (PYFILTER_MESSAGE_DATA)pCallbackPtr;
+						if (pMsg)
+						{
+							pMsg->data.bCreationSaved	= bCreationSaved;
+							if (pEntry && bCreationSaved)
+							{						
+								RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), &pEntry->path);
+								RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), &pEntry->command);
+								RtlCopyMemory(&pMsg->data.uuid, &pEntry->uuid, sizeof(pMsg->data.uuid));
+								pMsg->data.dwParentProcessId = (DWORD)pEntry->parent;
+							}
+						}
+					})
+				)
 				{
-					
+					//	이전 생성 정보를 기록해둔 상태.							
+				}
+				else
+				{
+					//	이 프로세스는 생성시점 드라이버가 실행 중이지 않아 
+					//	해당 프로세스 정보를 가지고 있지 않다. 
+					//	[TODO]
+					PUNICODE_STRING	pImageFileName		= NULL;
+					if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
+					{
+						RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
+						CMemory::Free(pImageFileName);
+					}
+					pMsg->data.dwParentProcessId	= (DWORD)GetParentProcessId(ProcessId);
+				}
+				if (MessageThreadPool()->Push(YFilter::Message::Category::Event, pMsg, sizeof(YFILTER_MESSAGE_DATA)))
+				{
+					//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+					MessageThreadPool()->Alert();
+				}
+				else
+				{
+					CMemory::Free(pMsg);
 				}
 			}
-			__log("PROCESS_STOP  PID=%d PPID=%d\n%wZ\n%wZ",
-				(int)ProcessId, pEntry? pEntry->parent:0, 
-				pEntry? &pEntry->path:&null, 
-				pEntry? &pEntry->command:&null);
-			MESSAGE_HEADER_PROCESS	msg;
-			//RtlZeroMemory(&msg, sizeof(msg));
-			msg.header.category = YFilter::Message::Category::Event;
-			msg.header.type = YFilter::Message::Type::ProcessStop;
-			msg.header.size = sizeof(msg);
-			msg.data.dwProcessId			= (DWORD)ProcessId;
-			msg.data.dwParentProcessId	= (DWORD)(pEntry? pEntry->parent : 0);
-			if( pEntry )
+			else
 			{
-				RtlStringCbCopyUnicodeString(msg.data.szPath, sizeof(msg.data.szPath), &pEntry->path);
-				RtlStringCbCopyUnicodeString(msg.data.szCommand, sizeof(msg.data.szCommand), &pEntry->command);
+				if (ProcessTable()->Remove(ProcessId, true, NULL, 
+					[](bool bCreationSaved, PPROCESS_ENTRY pEntry, PVOID pCallbackPtr) 
+						{
+						UNREFERENCED_PARAMETER(pCallbackPtr);
+						UNREFERENCED_PARAMETER(bCreationSaved);
+						if (pEntry)
+						{
+							__log("%s YFILTER_MESSAGE_DATA allocation failed.", __FUNCTION__);
+						}
+					})
+				)
+				{
+					//	이전 생성 정보를 기록해둔 상태.							
+				}
 			}
-			for( int i = 0 ; i < 3 ; i++ )
-			{
-				if( STATUS_SUCCESS == SendMessage(&Config()->client.event, &msg, sizeof(msg), 
-						NULL, NULL) ) break;
-			}
-			if( pEntry )	ProcessTable()->FreeEntryData(pEntry);
 		}
 	}
 }
