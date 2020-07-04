@@ -1,0 +1,127 @@
+<title>ZipVFS Virtual Table Interface</title>
+
+<p>
+This page describes the optional virtual table interface that may be
+used by applications to query and inspect the structure of a ZipVFS
+database.
+
+<h2 id=create>Functionality</h2>
+
+<p>This module provides three 
+[https://www.sqlite.org/vtab.html#eponymous_virtual_tables|eponymous virtual
+tables] - the "zipvfs", "zipvfs_freelist" and "zipvfs_stat" tables.  The
+schemas of these three tables are equivalent to:
+
+<blockquote><pre>
+  CREATE TABLE zipvfs(
+    pgno INTEGER PRIMARY KEY,     -- User db page number
+    offset INTEGER,               -- Byte offset of record in zipvfs file
+    size INTEGER                  -- Size in bytes of record in zipvfs file
+  );
+</pre></blockquote>
+<blockquote><pre>
+  CREATE TABLE zipvfs_freelist(
+    offset INTEGER,               -- Byte offset of free-slot
+    size INTEGER,                 -- Size in bytes of free-slot
+    parent INTEGER,               -- Offset of b-tree node
+    parent_idx INTEGER            -- Index of entry in b-tree node
+  );
+</pre></blockquote>
+<blockquote><pre>
+  CREATE TABLE zipvfs_stat(
+    field TEXT PRIMARY KEY,       -- Field name
+    value INTEGER                 -- Field value
+  );
+</pre></blockquote>
+
+<p>The "zipvfs" table contains one row for each page in the database. Column
+"pgno" contains, as one would expect, the page number. Column "offset" 
+contains the byte offset of the compressed page within the zipvfs file on
+disk. Column "size" contains the size in bytes of the compressed record.
+
+<p>The "zipvfs_freelist" table contains one row for each free-slot in
+the database file. The columns "offset" and "size" contain the values one
+would expect. Internally, free-slots are stored in a b-tree structure, 
+the nodes of which are themselves free-slots. The "parent" field of each
+row contains the offset to the free-slot on which the current entry was 
+found, or 0 if the current entry is the root node of the b-tree. The 
+"parent_idx" field contains the offset of the entry on the b-tree node. 
+
+<p>At time of writing the "zipvfs_stat" table always contains exactly six
+rows (more may be added in the future). The "field" column contains
+the name of an integer statistic and the "value" column contains its current
+value. The six available statistics and their interpretations are shown in
+the following table.
+
+<table border=1 style="margin:0 5ex 0 5ex">
+  <tr> <th style="width:20ex">Name <th>Interpretation
+  <tr> <td valign=top>'free-slots'<td> The number of free-slots currently in the ZipVFS
+       database file.
+  <tr> <td valign=top>'file-bytes'<td> The size of the ZipVFS database on disk, in
+       bytes. The actual database file may be slightly larger than this, as
+       ZipVFS normally extends files by either 1024 or 4096 bytes at a time.
+  <tr> <td valign=top>'content-bytes'<td> The total size of all compressed user database
+       pages currently stored in the zipvfs database file, in bytes.
+  <tr> <td valign=top>'free-bytes'<td> The total size of all free space on free-slots in
+        the zipvfs database file, in bytes.
+  <tr> <td valign=top>'frag-bytes'<td> 
+       The total size of all unused space at the end of used slots in the
+       zipvfs database file (i.e. space wasted because a slots payload size is
+       larger than the size of the compressed page currently stored in it).
+  <tr> <td valign=top>'gap-bytes'<td> 
+       Total size of the unused block of space created by an incremental
+       compact operation. See the [./api.wiki#file_control|ZIPVFS_CTRL_COMPACT]
+       file-control operation for more details.
+</table>
+
+<p> The "zipvfs_stat" statistics are the same as those accessible using the
+[./api.wiki#filespace|ZIPVFS_CTRL_STAT] file control.
+
+<p> By default, the "zipvfs" and "zipvfs_stat" virtual tables report on the
+"main" database. To use these interfaces to inspect an attached database, the
+name of the attached database must be specified as a parameter to the virtual
+table name. For example:
+
+<blockquote><pre>
+  ATTACH 'xyz.db' AS aux;
+  SELECT * FROM zipvfs('aux');         -- Inspect the database just attached
+  SELECT * FROM zipvfs_stat('aux');    -- ("aux"), instead of the main database.
+</pre></blockquote>
+
+<h2 id=building>Compilation and Deployment</h2>
+
+<p>All code for this module is contained in source file 
+[/doc/trunk/src/zipvfs_vtab.c|zipvfs_vtab.c]. There are two ways to
+use this code in an application:
+
+<ol>
+  <li> <p><b>As a loadable extension</b>. In this case, the module is 
+[http://www.sqlite.org/loadext.html#compiling_a_loadable_extension|
+compiled in the same way] as any other loadable extension. Once compiled,
+the extension can be 
+[http://www.sqlite.org/loadext.html#loading_an_extension| loaded at runtime]
+by the SQLite command line shell or any other application.
+  <li> <p><b>By statically linking the module into the application</b>. In this
+  case the zipvfs_vtab.c should be compiled and linked into the application
+  along with the other source files. zipvfs_vtab.c should be compiled with
+  the following compiler option:
+<blockquote>
+        -DSQLITE_CORE
+</blockquote>
+  <p>Before the virtual tables may be used, they must be registered with
+  the database connection by calling the following function:
+<blockquote><pre>
+  int sqlite3_zipvfsvtab_register(sqlite3 *db);
+</pre></blockquote>
+  <p>There is no header file for this function, so users may need to copy
+  the declaration above into the application code to prevent compiler
+  warnings.
+  <p>Function sqlite3_zipvfsvtab_register() should be passed the database
+  handle with which the virtual table modules should be registered.
+  If successful, SQLITE_OK is returned. If not, an SQLite error code.
+  If more than one connection needs to access the virtual tables,
+  sqlite3_zipvfsvtab_register() must be called once for each (sqlite3*)
+  handle.
+
+</ol>
+

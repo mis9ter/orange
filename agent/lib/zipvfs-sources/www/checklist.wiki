@@ -1,0 +1,40 @@
+<title>Testing Checklist</title>
+<ol type="1">
+<li><p>The following tests run on at least one platform and with no errors:
+    <ol type="a">
+    <li><b>textfixture ../zipvfs/test/zipvfs.test</b> -
+        <i>see [../test/README.txt] for build instructions</i>
+    <li><b>tclsh th3make zipvfs.rc test.rc</b>
+    <li><b>tclsh th3make zipvfs.rc memdebug.rc</b>
+    <li><b>tclsh th3make zipvfs.rc min.rc</b> - <i>run with Valgrind with no
+        unexplained errors</i>
+    <li><b>tclsh th3make zipvfs.rc alignment1.rc fast.rc</b>
+    <li><b>tclsh th3make zipvfs.rc alignment4.rc fast.rc</b>
+    <li><b>tclsh th3make zipvfs.rc alignment5.rc fast.rc</b>
+    <li><b>tclsh th3make zipvfs.rc alignment6.rc fast.rc</b>
+    </ol></p>
+<li><p>Run the test <b>tclsh th3make zipvfs.rc fast.rc</b> on each of the
+    following platforms:
+    <ol type="a">
+    <li> Linux x86
+    <li> Linux x86-64
+    <li> OpenBSD
+    <li> MacOS-X x86
+    <li> MacOS-X x86_64
+    <li> MacOS-X ppc (big-endian)
+    <li> WindowsXP
+    <li> Windows7 compiled with Mingw
+    <li> Windows7 compiled with VS2010
+    <li> Android
+    </ol></p>
+<li><p>There are no reasonably suppressible warnings on any 
+    of the platforms from the previous checklist item.</p>
+<li><p>Verify that databases generated on 32-bit systems are readable and
+    writable on 64-bit systems and vice versa</p>
+<li><p>Verify that databases generated on little-endian systems are
+    readable and writable on big-endian systems and vice versa</p>
+<li><p>Build the command-line shell and verify correct operation</p>
+<li><p>100% branch test coverage on at least one platform</p>
+<li><p>Code complies with [./design.wiki | design rules]</p>
+<li><p>Code complies with [./style.wiki | coding rules]</p>
+</ol>

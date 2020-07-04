@@ -1,0 +1,455 @@
+
+# This file contains tests of the VACUUM command on zipvfs databases.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfsC
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+do_test 1.0 {
+  zip_register "" 0
+  sqlite3 db test.db -vfs zip
+  execsql {
+    CREATE TABLE t1(a, b, UNIQUE(a, b));
+    INSERT INTO t1 VALUES(1, randomblob(500));
+    INSERT INTO t1 SELECT a+1, randomblob(length(b)-1) FROM t1;
+    INSERT INTO t1 SELECT a+2, randomblob(length(b)-1) FROM t1;
+    INSERT INTO t1 SELECT a+4, randomblob(length(b)-1) FROM t1;
+    INSERT INTO t1 SELECT a+8, randomblob(length(b)-1) FROM t1;
+  }
+} {}
+
+do_test 1.1 {
+  sqlite3 db2 test.db -vfs zip
+  sqlite3 db3 test.db -vfs zip
+  execsql VACUUM db2
+} {}
+
+do_test 1.2 { execsql { PRAGMA integrity_check } db  } ok
+do_test 1.3 { execsql { PRAGMA integrity_check } db2 } ok
+do_test 1.4 { execsql { PRAGMA integrity_check } db3 } ok
+
+do_test 1.5 { execsql { SELECT sum(a) FROM t1 } db  } 136
+do_test 1.6 { execsql { SELECT sum(a) FROM t1 } db2 } 136
+do_test 1.7 { execsql { SELECT sum(a) FROM t1 } db3 } 136
+
+do_test 1.8 {
+  db close
+  db2 close
+  db3 close
+} {}
+
+do_test 2.1 {
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql {
+    PRAGMA page_size = 8192;
+    CREATE TABLE t1(x);
+    INSERT INTO t1 VALUES(123);
+    INSERT INTO t1 VALUES('abc');
+    CREATE INDEX t1x ON t1(x);
+  }
+
+  execsql {
+    PRAGMA integrity_check;
+    PRAGMA page_size;
+    SELECT * FROM t1;
+  }
+} {ok 8192 123 abc}
+
+do_test 2.2 {
+  catchsql {
+    PRAGMA page_size = 16384;
+    VACUUM;
+  }
+} {1 {disk I/O error}}
+
+do_test 2.3 {
+  execsql {
+    PRAGMA integrity_check;
+    PRAGMA page_size;
+    SELECT * FROM t1;
+  }
+} {ok 8192 123 abc}
+
+do_test 2.4 {
+  catchsql {
+    PRAGMA page_size = 4096;
+    VACUUM;
+  }
+} {1 {disk I/O error}}
+
+do_test 2.5 {
+  execsql {
+    PRAGMA integrity_check;
+    PRAGMA page_size;
+    SELECT * FROM t1;
+  }
+} {ok 8192 123 abc}
+
+do_test 2.6 {
+  sqlite3 db2 test.db -vfs zip
+  execsql {
+    PRAGMA integrity_check;
+    PRAGMA page_size;
+    SELECT * FROM t1;
+  } db2
+} {ok 8192 123 abc}
+
+db close
+db2 close
+
+#-------------------------------------------------------------------------
+# Test cases 3.* check that VACUUM degragments a Zipvfs database.
+#
+sqlite3_test_control_pending_byte 0x1000000
+forcedelete test.db
+sqlite3 db test.db -vfs zip
+
+proc xStructure {iPg iOff nByte nPadding z} {
+  global X
+  if {$iPg<1} {
+    set X(fragmented) 1
+  } elseif {$iPg == 1} {
+    set X(1_iOff)  $iOff
+    set X(1_nByte) [expr $nByte+$nPadding]
+  } else {
+    if {$iPg>2} {
+      if {$X(expected_iPg)  != $iPg} { 
+        set X(fragmented) 1 
+      }
+      if {$X(expected_iOff) != $iOff} { 
+        set X(fragmented) 1 
+      }
+    }
+    set X(expected_iPg)  [expr $iPg+1]
+    set X(expected_iOff) [expr $iOff + $nByte + $nPadding + 6]
+    if {$X(expected_iOff)==$X(1_iOff)} {
+      incr X(expected_iOff) [expr $X(1_nByte) + 6]
+    }
+  }
+}
+
+# Return true if zipvfs database $db is fragmented, or false otherwise.
+#
+proc is_fragmented {db} {
+  global X
+  set X(fragmented) 0
+  zip_control $db main structure xStructure
+  return $X(fragmented)
+}
+
+do_execsql_test 3.1.1 {
+  PRAGMA cache_size = 50;
+  CREATE TABLE t1(a PRIMARY KEY, b);
+  INSERT INTO t1 VALUES(randomblob(16), randomblob(256));
+}
+set SQL {
+  INSERT INTO t1 
+  SELECT randomblob((rowid % 32)+8), randomblob((rowid % 512)+128) FROM t1;
+}
+do_execsql_test 3.1.2  $SQL        ;#    2
+do_execsql_test 3.1.7  $SQL        ;#    4
+do_execsql_test 3.1.8  $SQL        ;#    8
+do_execsql_test 3.1.9  $SQL        ;#   16
+do_execsql_test 3.1.10 $SQL        ;#   32
+do_execsql_test 3.1.11 $SQL        ;#   64
+do_execsql_test 3.1.12 $SQL        ;#   64
+do_execsql_test 3.1.13 $SQL        ;#  128
+do_execsql_test 3.1.14 $SQL        ;#  256
+
+do_test         3.1.16 { is_fragmented db } 1
+do_execsql_test 3.1.17 { VACUUM } {}
+do_test         3.1.18 { is_fragmented db } 0
+
+#-------------------------------------------------------------------------
+# Test that in pass-through mode, a "PRAGMA page_size" command followed
+# by a VACUUM may be used to modify the database page-size.
+#
+do_test 4.1 {
+  db close
+  forcedelete test.db
+  sqlite3 db test.db
+  execsql {
+    PRAGMA page_size = 1024;
+    CREATE TABLE t1(a, b);
+    CREATE INDEX i1 ON t1(a, b);
+    INSERT INTO t1 VALUES(randomblob(100), randomblob(100));
+
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --    2
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --    4
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --    8
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   16
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   32
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   64
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --  128
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --  256
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --  512
+    INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; -- 1024
+  }
+  db close
+} {}
+
+foreach jrnl_mode {delete wal} {
+
+  sqlite3 db test.db -vfs zip
+  do_execsql_test 4.$jrnl_mode.0 "PRAGMA journal_mode = $jrnl_mode" $jrnl_mode
+  db close
+
+  foreach pgsz {512 1024 2048 4096 8192 16384 32768 65536 1024} {
+
+    set tn "$jrnl_mode.$pgsz"
+    sqlite3 db test.db -vfs zip
+  
+    # Set the page-size to 1024. The VACUUM the db.
+    #
+    do_execsql_test 4.$tn.1 {
+      PRAGMA page_size = 1024;
+      VACUUM;
+    } {}
+  
+    # Check that the database contents are still correct. And that
+    # the database page-size is now 1024 bytes.
+    #
+    do_execsql_test 4.$tn.2 {
+      SELECT count(*) FROM t1; 
+      PRAGMA integrity_check;
+    } {1024 ok}
+    do_execsql_test 4.$tn.3 { PRAGMA main.page_size; } 1024
+  
+    # Set the page-size to $pgsz bytes. The VACUUM the db. In WAL mode
+    # this should not affect the page-size should still be 1024 bytes.
+    # But in rollback mode this should change the on disk page-size.
+    #
+    do_execsql_test 4.$tn.4 "
+      PRAGMA page_size = $pgsz;
+      VACUUM;
+    " {}
+  
+    # Check that the database contents are still correct. And that
+    # the database page-size is now as it should be (depending on the
+    # journal mode - see comment above).
+    #
+    do_execsql_test 4.$tn.5 {
+      SELECT count(*) FROM t1; 
+      PRAGMA integrity_check;
+    } {1024 ok}
+    if {$jrnl_mode == "wal"} {
+      do_execsql_test 4.$tn.6 { PRAGMA main.page_size; } 1024
+    } else {
+      do_execsql_test 4.$tn.6 { PRAGMA main.page_size; } $pgsz
+    }
+  
+    db close
+  }
+}
+
+#-------------------------------------------------------------------------
+# VACUUM on an empty database.
+# 
+do_test 5.1 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql { VACUUM }
+} {}
+do_test 5.2 {
+  db close
+  file size test.db
+} {1024}
+
+#-------------------------------------------------------------------------
+# VACUUM on a version=0 database.
+# 
+sqlite3_test_control_pending_byte 65536
+do_test 6.1 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  # version-0 databases are no longer supported, so this whole test is
+  # obsolete, but it doesn't hurt to keep it around as an extra exercise
+  # for version-1 databases.
+  #zip_control db main create_version_0 1
+  execsql { 
+    CREATE TABLE t1(x, y);
+    CREATE INDEX i1 ON t1(y);
+    INSERT INTO t1 VALUES(randomblob(100), randomblob(500));
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+    INSERT INTO t1 SELECT randomblob(100), randomblob(500) FROM t1;
+  }
+  db close
+  hexio_read test.db 176 4
+} {00000001}
+do_test 6.2 {
+  sqlite3 db test.db -vfs zip
+  execsql { 
+    VACUUM;
+    PRAGMA integrity_check;
+  }
+} {ok}
+do_test 6.3 {
+  zip_control db main integrity_check
+} {}
+
+#-------------------------------------------------------------------------
+# Check a stray invocation of SQLITE_FCNTL_OVERWRITE is detected.
+# 
+do_test 7.1 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql {
+    CREATE TABLE t3(x);
+    CREATE TABLE t2(x);
+    CREATE TABLE t1(x);
+    INSERT INTO t1 VALUES(1);
+    INSERT INTO t1 VALUES(2);
+    INSERT INTO t1 VALUES(3);
+  }
+} {}
+
+do_test 7.2 {
+  execsql {
+    BEGIN;
+      INSERT INTO t1 VALUES(4);
+  }
+  zip_control db main overwrite 444
+  catchsql COMMIT
+} {1 {disk I/O error}}
+
+do_test 7.3 {
+  db close
+  sqlite3 db test.db -vfs zip
+  execsql {
+    PRAGMA cache_size = 5;
+    BEGIN;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+    COMMIT;
+  }
+  execsql {
+    BEGIN;
+      INSERT INTO t3 VALUES(1);
+      INSERT INTO t2 VALUES(1);
+      UPDATE t1 SET x=randomblob(901);
+  }
+
+  zip_control db main overwrite 444
+  catchsql ROLLBACK;
+} {0 {}}
+
+do_test 7.4 {
+  execsql {
+    DELETE FROM t1;
+    PRAGMA zipvfs_journal_mode = wal;
+    BEGIN;
+      INSERT INTO t1 VALUES(4);
+  }
+  zip_control db main overwrite 444
+  breakpoint
+  catchsql COMMIT
+} {1 {disk I/O error}}
+
+#-------------------------------------------------------------------------
+# Another case of a stray FCNTL_OVERWRITE. This time combined with a 
+# stray FCNTL_SYNC. This test is aimed at improving the  code coverage
+# metric.
+#
+do_test 8.1 {
+  db close
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql {
+    PRAGMA cache_size = 5;
+    CREATE TABLE t1(a);
+    INSERT INTO t1 VALUES( randomblob(900) );
+    BEGIN;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+  }
+  zip_control db main overwrite 444
+} {444}
+
+do_test 8.2 {
+  list [catch { zip_control db main sync } msg] $msg
+} {1 {disk I/O error}}
+
+#-------------------------------------------------------------------------
+# Attempt to vacuum an attached zipvfs database.
+#
+do_test 9.1.1 {
+  db close
+  forcedelete test.db
+  forcedelete test.db2
+  sqlite3 db test.db -vfs zip
+  execsql {
+    ATTACH 'test.db2' AS aux;
+    CREATE TABLE aux.t1(a PRIMARY KEY, b, c UNIQUE);
+    INSERT INTO aux.t1 VALUES(1, 1, 1);
+    INSERT INTO aux.t1 VALUES(2, 2, 2);
+    INSERT INTO aux.t1 VALUES(3, 3, 3);
+    INSERT INTO aux.t1 VALUES(4, 4, 4);
+  }
+} {}
+
+do_execsql_test 9.1.2 {
+  PRAGMA aux.integrity_check;
+  VACUUM aux;
+  PRAGMA aux.integrity_check;
+} {ok ok}
+
+# This causes an IO error, as SQLite attempts to change the page size of
+# the attached zipvfs database.
+do_test 9.2.1 {
+  db close
+  forcedelete test.db
+  forcedelete test.db2
+  sqlite3 db test.db -vfs zip
+  execsql {
+    PRAGMA page_size = 16384;
+    ATTACH 'test.db2' AS aux;
+    CREATE TABLE aux.t1(a PRIMARY KEY, b, c UNIQUE);
+    INSERT INTO aux.t1 VALUES(1, 1, 1);
+    INSERT INTO aux.t1 VALUES(2, 2, 2);
+    INSERT INTO aux.t1 VALUES(3, 3, 3);
+    INSERT INTO aux.t1 VALUES(4, 4, 4);
+  }
+} {}
+do_catchsql_test 9.2.2 {
+  VACUUM aux;
+} {1 {disk I/O error}}
+do_execsql_test 9.2.3 {
+  SELECT * FROM t1;
+  PRAGMA integrity_check;
+} {1 1 1 2 2 2 3 3 3 4 4 4 ok}
+
+
+catch { db close }
+zip_unregister
+noop_unregister
+rle_unregister
+padded_unregister
+finish_test

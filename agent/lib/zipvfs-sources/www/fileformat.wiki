@@ -1,0 +1,205 @@
+<title>ZIPVFS File Format</title>
+
+<h2>1.0 Overview</h2>
+
+A ZIPVFS database file is logically divided into three sections: the header,
+the page-map, and the data area. 
+
+<h2>2.0 The Header</h2>
+
+The header is the first 200 bytes of the file.  The header is further
+subdivided into the first and second header, each of 100 bytes.
+
+The first header (the first 100 bytes of the file) are not used by 
+directly by ZIPVFS, though the bytes still must be initialized correctly
+for an SQLite database file.  (See the
+<a href="http://www.sqlite.org/fileformat2.html#database_header">SQLite
+File Format</a> documentation for additional information.)
+The first 100 bytes of a ZIPVFS database are used by the underlying
+SQLite pager module layer for storing
+information such as the database change counter.  ZIPVFS maintains
+the first 92 bytes of the first header as a copy of the first 92 bytes
+in the decoded (uncompressed and unencrypted) database file except that 
+the first 16 bytes are changed from "SQLite version 3" to to "ZV-name" 
+where "name" is the name of the encoding algorithm passed as
+the first parameter to zipvfs_create_vfs(). The "name", which is
+guaranteed to be 13 bytes or less in size, is padded with 0x00 bytes to
+make up the full 16 bytes. The last 8 bytes of the first header, and 
+some other bytes in the interior of the header, are set by the underlying
+pager layer.
+
+The second header (bytes 100 through 199 inclusive) is the
+ZIPVFS header. The ZIPVFS header contains a serialization of the ZipvfsHdr
+structure:
+
+<blockquote><pre>
+struct ZipvfsHdr {
+  i64 iFreeSlot;         /* 100: Byte offset of first free-slot in file */
+  i64 iDataStart;        /* 108: Byte offset of first byte in data-area */
+  i64 iDataEnd;          /* 116: pOffset of first byte following data-area */
+  i64 iGapStart;         /* 124: Offset of first byte in gap region */
+  i64 iGapEnd;           /* 132: Offset of first byte after gap region */
+  i64 iSize;             /* 140: Size of user database in bytes */
+  i64 nFreeSlot;         /* 148: Number of free-slots in file */
+  i64 nFreeByte;         /* 156: Total size of all free-slots */
+  i64 nFreeFragment;     /* 164: Total size of all padding in used slots */
+  int pgsz;              /* 172: User db page size */
+  int iVersion;          /* 176: Zipvfs file version */
+}; 
+</pre></blockquote>
+
+All values are either 64-bit or 32-bit unsigned twos-complement integers.
+The values are stored in the header as big-endian, and at the byte offset 
+from the start of the file given by the integer at the beginning of the
+corresponding comment.  So, for example, the iGapStart value is a 64-bit
+big-endian twos-complement integer stored at an offset of 124 from the start
+of the file.  Bytes 180 through 199 are not currently used by ZIPVFS but are
+reserved for future expansion.  Bytes 180 through 199 should be zero in
+all existing ZIPVFS database files.
+
+<h2>3.0 The Page-Map</h2>
+
+The page-map begins at byte offset 200 into the ZIPVFS database file. 
+The page-map contains an 8-byte entry for each page in the users database.
+The entry consists of the following elements, each stored as big-endian
+integers:
+
+  *  Offset of compressed page image in file.         5 bytes (40 bits). 
+  *  Size of compressed page image in file.           17 bits.
+  *  Number of unused bytes (if any) in slot.         7 bits.
+
+Another way to think of the encoding of a page-map entry is as a single
+big-endian 64-bit unsigned integer from which the upper 40 bits become
+the offset, the middle 17 bits become the compressed page size, and the
+lower 7 bits are the unused bytes following the compressed page.  If the
+lower 7 bits are all 1, that means the number of unused bytes is greater
+than or equal to 127 and the precise number of unused bytes must be
+obtained from the slot header.
+
+Any page-map entries that refer to unused pages have an offset of 0.
+
+<h2>4.0 The Data Area</h2>
+
+The data-area begins at some point in the file after the end of the 
+page-map, as determined by the iDataStart field of the ZIPVFS header.
+The data-area contains the compressed page images. Each page is stored as
+follows:
+
+  *  The page number (31 bits)
+  *  The slot payload size (17 bits)
+  *  The compressed page image,
+  *  Free space (if any),
+
+The initial page number and slot payload size are stored as big-endian
+integers.  Or, to look at it another way, the combined page number and
+slot payload size can be viewed as a 6-byte big-endian integer in which the
+page number is the upper 31 bits and the slot payload size is the lower 17
+bits.
+
+The page number and slot payload size numbers at the beginning of each page
+are collectively called the "slot-header".
+
+When SQLite overwrites a database page, the compressed image may change
+size. As a result, Zipvfs may not (usually does not) write the new
+compressed image back to the same point in the file as the old. The
+part of the file then occupied by the old compressed image becomes a
+"free-slot". It may be reused later.
+
+Free slots are organized using a b-tree that allows for the "best fit"
+slot to be located efficiently, even for large free lists. Btree nodes
+are themselves stored within free-slots. Additional information about
+Btree nodes is given below.
+
+The data-area may also contain a "gap", defined by two offsets stored
+in the header. A gap is a chunk of completely unused space. Neither
+compressed images or free-slots are found within a gap. A gap is created
+and manipulated by incremental-compact options (see file-control
+ZIPVFS_CTRL_COMPACT).
+
+The iVersion value of the second header may be 1 or 2.  A value of 1
+means that a rollback journal is used for transaction control.  A value
+of 2 means that a WAL is used.  Some very early ZIPVFS database files
+contained a value of 0 for iVersion, but that format is no longer 
+supported.  Future versions of ZIPVFS might use larger iVersion values
+to indicate new file-format extensions.
+
+<h2>5.0 Freelist B-Tree Nodes</h2>
+
+All slots in the database, free or otherwise, begin with a slot-header.
+For b-tree (or other free) slots, the page-number field is meaningless.
+The slot payload size is used though. Following the slot-header is a
+4 byte b-tree node header composed of two 16-bit big-endian integers,
+"height" and "number of entries".
+
+Height fields is the height of the sub-tree headed by this node.
+Leaf nodes have a height of 1, the parents of leaf nodes have 2, 
+and so forth.
+
+The number of entries field stores the number of entries in the btree node.
+
+Each entry in the b-tree is an 8-byte integer.
+The integer is broken down
+into three components describing the free-slot that the key represents:
+
+  *  a 17-bit payload size field (most significant)
+  *  a 40-bit offset (next most significant)
+  *  a 1-bit flag set to true if the slot is itself part of 
+     the b-tree structure (least significant).
+
+Following the header, a leaf b-tree node contains N entries of 8 bytes 
+each (just the key value), where N is the value stored in the "Number 
+of entries" field of the b-tree node header. 
+
+For internal nodes (those with height>1), the b-tree node header is 
+followed by a 5 byte offset (offset of the right-child) and N 13-byte 
+entries, where each entry is a key value is followed by a 5 byte child 
+slot offset.
+
+For both internal and leaf nodes, keys are stored in ascending order.
+ 
+For each entry on an internal node, all keys stored in the sub-tree
+headed by the child slot are less than the key stored as part of the
+entry itself. If the slot is not the left-most on its node, then all
+keys stored in the sub-tree are greater than the key associated with
+the key in the previous entry. All keys stored in the sub-tree headed
+by the right-child are greater than all keys stored on the internal
+node page.
+
+The minimum payload size for an internal node is (6 + 5 + 2*13)==37 
+bytes (the Page Number field of the header is not part of the payload). 
+To ensure that this is always true, the zipvfs module never allocates a 
+slot with a payload smaller than ZIPVFS_MIN_PAYLOAD bytes.
+
+<h2>6.0 Reading</h2>
+
+Reading a page from the file is simple. First lookup the entry for
+the requested page in the page map. Then read the blob of data from
+the data area and decompress it.
+
+If there is no write transaction active and the pager is running
+in rollback mode, data can be read directly from the file, bypassing
+the pager module.
+
+
+<h2>7.0 Writing</h2>
+
+The upper layer writes to the file a page at a time. If the upper 
+layer is overwriting an existing page, then the slot that currently
+contains the compressed page image is added to the free slot b-tree.
+
+This module then compresses the page image and writes it into the 
+file. There are two ways in which this can be done:
+
+  1.  The new page may be inserted into a free slot, or
+  2.  The new page may be appended to the end of the data area.
+
+If there are less than N free slots in the database, then option 1
+is only taken if an exact fit can be found - a free-slot of the exact
+size required by the compressed page. If there are greater than or
+equal to N free slots, then option 1 is taken if there exists any
+free-slot large enough to accommodate the compressed page. The
+btree mechanism described further down in this file is used to locate
+the best fit efficiently.
+
+The value of N is configurable using the ZIPVFS_CTRL_MAXFREE 
+file-control.

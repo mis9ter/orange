@@ -1,0 +1,355 @@
+
+# This file contains test cases for zipvfs. Specifically, test cases focusing
+# on file locking and hot journal playback using zipvfs databases.
+#
+
+
+source [file join [file dirname [info script]] zipvfs_common.tcl]
+source $testdir/lock_common.tcl
+set ::testprefix zipvfs2
+
+if {[uses_8_3_names]} {
+  puts -nonewline "SQLite compiled with SQLITE_ENABLE_8_3_NAMES=2. "
+  puts "Skipping tests ${testprefix}-*."
+  finish_test
+  return
+}
+
+db close
+zip_register "" 0
+
+proc setup {db} {
+  return "
+    $db close
+    zip_register {} 0
+    sqlite3 $db test.db -vfs zip
+  "
+}
+
+#-------------------------------------------------------------------------
+# Test cases zipvfs2-1.* check that file-locks appear to work.
+#
+do_multiclient_test tn {
+  code1 [setup db]
+  code2 [setup db2]
+  code3 [setup db3]
+
+  do_test zipvfs2-2.$tn.0 {
+    sql1 { 
+      CREATE TABLE t1(a, b);
+      INSERT INTO t1 VALUES(1, 2);
+      INSERT INTO t1 VALUES(3, 4);
+    }
+  } {}
+
+  do_test zipvfs2-2.$tn.1 { sql2 "SELECT * FROM t1" } {1 2 3 4}
+  do_test zipvfs2-2.$tn.2 { sql3 "SELECT * FROM t1" } {1 2 3 4}
+
+  # Open a write transaction with [db2] and a read transaction with [db3].
+  #
+  do_test zipvfs2-2.$tn.1 { sql2 { BEGIN; INSERT INTO t1 VALUES(5, 6); } } {}
+  do_test zipvfs2-2.$tn.2 { sql3 { BEGIN; SELECT * FROM t1; } } {1 2 3 4}
+
+  # Try to commit the write transaction belonging to [db2]. This should fail,
+  # as [db3] is still holding a SHARED lock on the database file.
+  #
+  do_test zipvfs2-2.$tn.3 { csql2 COMMIT } {1 {database is locked}}
+  do_test zipvfs2-2.$tn.4 { sql3 "SELECT * FROM t1" } {1 2 3 4}
+
+  # After [db3] closes the read transaction, [db2] can successfully commit
+  # the write transaction. Check that [db3] can now see the changes made
+  # by [db2].
+  #
+  do_test zipvfs2-2.$tn.5 { sql3 COMMIT } {}
+  do_test zipvfs2-2.$tn.6 { sql2 COMMIT } {}
+  do_test zipvfs2-2.$tn.7 { sql3 "SELECT * FROM t1" } {1 2 3 4 5 6}
+
+  # Check that both [db2] and [db3] have correctly released all locks. If they
+  # have not, then the following write by [db1] would fail.
+  #
+  do_test zipvfs2-2.$tn.8  { sql1 { INSERT INTO t1 VALUES(7, 8) } } {}
+  do_test zipvfs2-2.$tn.9  { sql2 "SELECT * FROM t1" } {1 2 3 4 5 6 7 8}
+  do_test zipvfs2-2.$tn.10 { sql3 "SELECT * FROM t1" } {1 2 3 4 5 6 7 8}
+
+  # Check that the busy-handler works.
+  #
+  code1 { db timeout 1000 }
+  do_test zipvfs2-2.$tn.11 {
+    sql2 { BEGIN; SELECT * FROM t1 }
+  } {1 2 3 4 5 6 7 8}
+
+  do_test zipvfs2-2.$tn.12 {
+    list [catch { sql1 { INSERT INTO t1 VALUES(9, 10) } } msg] $msg 
+  } {1 {database is locked}}
+}
+
+#-------------------------------------------------------------------------
+# Test cases zipvfs2-2.* test that explicit ROLLBACK and ROLLBACK TO 
+# operations are successful.
+#
+forcedelete test.db
+sqlite3 db test.db -vfs zip
+do_execsql_test 2.1 {
+  PRAGMA page_size = 1024;
+  PRAGMA auto_vacuum = 0;
+  PRAGMA cache_size = 10;
+  CREATE TABLE t2(x, y);
+  CREATE INDEX i2 ON t2(x);
+  INSERT INTO t2 VALUES(1, 2);
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  INSERT INTO t2 SELECT x*2, y*2 FROM t2;
+  SELECT * FROM t2 ORDER BY x DESC LIMIT 1;
+} {2048 4096}
+
+do_execsql_test 2.2.1 {
+  BEGIN; UPDATE t2 SET x=x-1;
+}
+do_test 2.2.2 {
+  db close
+  sqlite3 db test.db -vfs zip
+  execsql {
+    PRAGMA cache_size = 10;
+    PRAGMA integrity_check;
+    SELECT count(*) FROM t2 WHERE x*2!=y;
+  }
+} {ok 0}
+
+do_execsql_test 2.3 {
+  BEGIN; 
+    UPDATE t2 SET x=x-1;
+    SELECT count(*) FROM t2 WHERE x*2!=y;
+  ROLLBACK;
+  PRAGMA integrity_check;
+  SELECT count(*) FROM t2 WHERE x*2!=y;
+} {2048 ok 0}
+
+do_execsql_test 2.4 {
+  BEGIN; 
+    UPDATE t2 SET x=x-1;
+  COMMIT;
+  PRAGMA integrity_check;
+  SELECT count(*) FROM t2 WHERE x*2!=y;
+} {ok 2048}
+
+#-------------------------------------------------------------------------
+# Test cases zipvfs2-3.* verify that hot-journal rollback works with zipvfs.
+#
+db close
+forcedelete test.db
+sqlite3 db test.db -vfs zip
+
+zip_control db main cache_size 10
+zip_control db main detect_corruption 1
+do_execsql_test 3.1 {
+  PRAGMA cache_size = 10;
+  CREATE TABLE x1(a, b);
+  INSERT INTO x1 VALUES(randomblob(100), randomblob(100));
+  INSERT INTO x1 SELECT randomblob(100), randomblob(100) FROM x1;
+  INSERT INTO x1 SELECT randomblob(100), randomblob(100) FROM x1;
+  INSERT INTO x1 SELECT randomblob(100), randomblob(100) FROM x1;
+  INSERT INTO x1 SELECT randomblob(100), randomblob(100) FROM x1;
+  INSERT INTO x1 SELECT randomblob(100), randomblob(100) FROM x1;
+  INSERT INTO x1 SELECT randomblob(100), randomblob(100) FROM x1;
+  INSERT INTO x1 SELECT randomblob(100), randomblob(100) FROM x1;
+  BEGIN;
+    UPDATE x1 SET b = randomblob(99);
+} {}
+
+do_test 3.2 { lsort [glob test.db*] } {test.db test.db-journal}
+do_test 3.3 { 
+  file copy -force test.db test.db2
+  sqlite3 db2 test.db2 -vfs zip
+  set r [db2 eval "PRAGMA integrity_check"]
+  db2 close
+  string equal $r ok
+} 0
+do_test 3.4 { 
+  file copy -force test.db test.db2
+  file copy -force test.db-journal test.db2-journal
+  sqlite3 db2 test.db2 -vfs zip
+  set r [db2 eval "PRAGMA integrity_check"]
+  db2 close
+  string equal $r ok
+} 1
+
+do_execsql_test 3.5 { COMMIT }
+
+#-------------------------------------------------------------------------
+# Test that "BEGIN EXCLUSIVE" works with zipvfs databases.
+#
+do_multiclient_test tn {
+  code1 [setup db]
+  code2 [setup db2]
+  code3 [setup db3]
+
+  do_test zipvfs2-4.$tn.0 {
+    sql1 { 
+      CREATE TABLE t4(a, b);
+      INSERT INTO t4 VALUES('w', 'x');
+      INSERT INTO t4 VALUES('y', 'z');
+    }
+  } {}
+
+  do_test zipvfs2-4.$tn.1 { sql2  "SELECT * FROM t4" } {w x y z}
+  do_test zipvfs2-4.$tn.2 { sql1  "BEGIN EXCLUSIVE" } {}
+  do_test zipvfs2-4.$tn.3 { csql2 "SELECT * FROM t4" } {1 {database is locked}}
+
+  do_test zipvfs2-4.$tn.4 { sql1  "INSERT INTO t4 VALUES('A', 'B')" } {}
+  do_test zipvfs2-4.$tn.5 { sql1  "COMMIT" } {}
+
+  do_test zipvfs2-4.$tn.6 { sql2  "SELECT * FROM t4" } {w x y z A B}
+  do_test zipvfs2-4.$tn.7 { sql2  "INSERT INTO t4 VALUES('C', 'D')" } {}
+}
+
+#-------------------------------------------------------------------------
+# The following block of tests test that the ZIP_CTRL_COMPACT file-control
+# defragments a zipvfs database file.
+#
+catch {db close}
+forcedelete test.db
+sqlite3 db test.db -vfs zip
+zip_control db main cache_size 5
+do_test 5.1 {
+  execsql { 
+    PRAGMA page_size = 512;
+    CREATE TABLE t1(a, b);
+  }
+  for {set i 0} {$i < 100} {incr i} {
+    execsql {INSERT INTO t1 VALUES(randomblob($i), zeroblob(1000-$i))}
+  }
+  set size [file size test.db]
+  array set A [zip_control db main stat]
+  expr {$A(nFreeSlot) > 10}
+} {1}
+do_test 5.2 {
+  zip_control db main compact
+  array set A [zip_control db main stat]
+  expr {$A(nFreeSlot) == 0}
+} {1}
+
+do_test 5.3 { expr {[file size test.db] < $size} } {1}
+integrity_check 5.4
+
+#-------------------------------------------------------------------------
+# Check that ZIPVFS_CTRL_LOCKING_MODE works.
+#
+do_multiclient_test tn {
+  code1 [setup db]
+  code2 [setup db2]
+  code3 [setup db3]
+
+  do_test zipvfs2-6.$tn.0 {
+    sql1  { 
+      CREATE TABLE t1(a, b); 
+      INSERT INTO t1 VALUES(1, 2);
+    }
+    code1 { zip_control db main locking_mode -1 }
+  } {0}
+
+  do_test zipvfs2-6.$tn.1 { csql2  "SELECT * FROM t1" } {0 {1 2}}
+
+  do_test zipvfs2-6.$tn.2 { code1 { zip_control db main locking_mode 1 } } {1}
+  do_test zipvfs2-6.$tn.3 { sql1 "INSERT INTO t1 VALUES(3, 4)" } {}
+  do_test zipvfs2-6.$tn.4 { code1 { zip_control db main locking_mode -1 } } {1}
+
+  do_test zipvfs2-6.$tn.5 { csql2  "SELECT * FROM t1" } {1 {database is locked}}
+
+  do_test zipvfs2-6.$tn.6 { code1 { zip_control db main locking_mode 0 } } {0}
+  do_test zipvfs2-6.$tn.7 { sql1 "INSERT INTO t1 VALUES(5, 6)" } {}
+  do_test zipvfs2-6.$tn.8 { code1 { zip_control db main locking_mode -1 } } {0}
+
+  do_test zipvfs2-6.$tn.9 { csql2  "SELECT * FROM t1" } {0 {1 2 3 4 5 6}}
+}
+
+#-------------------------------------------------------------------------
+# Check that ZIPVFS_CTRL_LOCKING_MODE returns SQLITE_NOTFOUND if attempted
+# on an uncompressed database opened using zipvfs..
+#
+do_test 7.1.1 {
+  forcedelete test.db
+  sqlite3 db test.db
+  execsql { 
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+  }
+  db close
+
+  sqlite3 db test.db -vfs zip
+  execsql { SELECT * FROM t1 }
+} {1 2}
+do_test 7.1.2 { 
+  list [catch { zip_control db main locking_mode 1 } msg] $msg
+} {1 {unknown operation}}
+do_test 7.1.3 { 
+  db close
+  sqlite3 db test.db -vfs zip
+  list [catch { zip_control db main locking_mode 1 } msg] $msg
+} {1 {unknown operation}}
+
+do_test 7.2.1 {
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql { 
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+  }
+  db close
+
+  sqlite3 db test.db -vfs zip
+  execsql { SELECT * FROM t1 }
+} {1 2}
+do_test 7.2.2 { 
+  list [catch { zip_control db main locking_mode 1 } msg] $msg
+} {0 1}
+do_test 7.2.3 { 
+  db close
+  sqlite3 db test.db -vfs zip
+  list [catch { zip_control db main locking_mode 1 } msg] $msg
+} {0 1}
+
+#-------------------------------------------------------------------------
+# Check that ZIPVFS_CTRL_LOCKING_MODE returns SQLITE_NOTFOUND if attempted
+# on an uncompressed database opened using zipvfs..
+#
+
+do_test 8.1 {
+  forcedelete test.db
+  sqlite3 db test.db
+  execsql { 
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+  }
+  db close
+} {}
+
+foreach {tn cmd} {
+  2 { zip_control db main integrity_check } 
+  3 { zip_control db main compact } 
+} {
+
+  do_test 8.$tn.1 { 
+    sqlite3 db test.db -vfs zip
+    execsql { SELECT * FROM t1 }
+    list [catch $cmd msg] $msg
+  } {1 {unknown operation}}
+
+  do_test 8.$tn.2 { 
+    sqlite3 db test.db -vfs zip
+    list [catch $cmd msg] $msg
+  } {1 {unknown operation}}
+
+  db close
+}
+
+catch {db close}
+zip_unregister
+finish_test

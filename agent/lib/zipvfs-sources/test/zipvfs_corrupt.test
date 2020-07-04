@@ -1,0 +1,60 @@
+
+# This file contains miscellaneous test cases for zipvfs.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfs_corrupt
+db close
+sqlite3_shutdown
+
+test_sqlite3_log xLog
+proc xLog {args} {
+  puts $args
+}
+
+zip_register "" 0
+rle_register "" 0
+noop_register "" 0
+padded_register "" 0
+
+sqlite3 db test.db -vfs zip
+do_execsql_test 1.0 {
+  CREATE TABLE t1(x, y);
+  WITH s(i) AS (
+    SELECT 1 UNION ALL SELECT i+1 FROM s WHERE i<400
+  )
+  INSERT INTO t1 SELECT i, i FROM s;
+}
+db close
+
+db_save
+puts [file size test.db]
+do_test 1.1 {
+  set sz [file size test.db]
+  set blk [hexio_read test.db [expr $sz-1000] 100]
+  puts $blk
+  hexio_write test.db [expr $sz-1200] $blk
+  sqlite3 db test.db -vfs zip
+} {}
+do_catchsql_test 1.1 { SELECT * FROM t1 } {1 {disk I/O error}}
+
+db close
+db_restore
+do_test 2.1 {
+  hexio_write test.db 180 FFFFFF00
+  sqlite3 db test.db -vfs zip
+} {}
+do_catchsql_test 2.2 {
+  SELECT * FROM t1
+} {1 {disk I/O error}}
+
+catch { db close }
+zip_unregister
+rle_unregister
+noop_unregister
+padded_unregister
+sqlite3_shutdown
+test_sqlite3_log
+sqlite3_initialize
+finish_test

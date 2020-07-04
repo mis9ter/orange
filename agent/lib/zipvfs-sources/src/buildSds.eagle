@@ -1,0 +1,480 @@
+###############################################################################
+#
+# buildSds.eagle --
+#
+# Build script for System.Data.SQLite with the SQLite Extension
+# For Compressed Read/Write Databases (ZIPVFS)
+#
+# Copyright (c) 2004-2008 Hipp, Wyrick & Company, Inc.
+# 6200 Maple Cove Lane, Charlotte, NC 28269 USA
+# +1.704.948.4565
+#
+# All rights reserved.
+#
+###############################################################################
+#
+# ----------------------
+# HOW TO USE THIS SCRIPT
+# ----------------------
+#
+#    1. First, a complete copy of the public System.Data.SQLite source tree is
+#       needed.  This can be obtained from "https://system.data.sqlite.org/".
+#
+#    2. Second, a copy of Eagle is also required; however, you should already
+#       have this if you have a complete copy of the public System.Data.SQLite
+#       source tree, because it is needed to run the primary System.Data.SQLite
+#       test suite.  Alternatively, it can be obtained from "https://eagle.to/".
+#
+#    3. Third, a copy of zlib (headers and libraries) is required.  This can be
+#       obtained from "https://zlib.net/".
+#
+#    4. By default, this script will look for a "zlib-*" directory in the same
+#       directory as this script in order to locate the root of the zlib source
+#       tree.  Failing that, it will fallback to using the "..\zlib" directory.
+#       This can be overridden in the first (optional) command line argument,
+#       for example:
+#
+#           EagleShell.exe -file buildSds.eagle "C:\path\to\zlib\root"
+#
+#       In the above example, the directory specified must contain the "zlib.h"
+#       and "zlib.lib" files.
+#
+#    5. By default, this script will look in the "..\dotnet" directory in order
+#       to locate the root of the System.Data.SQLite source tree.  This can be
+#       overridden in the second (optional) command line argument, for example:
+#
+#           EagleShell.exe -file buildSds.eagle "" "C:\path\to\sds\root"
+#
+#       In the above example, the directory specified must be the parent of the
+#       "SQLite.Interop" and "Setup" sub-directories.
+#
+#    6. By default, this script will build the "Release" configuration of the
+#       System.Data.SQLite binaries.  This can be overridden in the third
+#       (optional) command line argument, for example:
+#
+#           EagleShell.exe -file buildSds.eagle "" "" Debug
+#
+#       The specified base build configuration must be "Debug" or "Release".
+#
+#    7. By default, this script will build the "Win32" platform for the
+#       System.Data.SQLite binaries.  This can be overridden in the fourth
+#       (optional) command line argument, for example:
+#
+#           EagleShell.exe -file buildSds.eagle "" "" "" x64
+#
+#       The specified build platform must be "MSIL", "Win32", or "x64".  The
+#       managed-only components are (also) built automatically for "Win32".
+#
+#    This script makes certain assumptions about how the System.Data.SQLite
+#    source tree is laid out.  If that layout changes, this script will need
+#    to be updated as well.
+#
+###############################################################################
+
+proc usage { error } {
+  if {[string length $error] > 0} then {puts stdout $error}
+
+  puts stdout "usage:\
+[file tail [info nameofexecutable]]\
+[file tail [info script]] \[zlibRoot\] \[sdsRoot\] \[baseConfiguration\]\
+\[platform\] \[year\]"
+
+  exit 1
+}
+
+if {[llength $argv] >= 0 && [llength $argv] <= 5} then {
+  package require Eagle
+
+  #
+  # NOTE: Set the path to the one containing this script file.
+  #
+  set path [file normalize [file dirname [info script]]]
+
+  if {[llength $argv] >= 1 && [string length [lindex $argv 0]] > 0} then {
+    #
+    # NOTE: Use the specified directory as the root directory of the
+    #       zlib source tree.
+    #
+    set zlib_path [file normalize [lindex $argv 0]]
+  } else {
+    if {[info exists env(ZLIBSRCDIR)]} then {
+      #
+      # NOTE: Use the environment variable, which was probably set by one
+      #       of the build tools.
+      #
+      set zlib_path $env(ZLIBSRCDIR)
+    } else {
+      #
+      # NOTE: By default, try to find a directory named "zlib-*" within the
+      #       script directory as the root directory of the zlib source tree.
+      #
+      set zlib_path [lindex \
+          [glob -nocomplain -types d -- [file join $path zlib-*]] 0]
+
+      if {[string length $zlib_path] > 0} then {
+        set zlib_path [file normalize $zlib_path]
+      }
+
+      #
+      # NOTE: Failing that, use a directory named "zlib" that is a peer of
+      #       the one containing this script as the root directory of the
+      #       zlib source tree.
+      #
+      if {[string length $zlib_path] == 0} then {
+        #
+        # TODO: Update me when zlib version changes.
+        #
+        set zlib_path [file join [file dirname $path] zlib-1.2.11]
+      }
+    }
+  }
+
+  if {[llength $argv] >= 2 && [string length [lindex $argv 1]] > 0} then {
+    #
+    # NOTE: Use the specified directory as the root directory of the
+    #       System.Data.SQLite source tree.
+    #
+    set root_path [file normalize [lindex $argv 1]]
+  } else {
+    #
+    # NOTE: By default, use a directory named "dotnet" that is a peer
+    #       of the one containing this script as the root directory of
+    #       the System.Data.SQLite source tree.
+    #
+    set root_path [file join [file dirname [file dirname $path]] dotnet]
+  }
+
+  #
+  # NOTE: Build the "Release" configuration by default.  It should be noted
+  #       that the "ManagedOnly" and "NativeOnly" suffixes will be appended
+  #       to this base configuration in the arguments passed to the actual
+  #       build command (which is a batch file).
+  #
+  if {[llength $argv] >= 3 && [string length [lindex $argv 2]] > 0} then {
+    set baseConfiguration [lindex $argv 2]
+  } else {
+    set baseConfiguration Release
+  }
+
+  #
+  # NOTE: Build the "Win32" platform by default.
+  #
+  if {[llength $argv] >= 4 && [string length [lindex $argv 3]] > 0} then {
+    set platform [lindex $argv 3]
+  } else {
+    set platform ""
+  }
+
+  #
+  # NOTE: For Mono, default to using the Visual Studio 2013 project file.
+  #       The year argument is not used on other platforms.
+  #
+  if {[llength $argv] >= 5 && [string length [lindex $argv 4]] > 0} then {
+    set year [lindex $argv 4]
+  } else {
+    if {![info exists year]} then {
+      set year 2013
+    }
+  }
+
+  #
+  # NOTE: When building for Mono (on POSIX?), use special handling to build
+  #       the managed assembly and SQLite interop assembly.
+  #
+  if {[string range $baseConfiguration end-3 end] eq "Mono"} then {
+    set baseConfiguration [string range $baseConfiguration 0 end-4]
+    set isMono true
+  } else {
+    set isMono false
+  }
+
+  #
+  # NOTE: When building for .NET Core (on POSIX?), use special handling to
+  #       build the managed assembly and SQLite interop assembly.
+  #
+  if {$year eq "NetStandard20"} then {
+    if {![info exists native_year]} then {
+      set native_year 2015; # TODO: Keep this up-to-date.
+    }
+
+    set isDotNetCore true
+  } else {
+    if {![info exists native_year]} then {
+      set native_year $year
+    }
+
+    set isDotNetCore false
+  }
+
+  set props_count 0
+
+  if {!$isMono} then {
+    set props_patterns(1) {sqlite3\.(?:vs)?props}; # regex
+    set props_patterns(2) {SQLite\.Interop\.20\d\d\.(?:vs)?props}; # regex
+    set props_path [file join $root_path SQLite.Interop props]
+
+    foreach fileName [glob [file join $props_path *]] {
+      if {[regexp -- $props_patterns(1) [file tail $fileName]]} then {
+        set data [readFile $fileName]; set count 0
+
+        set replacements(1) [join [list \
+            {SQLITE_ENABLE_ZIPVFS=1} {SQLITE_ENABLE_ZIPVFS_VTAB=1} \
+            {SQLITE_ENABLE_ZLIB_FUNCS=1}] \;]
+
+        if {![regexp -- $replacements(1) $data]} then {
+          append replacements(1) {;SQLITE_PLACEHOLDER=1}
+
+          incr count [regsub -all -- \
+              {SQLITE_PLACEHOLDER=1} $data $replacements(1) data]
+        }
+
+        if {$count > 0} then {
+          writeFile $fileName $data
+        }
+
+        incr props_count
+      } elseif {[regexp -- $props_patterns(2) [file tail $fileName]]} then {
+        set data [readFile $fileName]; set count 0
+        set replacements(2) {INTEROP_INCLUDE_ZIPVFS=1}
+
+        if {![regexp -- $replacements(2) $data]} then {
+          append replacements(2) {;INTEROP_PLACEHOLDER=1}
+
+          incr count [regsub -all -- \
+              {INTEROP_PLACEHOLDER=1} $data $replacements(2) data]
+
+          foreach {name value separator} [list \
+              INTEROP_INCLUDE_DIRECTORIES  [file nativename $zlib_path] \; \
+              INTEROP_LIBRARY_DIRECTORIES  [file nativename $zlib_path] \; \
+              INTEROP_LIBRARY_DEPENDENCIES zlib.lib                     \;] {
+            #
+            # NOTE: Figure out what the new value should be.  This handling is
+            #       common to all supported versions of Visual Studio.
+            #
+            set newValue [join \
+                [list \\2 [string map [list \\ \\\\] $value]] $separator]
+
+            #
+            # NOTE: Visual Studio 2005 and 2008 require different handling here
+            #       for their property files (i.e. "vsprops" extension).
+            #
+            if {[file extension $fileName] eq ".vsprops"} then {
+              #
+              # NOTE: Replace the named UserMacro XML element contents with the
+              #       new value as well as the current value, if any.
+              #
+              incr count [regsub -all -- \
+                  [appendArgs Name=\"( $name )\" \r\n\t\t Value=\"(.*?)\"] \
+                  $data [appendArgs Name=\" $name \" \r\n\t\t Value=\" \
+                  $newValue \"] data]
+
+              #
+              # NOTE: Fixup stray semi-colons when there was no previous value.
+              #
+              incr count [regsub -all -- {Value=\"\;} $data Value=\" data]
+              incr count [regsub -all -- {\;\"} $data \" data]
+            } else {
+              #
+              # NOTE: Replace the named XML element with one containing the new
+              #       value as well as the current value, if any.
+              #
+              incr count [regsub -all -- \
+                  [appendArgs (< $name >)(.*?)(</ $name >)] $data [appendArgs \
+                  \\1 $newValue \\3] data]
+
+              #
+              # NOTE: Fixup stray semi-colons when there was no previous value.
+              #
+              incr count [regsub -all -- \
+                  [appendArgs < $name >\;] $data [appendArgs < $name >] data]
+
+              incr count [regsub -all -- \
+                  [appendArgs \;</ $name >] $data [appendArgs </ $name >] data]
+            }
+          }
+        }
+
+        if {$count > 0} then {
+          writeFile $fileName $data
+        }
+
+        incr props_count
+      }
+    }
+  }
+
+  #
+  # NOTE: Did we actually find one or more build properties files?  If not,
+  #       the root path is likely wrong.
+  #
+  if {$isMono || $props_count > 0} then {
+    #
+    # NOTE: These are the file names, without the directory, that contain the
+    #       ZIPVFS implementation to use.
+    #
+    set zipvfsFileNames(1) zipvfs.c
+    set zipvfsFileNames(2) zipvfs.h
+    set zipvfsFileNames(3) zipvfs_vtab.c
+    set zipvfsFileNames(4) algorithms.c
+
+    #
+    # NOTE: These commands make assumptions about how the System.Data.SQLite
+    #       source tree is laid out.
+    #
+    foreach name [array names zipvfsFileNames] {
+      file copy -force [file join $path $zipvfsFileNames($name)] \
+          [file join $root_path SQLite.Interop src ext $zipvfsFileNames($name)]
+    }
+
+    set targetsFileName [file join $root_path Targets \
+        SQLite.NET.Settings.targets.extra]
+
+    set targetsFileTag "<!-- properties -->"
+
+    if {[file exists $targetsFileName]} then {
+      set data [readFile $targetsFileName]
+    } else {
+      set data [subst {
+        <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+          <PropertyGroup>
+            $targetsFileTag
+          </PropertyGroup>
+        </Project>
+      }]
+    }
+
+    #
+    # NOTE: The property "NetFx35 true" could be used here as well
+    #       (VS 2008, part 1).
+    #
+    set properties ""
+
+    foreach {propertyName propertyValue} \
+        [list InteropIncludeZipVfs true] {
+      append properties [subst {
+        <${propertyName} Condition="'\$(${propertyName})' == ''">${propertyValue}</${propertyName}>
+      }]
+    }
+
+    set data [string map [list \
+        $targetsFileTag [appendArgs $properties $targetsFileTag]] $data]
+
+    writeFile $targetsFileName $data
+
+    if {[isWindows]} then {
+      if {$isDotNetCore} then {
+        set buildManagedFileName build_net_standard_20.bat
+        set buildNativeFileName build.bat
+        set buildZlibFileName buildZlib.bat
+      } elseif {$isMono} then {
+        set buildManagedFileName build_mono.bat
+        set buildNativeFileName build_mono.bat
+        set buildZlibFileName buildZlib.bat
+      } else {
+        set buildManagedFileName build.bat
+        set buildNativeFileName build.bat
+        set buildZlibFileName buildZlib.bat
+      }
+
+      # set env(NOMSBUILD64) 1; set env(NETFX35ONLY) 1; # VS 2008, part 2.
+
+      if {[string tolower $platform] in [list msil ""]} then {
+        exec -nocapture -eventflags Wait -success Success -- \
+            $env(ComSpec) /c [file join $root_path Setup \
+            $buildManagedFileName] [appendArgs $baseConfiguration \
+            ManagedOnly]
+      }
+
+      if {!$isMono} then {
+        if {[string tolower $platform] in [list win32 x64 ""]} then {
+          if {[string length $platform] > 0} then {
+            if {![info exists no(downloadZlib)] && \
+                ![file exists $zlib_path]} then {
+              package require Eagle.Test; package require Eagle.Unzip
+              set fileName [appendArgs [getTemporaryFileName] .zip]
+              uri download https://urn.to/r/zlib $fileName
+              extractZipArchive $fileName $zlib_path true
+            }
+
+            set zlib_makefile [file join $zlib_path win32 Makefile.msc]
+
+            if {![info exists no(makefileZlib)] && \
+                [file exists $zlib_makefile]} then {
+              set data [readFile $zlib_makefile]
+
+              if {[string first -nocase Debug $baseConfiguration] == 0} then {
+                set zlib_runtime -MTd
+              } else {
+                set zlib_runtime -MT
+              }
+
+              set data [string map [list \
+                  " -MD " [appendArgs " " $zlib_runtime " "]] $data]
+
+              writeFile $zlib_makefile $data
+            }
+
+            set zlibPlatform [string map [list win32 x86 x64 x86_amd64] \
+                [string tolower $platform]]
+
+            set env(ZLIBSRCDIR) $zlib_path
+
+            exec -nocapture -eventflags Wait -success Success -- \
+                $env(ComSpec) /c [file join $path $buildZlibFileName] \
+                $zlibPlatform
+          }
+
+          if {![info exists no(interopOnly)]} then {
+            set env(INTEROPONLY) 1
+          }
+
+          if {![info exists no(staticOnly)]} then {
+            set env(STATICONLY) 1
+          }
+
+          exec -nocapture -eventflags Wait -success Success -- \
+              $env(ComSpec) /c [file join $root_path Setup \
+              $buildNativeFileName] [appendArgs $baseConfiguration \
+              NativeOnly] $platform
+        }
+      }
+    } else {
+      if {$isDotNetCore} then {
+        set env(SQLITE_NET_CONFIGURATION_SUFFIX) NetStandard20
+      } elseif {$isMono} then {
+        set env(SQLITE_NET_CONFIGURATION_SUFFIX) MonoOnPosix
+      } else {
+        unset -nocomplain env(SQLITE_NET_CONFIGURATION_SUFFIX)
+      }
+
+      if {[string tolower $platform] in [list msil ""]} then {
+        set projectFileName [appendArgs System.Data.SQLite. $year .csproj]
+
+        if {$isDotNetCore} then {
+          set buildManagedFileName [appendArgs build-netstandard20- \
+              [string tolower $baseConfiguration] .sh]
+        } else {
+          set buildManagedFileName [appendArgs build-mono- \
+              [string tolower $baseConfiguration] .sh]
+        }
+
+        exec -nocapture -eventflags Wait -success Success -- \
+            [file join $root_path Setup $buildManagedFileName]
+      }
+
+      if {[string tolower $platform] in [list win32 x64 ""]} then {
+        set buildNativeFileName [appendArgs compile-interop-assembly- \
+            [string tolower $baseConfiguration] .sh]
+
+        exec -nocapture -eventflags Wait -success Success -- \
+            [file join $root_path Setup $buildNativeFileName] \
+            -DSQLITE_ENABLE_ZIPVFS=1 -DSQLITE_ENABLE_ZIPVFS_VTAB=1 \
+            -DSQLITE_ENABLE_ZLIB_FUNCS=1 -DINTEROP_INCLUDE_ZIPVFS=1 -lz
+      }
+    }
+  } else {
+    usage "no build properties files were found (bad root path?)"
+  }
+} else {
+  usage ""
+}

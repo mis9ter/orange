@@ -1,0 +1,44 @@
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+db close
+
+set thisdir [file dirname [info script]]
+
+# Organization of tests:
+#
+#   zipvfs1.test:   Simple, warm-body tests.
+#
+#   zipvfs2.test:   Locking and hot-journal rollback tests. 
+# 
+#   zipvfs3.test:   Fault-injection tests.
+#
+#   zipvfs5.test:   Miscellaneous tests, including tests of corrupt files.
+#
+#   zipvfs6.test:   Tests of the ZIPVFS_CTRL_COMPACT file-control.
+#
+#   zipvfs7.test:   Tests that focus on the code that manipulates the 
+#                   free-slot b-tree stored in the zipvfs file.
+#
+#   zipvfs8.test:   Test that the 52 byte block starting at offset 40 of the
+#                   user database file is replicated at the same location
+#                   of the zipvfs database file.
+#
+#   zipvfsG.test:   Tests for zipvfs databases that use WAL mode.
+#
+#   zipvfsG.test:   Test that using "PRAGMA journal_mode=OFF" during a
+#                   VACUUM does not leave the database vulnerable to
+#                   corruption, even if an error occurs and the VACUUM is
+#                   rolled back.
+#
+
+foreach f [lsort [glob [file join $thisdir *.test]]] {
+  set tail [file tail $f]
+# if {[lsearch {zipvfs_crash.test zipvfs3.test zipvfsE.test} $tail]>=0} continue
+  if {$tail == [file tail [info script]]} continue
+  slave_test_file $f
+}
+
+finish_test
+
+

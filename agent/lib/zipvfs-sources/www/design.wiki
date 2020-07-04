@@ -1,0 +1,101 @@
+<title>Design Rules</title>
+
+<h2>Principles</h2>
+
+<ol>
+<li value="11"><p>
+   Cross-platform.  The code can be compiled and run on multiple platforms:
+   big-endian and little-endian, 32-bit and 64-bit.
+   Database files also are fully portable between platforms - the file
+   format is platform independent.
+
+<li><p>
+   Backwards compatible.
+   Future releases of ZIPVFS should be a drop-in replacement for the
+   current release.  The interface and file format are
+   binary compatible between releases.
+
+<li><p>
+   Principle of Least Surprise.  The code does what programmers expect.  
+
+<li><p>
+   Self-contained.  Minimal external dependences.
+
+<li><p>
+   Timeless.  The code is intended to have a useful lifespan of decades.
+   The code is readable, understandable, and maintainable by people 
+   not yet born.
+   
+
+</ol>
+
+<h2>Constraints</h2>
+
+<ol>
+<li value="21"><p>
+   No large stack frames.  The system runs with 2K or less of stack space.
+
+<li><p>
+   Bounded recursion.
+
+<li><p>
+   No large memory allocations.  The maximum memory allocation size is
+   proportional to the size of the largest data row read or written,
+   or the database page size, whichever is greater.
+    
+<li><p>
+   Minimal library support.  Use SQLite-supplied utilities and services
+   wherever possible.  Acceptable routines from the standard library:
+   <ul>
+   <li> memcpy()
+   <li> memset()
+   <li> memmove()
+   <li> strcmp()
+   </ul>
+
+<li><p>
+   Threadsafe but not threaded.  ZIPVFS does not use threads itself 
+   but is safe to use within a multi-threaded application.
+
+</ol>
+
+<h2>Robustness</h2>
+
+<ol>
+<li value="31"><p>
+   I/O errors either self-correct or report back up to
+   the application.
+
+<li><p>
+   Corrupt database files are detected and reported back up to the
+   application.
+
+<li><p>
+   OOM errors are detected and handled either by making due without
+   the requested memory or by reporting the error back up to
+   the application.
+
+<li><p>
+   No resource leaks.
+   All resources are returned to the
+   system when no longer required.  This is true
+   even following OOM errors, I/O errors, or other
+   system problems.
+</ol>
+
+<h2>Naming Conventions</h2>
+
+<ol>
+<li value="41"><p>
+   All exported symbols begin with "zipvfs_".  Any symbol that begins
+   with "zipvfs_" is exported.
+
+<li><p>
+   The only exported symbols are the defined and documented interfaces.
+
+<li><p>
+   Exported symbols are lower-case with "_" seperating words.
+
+<li><p>
+   Exported macros begin with "ZIPVFS_" or "SQLITE_".
+</ol>

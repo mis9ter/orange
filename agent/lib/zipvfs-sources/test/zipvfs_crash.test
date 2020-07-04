@@ -1,0 +1,202 @@
+
+
+# This file contains crash-test scripts for zipvfs.
+#
+
+source [file join [file dirname [info script]] zipvfs_common.tcl]
+source $testdir/malloc_common.tcl
+set ::testprefix zipvfs_crash
+
+proc signature {} {
+  db eval {SELECT count(*), md5sum(a), md5sum(b), md5sum(c) FROM t1}
+}
+
+proc signature2 {} {
+  db eval {
+    SELECT count(*), md5sum(a), md5sum(b), md5sum(c) FROM t1;
+    SELECT count(*), md5sum(a), md5sum(b), md5sum(c) FROM t2;
+  }
+}
+
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+autoinstall_test_functions
+set nRepeat 100
+
+if {[uses_8_3_names]} {
+  set jrnl "test.nal"
+  set jrnl2 "test2.nal"
+  set mjrnl "test.9*"
+} else {
+  set jrnl "test.db-journal"
+  set jrnl2 "test2.db-journal"
+  set mjrnl "test.db-mj*"
+}
+
+
+foreach {tn1 bMultiplex zipvfs} {
+  1 0 noop
+  2 0 zip
+  3 0 rle
+  4 1 noop
+  5 1 zip
+  6 1 rle
+} {
+  set chunk_size 131072
+
+  if {$bMultiplex} {
+    sqlite3_multiplex_initialize "" 1
+    set vfs_init {
+      sqlite3_multiplex_initialize crash 1
+      zip_register multiplex 0
+      rle_register multiplex 0
+      noop_register multiplex 0
+      padded_register multiplex 0
+    }
+  } else {
+    set vfs_init {
+      zip_register crash 0
+      rle_register crash 0
+      noop_register crash 0
+      padded_register crash 0
+    }
+  }
+
+  zip_register "" 0
+  rle_register "" 0
+  noop_register "" 0
+  padded_register "" 0
+
+  foreach f [glob -nocomplain test.* test2.*] { forcedelete $f }
+  forcedelete test.nal test2.nal
+  sqlite3 db test.db -vfs $zipvfs
+
+  catch { sqlite3_multiplex_control db main chunk_size $chunk_size }
+
+  do_execsql_test $tn1.0 {
+    CREATE TABLE t1(a, b, c, UNIQUE(a, b, c));
+    INSERT INTO t1 VALUES(randomblob(200), randomblob(200), randomblob(200));
+INSERT INTO t1 VALUES(randomblob(200), randomblob(200), randomblob(200));
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+  }
+  set sig [signature]
+  
+  #-------------------------------------------------------------------------
+  # Test case 1. Single file transactions.
+  #
+  foreach {tn2 delay deletejournal file} "
+    1 1 1 $jrnl
+    2 1 0 $jrnl
+    3 2 0 $jrnl
+    4 3 0 $jrnl
+    5 1 0 test.db
+  " {
+    for {set i 0} {$i < $nRepeat} {incr i} {
+      do_test $tn1.1.$tn2.1.$i {
+        crashsql -delay $delay -file $file -seed $i -opendb "
+          $vfs_init
+          sqlite3 db test.db -vfs $zipvfs
+          catch { sqlite3_multiplex_control db main chunk_size $chunk_size }
+          zip_control db main cache_size 2
+        " {
+          UPDATE t1 SET b = randomblob(100) WHERE rowid%2;
+        }
+      } {1 {child process exited abnormally}}
+      if {$deletejournal} { file delete $jrnl }
+      do_test $tn1.1.$tn2.2.$i { signature } $sig
+      integrity_check $tn1.1.$tn2.3.$i
+    }
+  }
+
+  #-------------------------------------------------------------------------
+  # Test case 2. Transactions involving multiple databases.
+  #
+  db close
+  foreach f [glob -nocomplain test.* test2.*] { forcedelete $f }
+  forcedelete test.nal test2.nal
+  sqlite3 db test.db -vfs $zipvfs
+  execsql {  ATTACH 'test2.db' AS aux; }
+  catch {
+    sqlite3_multiplex_control db main chunk_size $chunk_size
+    sqlite3_multiplex_control db aux chunk_size $chunk_size
+  }
+  do_execsql_test 2.0 {
+    CREATE TABLE t1(a, b, c, UNIQUE(a, b, c));
+INSERT INTO t1 VALUES(randomblob(200), randomblob(200), randomblob(200));
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+INSERT INTO t1 SELECT randomblob(200),randomblob(200),randomblob(200) FROM t1;
+    CREATE TABLE aux.t2(a, b, c, UNIQUE(a, b, c));
+    INSERT INTO t2 SELECT * FROM t1;
+  }
+  
+  set sig [signature2]
+  
+  foreach {tn2 delay file} "
+    1 1 $jrnl
+    2 1 $jrnl2
+    3 1 test.db
+    4 1 test2.db
+    5 1 $mjrnl
+  " {
+    for {set i 0} {$i < $nRepeat} {incr i} {
+      do_test $tn1.2.$tn2.1.$i {
+        crashsql -delay $delay -file $file -seed $i -opendb "
+          $vfs_init
+          sqlite3 db test.db -vfs $zipvfs
+          db eval { ATTACH 'test2.db' AS aux; }
+          catch {
+            sqlite3_multiplex_control db main chunk_size $chunk_size
+            sqlite3_multiplex_control db aux chunk_size $chunk_size
+          }
+        " {
+          BEGIN;
+            UPDATE t1 SET b = randomblob(100) WHERE rowid%2;
+            UPDATE t2 SET b = randomblob(100) WHERE rowid%2;
+          COMMIT;
+        }
+      } {1 {child process exited abnormally}}
+  
+      do_test $tn1.2.$tn2.2.$i { signature2 } $sig
+  
+      # If the crash occurred while syncing the master-journal file to disk,
+      # the master-journal may end up filled with garbage data, or may end
+      # up zero bytes in size. In this case SQLite never deletes the file 
+      # (since there exist no journals containing pointers to it).
+      #
+      # Zero byte master-journal files cause a problem for these tests. 
+      # Because the VFS xAccess() method returns 0 (does not exist) for
+      # zero byte files, the code that searches for a free master-journal
+      # file name may fail, leading SQLite to attempt an exclusive-create 
+      # operation on a master journal file that already exists. Which causes
+      # an SQLITE_CANTOPEN. 
+      #
+      # So, delete all *mj* files after running such a crash-test.
+      #
+      if { $file == $mjrnl } {
+        foreach f [glob -nocomplain $mjrnl] { forcedelete $f }
+      }
+    }
+  }
+  
+  db close
+  rle_unregister
+  zip_unregister
+  noop_unregister
+  padded_unregister
+  sqlite3_multiplex_shutdown
+}
+
+
+
+finish_test
+

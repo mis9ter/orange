@@ -1,0 +1,65 @@
+
+
+# This file contains test cases for zipvfs. Specifically, test cases 
+# focusing on OOM and IO error handling while the upper level pager 
+# is using journal_mode=off.
+#
+
+source [file join [file dirname [info script]] zipvfs_common.tcl]
+source $testdir/lock_common.tcl
+set ::testprefix zipvfsfault2
+db close
+
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+# Register the zipvfs as the default VFS for the tests in this file.
+#
+v3_register ddd "" 0 
+zip_register "" 1 
+
+sqlite3 db test.db
+faultsim_save_and_close
+
+do_faultsim_test 1 -faults * -prep {
+  catch {db close}
+  faultsim_restore_and_reopen
+  zipvfs_vtab_register db
+  execsql { CREATE TEMP TABLE xx(x) }
+} -body {
+  execsql { 
+    CREATE VIRTUAL TABLE temp.ds USING zipvfs_dictstore(main);
+    INSERT INTO ds VALUES(10, X'11223344556677889900');
+    SELECT id, quote(val) FROM ds;
+  }
+} -test {
+  faultsim_test_result {0 {10 X'11223344556677889900'}} {1 {vtable constructor failed: ds}}
+}
+
+catch { db close }
+forcedelete test.db
+sqlite3 db file:test.db?vfs=ddd&zv=dict -uri 1
+zipvfs_vtab_register db
+do_execsql_test 2.0 {
+  CREATE VIRTUAL TABLE temp.ds USING zipvfs_dictstore(main);
+  INSERT INTO ds VALUES(10, X'11223344556677889900');
+  CREATE TABLE t1(a, b);
+  INSERT INTO t1 VALUES(1, 2), (3, 4);
+}
+faultsim_save_and_close
+
+do_faultsim_test 2 -faults * -prep {
+  catch {db close}
+  faultsim_restore
+  sqlite3 db file:test.db?vfs=ddd -uri 1
+} -body {
+  execsql { SELECT * FROM t1 }
+} -test {
+  faultsim_test_result {0 {1 2 3 4}} {1 {disk I/O error}}
+}
+
+
+catch {db close}
+zip_unregister
+generic_unregister ddd
+finish_test

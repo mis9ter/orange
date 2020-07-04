@@ -1,0 +1,88 @@
+# Tests for the zipvfs module.
+#
+# The tests in this file verify that automatic detection of the compression 
+# algorithm seems to work.
+#
+# The xCompressOpen and xCompressClose methods are also tested by activating
+# the encryption logic of the zip compressor.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfs9
+
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+do_test 1.1 {
+  zip_register "" 0 abcd
+} {}
+do_test 1.2 {
+  generic_unregister abcd
+} {}
+do_test 1.3 {
+  list [catch {zip_register "" 0 abcdefghijklmn} msg] $msg
+} {1 {SQL logic error}}
+do_test 1.4 {
+  list [catch {zip_register "" 0 abcdefghijklm} msg] $msg
+} {0 {}}
+do_test 1.5 {
+  generic_unregister abcdefghijklm
+} {}
+
+noop_register "" 0
+
+foreach {tn name} {
+  1  zip
+  2  x
+  3  abcdefghijkl
+  4  abcdefghijklm
+} {
+  catch { db close }
+  forcedelete test.db
+  zip_register "" 0 $name
+  sqlite3 db test.db -vfs $name
+  execsql {
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+  }
+  db close
+  do_test 2.$tn {
+    sqlite3 db test.db -vfs noop
+    execsql { SELECT * FROM t1 }
+  } {1 2}
+
+  catch { db close }
+  generic_unregister $name
+}
+
+zip_register "" 0
+do_test 3.0 {
+  forcedelete test.db
+  sqlite3 db file:test.db?vfs=zip&pw=123456
+  execsql {
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+  }
+  db close
+} {}
+
+foreach {tn uri res} {
+  1  file:test.db?pw=123456                 0
+  2  file:test.db?auto_detect=1&pw=123456   0
+  3  file:test.db?auto_detect=0&pw=123456   1
+  4  file:test.db?pw=123457                 1
+} {
+  sqlite3 db $uri -vfs noop
+  do_test 3.$tn {
+    catch { execsql { SELECT * FROM t1 } }
+  } $res
+  db close
+}
+
+
+
+noop_unregister
+zip_unregister
+finish_test

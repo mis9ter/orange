@@ -1,0 +1,70 @@
+
+
+# This file contains test cases for zipvfs. Specifically, test cases 
+# focusing on OOM and IO error handling while the upper level pager 
+# is using journal_mode=off.
+#
+
+source [file join [file dirname [info script]] zipvfs_common.tcl]
+source $testdir/lock_common.tcl
+set ::testprefix zipvfsfault
+db close
+
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+# Register the zipvfs as the default VFS for the tests in this file.
+#
+zip_register "" 1 
+
+sqlite3 db test.db
+do_execsql_test 1.0 {
+  PRAGMA cache_size = 10;
+  PRAGMA zipvfs_cache_size = 10;
+  PRAGMA page_size = 512;
+
+  CREATE TABLE t1(a PRIMARY KEY, b, c);
+  CREATE INDEX i1b ON t1(b);
+  CREATE INDEX i1c ON t1(c);
+
+  WITH s(i) AS ( VALUES(1) UNION ALL SELECT i+1 FROM s WHERE i<25 )
+  INSERT INTO t1 SELECT i, randomblob(100), randomblob(400) FROM s;
+} {10}
+faultsim_save_and_close
+
+do_faultsim_test 1 -faults * -prep {
+  catch {db close}
+  faultsim_restore_and_reopen
+} -body {
+  execsql { UPDATE t1 SET b=randomblob(99) }
+} -test {
+  faultsim_test_result {0 {}}
+  faultsim_integrity_check
+  set res [db eval { SELECT sum(length(b)), sum(length(c)) FROM t1 }]
+  if {$res != "2500 10000" && $res != "2475 10000"} {
+    error "content has changed! ($res)"
+  }
+}
+
+do_faultsim_test 2 -faults * -prep {
+  catch {db close}
+  faultsim_restore_and_reopen
+} -body {
+  execsql { 
+    BEGIN;
+      UPDATE t1 SET b=randomblob(99) WHERE b<=12;
+      UPDATE t1 SET b=randomblob(99) WHERE b>12;
+    COMMIT;
+  }
+} -test {
+  faultsim_test_result {0 {}}
+  faultsim_integrity_check
+  set res [db eval { SELECT sum(length(b)), sum(length(c)) FROM t1 }]
+  if {$res != "2500 10000" && $res != "2475 10000"} {
+    error "content has changed! ($res)"
+  }
+}
+
+catch {db close}
+zip_unregister
+finish_test

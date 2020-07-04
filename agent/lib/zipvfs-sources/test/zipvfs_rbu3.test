@@ -1,0 +1,203 @@
+
+#-------------------------------------------------------------------------
+# This file contains test cases for zipvfs and the SQLite RBU extension.
+# Specifically, test cases to verify that rbu vacuum works with zipvfs
+# databases.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfs_rbu3
+
+ifcapable !rbu {
+  finish_test
+  return
+}
+
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+sqlite3rbu_create_vfs -default ovfs ""
+
+#zip_register "" 1
+zipvfs_register 1
+
+proc first_16 {file} {
+  set fd [open $file]
+  fconfigure $fd -encoding binary -translation binary
+  set data [read $fd 16]
+  close $fd
+  set data
+}
+
+proc do_rbu_vacuum_test {tn {fname test.db}} {
+  set f16 [first_16 test.db]
+
+  uplevel [list do_test $tn.1 [string map [list %FNAME% $fname] {
+    forcedelete state.db
+    if {$::step==0} { sqlite3rbu_vacuum rbu %FNAME% state.db }
+    while 1 {
+      if {$::step==1} { sqlite3rbu_vacuum rbu %FNAME% state.db }
+      set rc [rbu step]
+      if {$rc!="SQLITE_OK"} break
+      if {$::step==1} { rbu close }
+    }
+    rbu close
+  }] {SQLITE_DONE}]
+
+  uplevel [list do_execsql_test $tn.2 {
+    PRAGMA integrity_check
+  } ok]
+
+  uplevel [list do_test $tn.3 [list first_16 test.db] $f16]
+}
+
+
+foreach ::step {0 1} {
+  set ::testprefix zipvfs_rbu3-$::step
+
+  reset_db
+  db close
+  sqlite3 db test.db
+
+  do_execsql_test 1.0 {
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+    INSERT INTO t1 VALUES(3, 4);
+  }
+  do_rbu_vacuum_test 1.1
+  do_test 1.2 { first_16 test.db } "SQLite format 3\000"
+  db close
+
+  forcedelete test.db
+  sqlite3 db file:test.db?zv=zlib
+  do_execsql_test 2.0 {
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+    INSERT INTO t1 VALUES(3, 4);
+  }
+  do_test 2.1 { first_16 test.db } "ZV-zlib\000\000\000\000\000\000\000\000\000"
+  do_rbu_vacuum_test 2.2
+  db close
+
+  forcedelete test.db
+  sqlite3 db file:test.db?zv=rle
+  do_execsql_test 3.0 {
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+    INSERT INTO t1 VALUES(3, 4);
+  }
+  do_test 3.1 { 
+    first_16 test.db 
+  } "ZV-rle\000\000\000\000\000\000\000\000\000\000"
+  do_rbu_vacuum_test 3.2
+  db close
+
+  forcedelete test.db
+  sqlite3 db file:test.db?zv=rle
+  do_execsql_test 3.0 {
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+    INSERT INTO t1 VALUES(3, 4);
+  }
+  do_test 3.1 { 
+    first_16 test.db 
+  } "ZV-rle\000\000\000\000\000\000\000\000\000\000"
+  do_rbu_vacuum_test 3.2
+  db close
+
+  forcedelete test.db
+  sqlite3 db file:test.db?zv=rle&password=12345
+  do_execsql_test 3.0 {
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+    INSERT INTO t1 VALUES(3, 4);
+  }
+  do_test 3.1 { 
+    first_16 test.db 
+  } "ZV-rle\000\000\000\000\000\000\000\000\000\000"
+  do_rbu_vacuum_test 3.2 file:test.db?password=12345
+  db close
+
+  ifcapable 8_3_names {
+    forcedelete test.db
+    sqlite3 db file:test.db?zv=rle&password=12345&8_3_names=1
+    do_execsql_test 4.0 {
+      CREATE TABLE t1(a, b, UNIQUE(a, b));
+      INSERT INTO t1 VALUES(1, randomblob(800));
+      INSERT INTO t1 VALUES(3, randomblob(800));
+    }
+    do_test 4.1 { 
+      first_16 test.db 
+    } "ZV-rle\000\000\000\000\000\000\000\000\000\000"
+    do_rbu_vacuum_test 4.2 file:test.db?password=12345&8_3_names=1
+    db close
+
+    do_test 4.3.0 { file exists test.oal } {0}
+    do_test 4.3.1 {
+      forcedelete state.db
+      sqlite3rbu_vacuum rbu file:test.db?password=12345&8_3_names=1 state.db
+      rbu step
+      rbu close
+      file exists test.oal
+    } {1}
+    do_test 4.3.2 {
+      while {[file exists test.oal]} {
+        sqlite3rbu_vacuum rbu file:test.db?password=12345&8_3_names=1 state.db
+        rbu step
+        rbu close
+      }
+      file exists test.wal
+    } {1}
+
+    do_test 4.3.4 { 
+      first_16 test.db 
+    } "ZV-rle\000\000\000\000\000\000\000\000\000\000"
+  }
+
+  # Check that the following user db settings are not disturbed by an
+  # RBU vacuum.
+  #
+  #    PRAGMA page_size;
+  #    PRAGMA auto_vacuum;
+  #    PRAGMA user_version;
+  #    PRAGMA application_id;
+  #
+  forcedelete test.db
+  sqlite3 db file:test.db?zv=rle
+  do_execsql_test 5.0 {
+    PRAGMA page_size = 8192;
+    PRAGMA auto_vacuum = 2;
+    PRAGMA user_version = 999;
+    PRAGMA application_id = 1000;
+    CREATE TABLE x1(x, y);
+    INSERT INTO x1 VALUES(randomblob(100), randomblob(100));
+    INSERT INTO x1 VALUES(randomblob(100), randomblob(100));
+    INSERT INTO x1 VALUES(randomblob(100), randomblob(100));
+    INSERT INTO x1 VALUES(randomblob(100), randomblob(100));
+    INSERT INTO x1 VALUES(randomblob(100), randomblob(100));
+    CREATE INDEX i1 ON x1(y, x);
+    PRAGMA page_size;
+    PRAGMA auto_vacuum;
+    PRAGMA user_version;
+    PRAGMA application_id;
+  } {8192 2 999 1000}
+  breakpoint
+  do_rbu_vacuum_test 5.1 file:test.db
+  do_execsql_test 5.2 {
+    PRAGMA main.page_size;
+    PRAGMA main.auto_vacuum;
+    PRAGMA main.user_version;
+    PRAGMA main.application_id;
+  } {8192 2 999 1000}
+
+  db close
+}
+
+catch { db close }
+zipvfs_unregister
+sqlite3rbu_destroy_vfs ovfs
+
+finish_test
+

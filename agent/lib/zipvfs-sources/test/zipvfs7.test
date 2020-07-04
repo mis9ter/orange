@@ -1,0 +1,389 @@
+
+#-------------------------------------------------------------------------
+# Tests for the zipvfs module.
+#
+# The tests in this file aim to exercise otherwise untested branches of the
+# code that manipulates the free-list b-tree structure.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfs7
+
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+zip_register "" 0
+
+do_test 1.0 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  zip_control db main max_free 1000000
+  execsql {
+    PRAGMA secure_delete = ON;
+    BEGIN;
+      CREATE TABLE t1(x);
+      INSERT INTO t1 VALUES(randomblob(900));
+      INSERT INTO t1 VALUES(randomblob(900));
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+    COMMIT;
+    UPDATE t1 SET x = zeroblob(900);
+    DELETE FROM t1;
+  }
+
+  zip_control db main compact
+  zip_control db main integrity_check;
+} {}
+
+do_test 2.0 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  zip_control db main max_free 1000000
+  execsql {
+    PRAGMA secure_delete = ON;
+    BEGIN;
+      CREATE TABLE t1(x);
+      INSERT INTO t1 VALUES(randomblob(900));
+      INSERT INTO t1 VALUES(randomblob(900));
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+      INSERT INTO t1 SELECT randomblob(900) FROM t1;
+    COMMIT;
+    UPDATE t1 SET x = zeroblob(900);
+    UPDATE t1 SET x = randomblob(900);
+  }
+
+  zip_control db main compact
+  zip_control db main integrity_check;
+} {}
+
+do_test 3.0 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  zip_control db main max_free 1000000
+  execsql {
+    PRAGMA secure_delete = ON;
+    PRAGMA page_size = 4096;
+    BEGIN;
+      CREATE TABLE t1(x, y);
+  }
+  for {set i 1000} {$i >= 10} {incr i -1} {
+    execsql { INSERT INTO t1 VALUES( randomblob($i), zeroblob(3990-$i) ) }
+  }
+  execsql { COMMIT }
+
+  for {set i 0} {$i < 1000} {incr i} {
+    execsql { DELETE FROM t1 WHERE rowid = (SELECT min(rowid) FROM t1) }
+  }
+  for {set i 1000} {$i >= 10} {incr i -1} {
+    execsql { INSERT INTO t1 VALUES( randomblob($i), zeroblob(3990-$i) ) }
+  }
+
+  zip_control db main integrity_check;
+  zip_control db main compact
+  zip_control db main integrity_check;
+} {}
+
+set strcounter 0
+proc str {n} {
+  incr ::strcounter
+  string range [string repeat "$::strcounter." $n] 1 $n
+}
+
+rle_register "" 0
+do_test 4.0 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs rle
+  zip_control db main max_free 1000000
+
+  db func str str
+
+  execsql {
+    PRAGMA secure_delete = ON;
+    PRAGMA page_size = 512;
+    BEGIN;
+      CREATE TABLE t1(x, y);
+  }
+  for {set i 1} {$i < 480} {incr i} {
+    execsql { INSERT INTO t1 VALUES( str($i), zeroblob(485-$i) ) }
+  }
+  execsql COMMIT
+  zip_control db main integrity_check;
+  for {set i 1} {$i < 480} {incr i} {
+    execsql { DELETE FROM t1 WHERE rowid = $i }
+  }
+  zip_control db main integrity_check;
+} {}
+do_test 4.1 {
+  for {set i 479} {$i > 0} {incr i -1} {
+    execsql { INSERT INTO t1 VALUES( str($i), zeroblob(485-$i) ) }
+  }
+  zip_control db main integrity_check;
+} {}
+
+
+proc set_pg_content {iPg nByte} {
+  set fd [db incrblob t1 x 1]
+  set off [expr 250 + ($iPg * 508)]
+  seek $fd $off
+  puts -nonewline $fd [string repeat x $nByte]
+  close $fd
+}
+
+
+do_test 5.0 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs rle
+  zip_control db main max_free 1000000
+
+  db func str str
+  execsql {
+    PRAGMA secure_delete = ON;
+    PRAGMA page_size = 512;
+    BEGIN;
+      CREATE TABLE t1(x);
+      INSERT INTO t1 VALUES(zeroblob(508*500));
+    COMMIT;
+  }
+  zip_control db main integrity_check;
+} {}
+do_test 5.1 {
+  zip_control db main append_freeslot 50
+  zip_control db main append_freeslot 50
+  zip_control db main append_freeslot 50
+  zip_control db main append_freeslot 50
+  zip_control db main append_freeslot 70
+  zip_control db main append_freeslot 70
+  zip_control db main append_freeslot 40
+  zip_control db main append_freeslot 40
+  zip_control db main append_freeslot 40
+} {}
+do_test 5.2 {
+  set_pg_content 100 55
+  set_pg_content 101 55
+} {}
+
+do_test 6.0 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs rle
+  zip_control db main max_free 1000000
+
+  db func str str
+  execsql {
+    PRAGMA secure_delete = ON;
+    PRAGMA page_size = 512;
+    BEGIN;
+      CREATE TABLE t1(x);
+      INSERT INTO t1 VALUES(zeroblob(508*500));
+    COMMIT;
+  }
+  zip_control db main integrity_check;
+} {}
+do_test 6.1 {
+  for {set i 0} {$i < 14} {incr i} {
+    zip_control db main append_freeslot 51
+  }
+  for {set i 0} {$i < 13} {incr i} {
+    zip_control db main append_freeslot 52
+  }
+  for {set i 0} {$i < 5} {incr i} {
+    zip_control db main append_freeslot 50
+  }
+  for {set i 0} {$i < 13} {incr i} {
+    zip_control db main remove_freeslot 52
+  }
+} {}
+
+#-------------------------------------------------------------------------
+# The following tests check that some specific types of corruption are
+# detected by the integrity-check code. Specifically, that:
+#
+#   * For a given page number, the slot-payload-size field is less than
+#     or equal to the user database page-size.
+#
+#   * For a given page number, the offset does point to a slot containing
+#     the correct page.
+#
+do_test 7.0 {
+  catch { db close }
+  forcedelete test.db
+  sqlite3 db test.db -vfs rle
+  execsql {
+    BEGIN;
+      CREATE TABLE t1(a, b);
+      INSERT INTO t1 VALUES(1, 2);
+    COMMIT;
+  }
+  db_save
+  db close
+} {}
+do_test 7.1 {
+  hexio_write test.db 116 [format %.16X 456]
+  hexio_write test.db 205 [format %.4X 17000]
+  sqlite3 db test.db -vfs rle
+  list [catch {zip_control db main integrity_check} msg] $msg
+} {1 {disk I/O error}}
+do_test 7.2 {
+  catch { db close } 
+  db_restore
+  hexio_write test.db 116 [format %.16X 456]
+  hexio_write test.db 456 00000004
+  sqlite3 db test.db -vfs rle
+  list [catch {zip_control db main integrity_check} msg] $msg
+} {1 {disk I/O error}}
+
+#-------------------------------------------------------------------------
+#
+do_test 8.0 {
+  catch { db close }
+  forcedelete test.db
+  sqlite3 db test.db -vfs rle
+  execsql {
+    PRAGMA secure_delete = 1;
+    BEGIN;
+      CREATE TABLE t1(a, b);
+      INSERT INTO t1 VALUES(1, 2);
+    COMMIT;
+  }
+  zip_control db main offset_and_size 1
+} {456 117}
+
+do_test 8.1 {
+  sqlite3 db2 file:test.db?excl=1 -vfs rle
+  execsql { INSERT INTO t1 VALUES(3, 4) } db2
+  list [catch { zip_control db main offset_and_size 1 } msg] $msg
+} {1 {database is locked}}
+db2 close
+
+do_execsql_test 8.1.1 {
+  SELECT * FROM t1;
+} {1 2 3 4}
+
+do_test 8.2   { 
+  set nUsed [zip_control db main cache_used]
+  # The exact number of bytes used depends on the size of some structures
+  # that changed based on compile time options. Hence the range here.
+  #puts "\[nUsed=$nUsed\]"
+  expr {$nUsed>3000 && $nUsed<3800}
+} {1}
+
+do_test 8.3.1 { zip_control db main cache_hit 0 } {15}
+do_test 8.3.2 { zip_control db main cache_hit 1 } {15}
+do_test 8.3.3 { zip_control db main cache_hit 0 } {0}
+
+do_test 8.3.1 { zip_control db main cache_write 0 } {1}
+do_test 8.3.2 { zip_control db main cache_write 1 } {1}
+do_test 8.3.3 { zip_control db main cache_write 0 } {0}
+
+do_test 8.4.1 { zip_control db main cache_miss 0 } {1}
+do_test 8.4.2 { zip_control db main cache_miss 1 } {1}
+do_test 8.4.3 { zip_control db main cache_miss 0 } {0}
+
+do_test 8.5.1 { zip_control db main direct_read 0 } {3}
+do_test 8.5.2 { zip_control db main direct_read 1 } {3}
+do_test 8.5.3 { zip_control db main direct_read 0 } {0}
+
+do_test 8.6.1 { zip_control db main direct_bytes 0 } {279}
+do_test 8.6.2 { zip_control db main direct_bytes 1 } {279}
+do_test 8.6.3 { zip_control db main direct_bytes 0 } {0}
+
+#-----------------------------------------------------------
+#
+do_test 9.0 {
+  catch { db close }
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql {
+    BEGIN;
+      CREATE TABLE t1(a, b);
+      CREATE TABLE t2(a, b);
+      INSERT INTO t1 VALUES(1, 2);
+      INSERT INTO t2 VALUES(3, 4);
+    COMMIT;
+  }
+} {}
+
+do_test 9.1 {
+  sqlite3 db test.db -vfs rle
+  execsql { SELECT * FROM t1 UNION ALL SELECT * FROM t2; }
+} {1 2 3 4}
+
+do_test 9.2 {
+  db close
+  v3_register xyz {} 0
+  hexio_write test.db 3 78797A00
+  sqlite3 db test.db -vfs rle
+  catchsql { SELECT * FROM t1 UNION ALL SELECT * FROM t2; }
+} {1 {unable to open database file}}
+generic_unregister xyz
+
+do_test 9.3 {
+  db close
+  register_jt_vfs ""
+  hexio_write test.db 3 6A7400
+  sqlite3 db test.db -vfs rle
+  catchsql { SELECT * FROM t1 UNION ALL SELECT * FROM t2; }
+} {1 {unable to open database file}}
+unregister_jt_vfs
+
+#-----------------------------------------------------------
+#
+do_test 10.0 {
+  catch { db close }
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql {
+    BEGIN;
+      CREATE TABLE t1(a, b);
+      INSERT INTO t1 VALUES(1, 2);
+      INSERT INTO t1 VALUES(3, 4);
+    COMMIT;
+  }
+  sqlite3 db2 test.db -vfs zip
+  execsql {
+    BEGIN;
+      SELECT * FROM t1;
+  }
+} {1 2 3 4}
+
+proc busyhandler {args} {
+  incr ::busyhandler_count
+  return 1
+}
+
+do_test 10.1 {
+  db2 busy busyhandler
+  set ::busyhandler_count 0
+  catchsql { INSERT INTO t1 VALUES(5, 6) } db2
+} {1 {database is locked}}
+do_test 10.2 { set ::busyhandler_count } 1
+
+do_test 10.3 {
+  set ::busyhandler_count 0
+  breakpoint
+  zip_control db2 main busy_handler
+  catchsql { INSERT INTO t1 VALUES(5, 6) } db2
+} {1 {database is locked}}
+do_test 10.4 { set ::busyhandler_count } 1
+db2 close
+
+db close
+zip_unregister
+rle_unregister
+finish_test

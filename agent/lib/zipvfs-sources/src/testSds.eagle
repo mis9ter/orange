@@ -1,0 +1,283 @@
+###############################################################################
+#
+# testSds.eagle --
+#
+# Test script for System.Data.SQLite with the SQLite Extension
+# For Compressed Read/Write Databases (ZIPVFS)
+#
+# Copyright (c) 2004-2008 Hipp, Wyrick & Company, Inc.
+# 6200 Maple Cove Lane, Charlotte, NC 28269 USA
+# +1.704.948.4565
+#
+# All rights reserved.
+#
+###############################################################################
+#
+# ----------------------
+# HOW TO USE THIS SCRIPT
+# ----------------------
+#
+#    1. First, execute one of the "buildSds*.bat" batch tools in order to build
+#       the System.Data.SQLite binaries with ZIPVFS enabled.  This should also
+#       end up copying the necessary managed / native binaries to directories
+#       where Eagle and the CLR can easily find them.
+#
+#    2. Execute this tool using a command similar to the following:
+#
+#           EagleShell.exe -file testSds.eagle
+#
+#    This script makes certain assumptions about how the System.Data.SQLite
+#    and ZIPVFS source trees are laid out.  If those layouts change, this
+#    script will need to be updated as well.
+#
+###############################################################################
+
+set script [info script]
+set path [file dirname $script]
+set dbFileName(1) [file join $path test1.ez.db]
+set dbFileName(2) [file join $path test2.dz.db]
+set password(1) 1234
+
+###############################################################################
+
+if {![info exists encrypted]} then {
+  set encrypted true
+}
+
+###############################################################################
+
+if {$encrypted} then {
+  set dbFileName(0) $dbFileName(1)
+
+  set dbUri(0) [appendArgs \
+      file: $dbFileName(0) ?vfs=zipvfs&zv=zlib&password= $password(1)]
+} else {
+  set dbFileName(0) $dbFileName(2)
+
+  set dbUri(0) [appendArgs \
+      file: $dbFileName(0) ?vfs=zipvfs&zv=zlib]
+}
+
+###############################################################################
+
+if {[isWindows]} then {
+  set zipvfsExeFileName [file join $path zsqlite3.exe]
+} else {
+  set zipvfsExeFileName [file join $path zsqlite3]
+}
+
+###############################################################################
+
+if {![info exists no(copySdsFiles)]} then {
+  #
+  # NOTE: Procedure copied from "lib/System.Data.SQLite/common.eagle" in
+  #       the System.Data.SQLite source tree.  It is designed to return
+  #       non-zero when running on the Mac OS or iOS operating systems.
+  #
+  proc isDarwin {} {
+    return [expr {
+      [info exists ::tcl_platform(os)] && $::tcl_platform(os) eq "Darwin"
+    }]
+  }
+
+  set done(managed) false; set done(native) false
+  set copied(managed) false; set copied(native) false
+  set message(managed) false; set message(native) false
+
+  if {![info exists root_path]} then {
+    set root_path [file join [file dirname [file dirname $path]] dotnet]
+  }
+
+  if {[isDotNetCore]} then {
+    set managedYears [list \
+        NetStandard20 NetStandard20 NetStandard20 NetStandard20 \
+        NetStandard20 NetStandard20 NetStandard20]
+
+    set nativeYears [list 2017 2015 2013 2012 2010 2008 2005]
+    set extraSourceDirectory netstandard2.0
+    set extraTargetDirectory netStandard20
+  } else {
+    set managedYears [list 2017 2015 2013 2012 2010 2008 2005]
+    set nativeYears $managedYears
+    set extraSourceDirectory ""
+    set extraTargetDirectory netFramework40
+  }
+
+  if {![info exists configuration]} then {
+    set configuration Release
+  }
+
+  if {![info exists suffix]} then {
+    if {[isDotNetCore]} then {
+      set suffix NetStandard20
+    } elseif {[isMono]} then {
+      set suffix MonoOnPosix
+    } else {
+      set suffix ""
+    }
+  }
+
+  if {[isWindows]} then {
+    set nativeFileNameOnly SQLite.Interop.dll
+  } elseif {[isDotNetCore]} then {
+    set nativeFileNameOnly SQLite.Interop.dll
+  } elseif {[isDarwin]} then {
+    set nativeFileNameOnly libSQLite.Interop.dylib
+  } else {
+    set nativeFileNameOnly libSQLite.Interop.so
+  }
+
+  foreach managedYear $managedYears nativeYear $nativeYears {
+    set sourceFileName [file join \
+        $root_path bin $managedYear [appendArgs $configuration \
+        $suffix] bin $extraSourceDirectory System.Data.SQLite.dll]
+
+    set targetFileName [file join \
+        $root_path Externals Eagle bin $extraTargetDirectory \
+        System.Data.SQLite.dll]
+
+    if {[file exists $targetFileName]} then {
+      set done(managed) true
+    } elseif {[file exists $sourceFileName]} then {
+      file copy $sourceFileName $targetFileName
+      set done(managed) true; set copied(managed) true
+    }
+
+    if {$copied(managed) && !$message(managed)} then {
+      host result Ok [appendArgs \
+          "Managed binary copied from \"" $sourceFileName \
+          "\" to \"" $targetFileName "\".\n"]
+
+      set message(managed) true
+    }
+
+    set sourceFileName [file join \
+        $root_path bin $nativeYear [appendArgs $configuration \
+        $suffix] bin $nativeFileNameOnly]
+
+    set targetFileName [file join \
+        $root_path Externals Eagle bin $extraTargetDirectory \
+        $nativeFileNameOnly]
+
+    if {[file exists $targetFileName]} then {
+      set done(native) true
+    } elseif {[file exists $sourceFileName]} then {
+      file copy $sourceFileName $targetFileName
+      set done(native) true; set copied(native) true
+    }
+
+    if {$copied(native) && !$message(native)} then {
+      host result Ok [appendArgs \
+          "Native binary copied from \"" $sourceFileName \
+          "\" to \"" $targetFileName "\".\n"]
+
+      set message(native) true
+    }
+
+    if {$done(managed) && $done(native)} then {
+      break
+    }
+  }
+
+  #
+  # NOTE: If a file was copied, re-launch this process; otherwise, they
+  #       may not be properly detected by the CLR runtime.
+  #
+  if {$copied(managed) || $copied(native)} then {
+    set newArgv [list -file $script]
+    if {[llength $argv] > 0} then {eval lappend newArgv $argv}
+    eval execShell [list [list -nocapture]] $newArgv; exit 0
+  }
+}
+
+###############################################################################
+
+if {![file exists $dbFileName(0)]} then {
+  if {[file exists $zipvfsExeFileName]} then {
+    exec -success Success -- $zipvfsExeFileName $dbUri(0) \
+        [appendArgs \" "CREATE TABLE t1(x);" \"]
+
+    exec -success Success -- $zipvfsExeFileName $dbUri(0) \
+        [appendArgs \" "INSERT INTO t1 VALUES('This will be encrypted.');" \
+        \"]
+
+    exec -success Success -- $zipvfsExeFileName $dbUri(0) \
+        [appendArgs \" "VACUUM;" \"]
+
+    host result Break [appendArgs \
+        "Database created using \"" $zipvfsExeFileName \".\n]
+  } elseif {[catch {object load System.Data.SQLite} error] == 0} then {
+    set connection [sql open -type SQLite [subst \
+        {FullUri=${dbUri(0)};VfsName=zlib;ZipVfsVersion=v3;}]]
+
+    sql execute $connection { \
+      CREATE TABLE t1(x); \
+    }
+
+    sql execute $connection { \
+      INSERT INTO t1 VALUES('This will be encrypted.'); \
+    }
+
+    sql execute $connection { \
+      VACUUM; \
+    }
+
+    sql close $connection
+
+    host result Break "Database created using System.Data.SQLite.\n"
+  } else {
+    error [appendArgs \
+        "cannot create database using \"" $zipvfsExeFileName \
+        "\" or System.Data.SQLite: " $error]
+  }
+}
+
+###############################################################################
+
+if {[catch {object load System.Data.SQLite}] == 0} then {
+  set connection [sql open -type SQLite [subst \
+      {FullUri=${dbUri(0)};VfsName=zlib;ZipVfsVersion=v3;}]]
+
+  set expected(1) {{This will be encrypted.}}
+
+  set data(1) [sql execute -execute reader -format list \
+      $connection {SELECT * FROM t1;}]
+
+  if {$data(1) eq $expected(1)} then {
+    host result Ok [appendArgs "PHASE #1: SUCCESS\n"]
+  } else {
+    host result Error [appendArgs "PHASE #1: FAILURE\n"]
+    host result Error [appendArgs "  Expected: \{" $expected(1) \}\n]
+    host result Error [appendArgs "  Got: \{" $data(1) \}\n]
+  }
+
+  sql close $connection
+} else {
+  host result Continue "Cannot load System.Data.SQLite, test #1 skipped.\n"
+}
+
+###############################################################################
+
+if {[file exists $zipvfsExeFileName]} then {
+  set expected(2) [string trim {
+PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE t1(x);
+INSERT INTO t1 VALUES('This will be encrypted.');
+COMMIT;
+  }]
+
+  set data(2) [string trim [string map [list \r\n \n] \
+      [exec -- $zipvfsExeFileName $dbUri(0) .dump]]]
+
+  if {$data(2) eq $expected(2)} then {
+    host result Ok [appendArgs "PHASE #2: SUCCESS\n"]
+  } else {
+    host result Error [appendArgs "PHASE #2: FAILURE\n"]
+    host result Error [appendArgs "  Expected: \{" $expected(2) \}\n]
+    host result Error [appendArgs "  Got: \{" $data(2) \}\n]
+  }
+} else {
+  host result Continue [appendArgs \
+      "ZIPVFS shell \"" $zipvfsExeFileName "\" not found, test #2 skipped.\n"]
+}

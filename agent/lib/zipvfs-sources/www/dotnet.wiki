@@ -1,0 +1,50 @@
+<title>Compiling And Using with System.Data.SQLite</title>
+<h1 align="center">
+How To Compile And Use ZIPVFS with System.Data.SQLite
+</h1>
+
+<h2>1.0 Introduction</h2>
+
+This document explains how to compile an extended version of System.Data.SQLite
+that is able to read and write compressed database files using ZIPVFS.
+
+<h2>2.0 Obtaining and Compiling zlib</h2>
+
+This is now done automatically by the build tool.
+
+<h2>3.0 Compiling System.Data.SQLite with ZIPVFS support for Win32</h2>
+
+This section assumes that the System.Data.SQLite source code is present in
+a directory named "dotnet" that is a peer of the root ZIPVFS source code
+directory.
+
+To build System.Data.SQLite with ZIPVFS, the following commands can be used
+from a command prompt from within the root ZIPVFS source code directory:
+
+<blockquote><pre>
+..\dotnet\Externals\Eagle\bin\netFramework40\EagleShell.exe -file src\buildSds.eagle "" "" "" MSIL
+..\dotnet\Externals\Eagle\bin\netFramework40\EagleShell.exe -file src\buildSds.eagle "" "" "" Win32
+..\dotnet\Externals\Eagle\bin\netFramework40\EagleShell.exe -file src\buildSds.eagle "" "" "" x64
+</pre></blockquote>
+
+<h2>4.0 Verifying System.Data.SQLite with ZIPVFS support</h2>
+
+The following command can be used to verify the System.Data.SQLite binaries
+were built correctly:
+
+<blockquote><pre>
+..\dotnet\Externals\Eagle\bin\netFramework40\EagleShell.exe -file src\testSds.eagle
+</pre></blockquote>
+
+<h2>5.0 Using System.Data.SQLite with ZIPVFS support</h2>
+
+Opening a ZIPVFS database with System.Data.SQLite requires using a connection
+string similar to one of the following:
+
+<blockquote><pre>
+"Data Source=database.db;VfsName=zlib;ZipVfsVersion=v2;"
+</pre></blockquote>
+
+<blockquote><pre>
+"FullUri=file:database.db?vfs=zipvfs&zv=zlib;ZipVfsVersion=v3;"
+</pre></blockquote>

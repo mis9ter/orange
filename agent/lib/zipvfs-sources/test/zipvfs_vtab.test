@@ -1,0 +1,132 @@
+
+# This file contains simple test cases for zipvfs.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfs_test
+
+db close
+rle_register "" 1
+sqlite3 db test.db
+zipvfs_vtab_register db
+
+proc bigstr {n} {
+  set t "9012345678"
+  string range [string repeat $t $n] 1 $n
+}
+
+db func bigstr bigstr
+
+
+do_execsql_test 1.0 {
+  BEGIN;
+    CREATE TABLE t1(x);
+    CREATE TABLE t2(x);
+    CREATE TABLE t3(x);
+    INSERT INTO t1 VALUES( bigstr(50) );
+    INSERT INTO t2 VALUES( bigstr(200) );
+    INSERT INTO t3 VALUES( bigstr(800) );
+  COMMIT;
+} {}
+
+
+do_execsql_test 1.1 {
+  SELECT * FROM zipvfs;
+} {
+  1 456 190 2 652 84 3 742 234 4 982 822
+}
+
+do_execsql_test 1.1.1 {
+  SELECT * FROM zipvfs_stat;
+} {
+  free-slots    0 
+  file-bytes    1810 
+  content-bytes 1330 
+  free-bytes    0 
+  frag-bytes    0 
+  gap-bytes     0
+}
+
+do_execsql_test 1.2 {
+  BEGIN;
+    CREATE TABLE t4(x);
+    INSERT INTO t4 VALUES( bigstr(10) );
+    SELECT * FROM zipvfs;
+} {
+  1 456 190 2 652 84 3 742 234 4 982 822
+  5 0 0
+}
+
+do_execsql_test 1.3 {
+  COMMIT;
+  SELECT * FROM zipvfs;
+} {
+  1 1810 226 2 652 84 3 742 234 4 982 822 5 2042 44
+}
+
+do_execsql_test 1.4 {
+  BEGIN;
+    INSERT INTO t4 VALUES( bigstr(1000000) );
+    SELECT * FROM zipvfs WHERE offset!=0;
+} {
+  1 1810 226 2 652 84 3 742 234 4 982 822 5 2042 44
+}
+
+do_execsql_test 1.5 {
+  ROLLBACK;
+}
+
+
+forcedelete test.db2
+do_execsql_test 1.6 {
+  ATTACH 'test.db2' AS aux;
+  CREATE TABLE aux.xyz(a, b);
+  SELECT * FROM zipvfs('aux');
+} {
+  1 456 120 2 582 26
+}
+
+do_execsql_test 1.6.1 {
+  SELECT * FROM zipvfs_stat;
+} {
+  free-slots 1   file-bytes 2092 content-bytes 1410 
+  free-bytes 190 frag-bytes 0    gap-bytes        0
+}
+
+
+do_execsql_test 1.6.2 {
+  SELECT * FROM zipvfs_stat('aux');
+} {
+  free-slots    0 file-bytes    625 content-bytes 146 
+  free-bytes    0 frag-bytes    11  gap-bytes     0
+}
+
+
+#-------------------------------------------------------------------------
+# Test that an intelligible error message is returned if the zipvfs
+# table is queried from a non-zipvfs database.
+#
+db close
+rle_unregister
+forcedelete test.db
+sqlite3 db test.db 
+zipvfs_vtab_register db
+
+do_execsql_test 2.1 {
+  CREATE TABLE tt(a, b, c);
+}
+
+do_catchsql_test 2.2 {
+  SELECT * FROM zipvfs;
+} {1 {not a zipvfs database}}
+
+do_catchsql_test 2.3 {
+  CREATE VIRTUAL TABLE xyz USING zipvfs;
+} {1 {no such module: zipvfs}}
+
+
+db close
+rle_unregister
+finish_test
+

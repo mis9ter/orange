@@ -1,0 +1,110 @@
+
+# This file contains simple test cases for zipvfs.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+
+ifcapable !rbu {
+  finish_test
+  return
+}
+
+
+set ::testprefix zipvfs_rbu1
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+sqlite3rbu_create_vfs ovfs ""
+
+zip_register ovfs 0
+rle_register ovfs 0
+noop_register ovfs 0
+padded_register ovfs 0
+
+# Run the RBU in file $rbu on target database $target until completion.
+#
+proc run_rbu {target rbu} {
+  sqlite3rbu rbu $target $rbu
+  while { [rbu step]=="SQLITE_OK" } {}
+  rbu close
+}
+
+proc step_rbu {target rbu} {
+  while 1 {
+    sqlite3rbu rbu $target $rbu
+    set rc [rbu step]
+    rbu close
+    if {$rc != "SQLITE_OK"} break
+  }
+  set rc
+}
+
+set dfltvfs [lindex [sqlite3_vfs_list] 0]
+
+foreach {tn runcmd createtarget createsource opentarget opensource} [subst {
+  1 run_rbu        file:test.db?vfs=zip file:rbu.db?vfs=zip
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip
+  2 step_rbu       file:test.db?vfs=zip file:rbu.db?vfs=zip
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip
+  3 run_rbu        file:test.db?vfs=zip file:rbu.db?vfs=$dfltvfs
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip
+  4 step_rbu       file:test.db?vfs=zip file:rbu.db?vfs=$dfltvfs
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip
+  5 run_rbu        file:test.db?vfs=zip rbu.db
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip
+  6 step_rbu       file:test.db?vfs=zip rbu.db
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip
+  7 run_rbu        test.db              file:rbu.db?vfs=zip
+                   test.db              file:rbu.db?vfs=zip
+  8 step_rbu       test.db              file:rbu.db?vfs=zip
+                   test.db              file:rbu.db?vfs=zip
+
+  9 run_rbu        test.db              file:rbu.db?vfs=zip
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip 
+
+  10 step_rbu       test.db              file:rbu.db?vfs=zip
+                   file:test.db?vfs=zip file:rbu.db?vfs=zip 
+}] {
+
+  catch { db close }
+  forcedelete test.db test.db-wal test.db-oal
+  do_test $tn.0 {
+    sqlite3 db $createtarget
+    execsql {
+      CREATE TABLE t1(a INTEGER PRIMARY KEY, b);
+      CREATE INDEX t1b ON t1(b);
+    } db
+  } {}
+
+  do_test $tn.1 {
+    forcedelete rbu.db
+    sqlite3 db2 $createsource
+    execsql {
+      CREATE TABLE data_t1(a, b, rbu_control);
+      INSERT INTO data_t1 VALUES(1, 2, 0);
+      INSERT INTO data_t1 VALUES(3, 4, 0);
+      INSERT INTO data_t1 VALUES(5, 6, 0);
+    } db2
+    db2 close
+  } {}
+
+  do_test $tn.2 { 
+    $runcmd $opentarget $opensource 
+  } {SQLITE_DONE}
+
+  do_test $tn.3 {
+    execsql { SELECT * FROM t1 }
+  } {1 2 3 4 5 6}
+
+}
+
+
+zip_unregister
+noop_unregister
+rle_unregister
+padded_unregister
+
+sqlite3rbu_destroy_vfs ovfs
+finish_test

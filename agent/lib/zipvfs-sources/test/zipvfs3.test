@@ -1,0 +1,683 @@
+
+
+# This file contains test cases for zipvfs. Specifically, test cases focusing
+# on OOM and IO error handling.
+#
+
+source [file join [file dirname [info script]] zipvfs_common.tcl]
+source $testdir/lock_common.tcl
+set ::testprefix zipvfs3
+db close
+
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+# Register the zipvfs as the default VFS for the tests in this file.
+#
+zip_register "" 1 
+
+if 1 {
+
+#-------------------------------------------------------------------------
+# Test error handling during a simple read and write of a small zipvfs
+# database. This test is run three times, with page sizes of 512, 1024, 
+# and 8192 bytes. This is because when an SQLite connection first accesses
+# a database, it assumes the page-size of the db is equal to the connection
+# default (determined by the xSectorSize() VFS method) and attempts to load
+# page 1 based on this assumption. Once page 1 is loaded, if it turns out
+# that the page-size of the database is other than that which was assumed,
+# the page is reloaded, this time using the correct page size.
+#
+# Loading $N bytes from the start of the file where $N is not the page-size
+# of the users database is a special case for zipvfs. Running this test
+# with several different page-sizes makes sure that the code for this case
+# is tested.
+#
+foreach {iTest pgsz} {1 512   2 1024   3 8192} {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db
+
+  do_execsql_test 1.$iTest.0 "
+    PRAGMA page_size = $pgsz;
+    CREATE TABLE x1(a, b, UNIQUE(a, b));
+    INSERT INTO x1 VALUES(1, 2);
+    INSERT INTO x1 VALUES(3, 4);
+  "
+  faultsim_save_and_close
+
+  do_zip_faultsim_test 1.$iTest.1 -prep {
+    faultsim_restore_and_reopen
+    reset_prng_state
+  } -body {
+    execsql { INSERT INTO x1 VALUES(5, 6) }
+    execsql { SELECT * FROM x1 }
+  } -test {
+    faultsim_test_result {0 {1 2 3 4 5 6}}
+    faultsim_integrity_check
+    set res [db eval { SELECT * FROM x1 }]
+    if {$res != "1 2 3 4 5 6" && $res != "1 2 3 4"} {
+      error "Database content is incorrect"
+    }
+  }
+}
+
+#-------------------------------------------------------------------------
+# Error handling in a transaction opened with "BEGIN EXCLUSIVE".
+#
+do_zip_faultsim_test zipvfs3-2 -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+} -body {
+  execsql { 
+    BEGIN EXCLUSIVE;
+      INSERT INTO x1 VALUES(5, 6);
+  }
+} -test {
+  faultsim_test_result {0 {}}
+  faultsim_integrity_check
+  catchsql { COMMIT }
+
+  # Make sure locks have been correctly released.
+  sqlite3 db2 test.db
+  set res [db2 eval { SELECT * FROM x1 }]
+  if {$res != "1 2 3 4 5 6" && $res != "1 2 3 4"} {
+    error "Database content is incorrect"
+  }
+  db2 eval { INSERT INTO x1 VALUES(7, 8) }
+  db2 close
+}
+
+#-------------------------------------------------------------------------
+# Test error handling in larger transactions. The caches used by the user
+# and zipvfs pager modules are set to be very small.
+#
+# This test is run three times. Once with the user level using 
+# "journal_mode=DELETE", and once with "journal_mode=OFF". In both cases,
+# errors do not corrupt the database file, as the transaction is rolled
+# back using the persistent zipvfs level journal. The third run uses
+# "synchronous=OFF". This works too, even though the xSync method of the
+# VFS is never invoked.
+#
+faultsim_delete_and_reopen
+do_test 3.0 {
+  reset_prng_state
+  execsql {
+    CREATE TABLE x1(a, b, UNIQUE(a, b));
+    BEGIN;
+      INSERT INTO x1 VALUES(randomblob(200), randomblob(200));
+      INSERT INTO x1 SELECT randomblob(200), randomblob(200) FROM x1;
+      INSERT INTO x1 SELECT randomblob(200), randomblob(200) FROM x1;
+      INSERT INTO x1 SELECT randomblob(200), randomblob(200) FROM x1;
+      INSERT INTO x1 SELECT randomblob(200), randomblob(200) FROM x1;
+      INSERT INTO x1 SELECT randomblob(200), randomblob(200) FROM x1;
+    COMMIT;
+  }
+  expr {[db one {PRAGMA page_count}]>20}
+} {1}
+faultsim_save_and_close
+foreach {iTest ::journal_mode} {
+  1  "PRAGMA journal_mode = DELETE"
+  2  "PRAGMA journal_mode = TRUNCATE"
+  3  "PRAGMA journal_mode = OFF"
+  4  "PRAGMA synchronous = OFF"
+} {
+  do_zip_faultsim_test zipvfs3-3.$iTest -faults ioerr* -prep {
+    faultsim_restore_and_reopen
+    reset_prng_state
+    execsql {PRAGMA cache_size = 10}
+    execsql $::journal_mode
+    zip_control db main cache_size 10
+  } -body {
+    execsql { UPDATE x1 SET a = randomblob(199) }
+  } -test {
+    faultsim_test_result {0 {}}
+    faultsim_integrity_check
+    if {$testrc==0} {
+      set sz [db one {SELECT sum(length(a)-199) FROM x1}]
+      if {$sz != 0} {
+        error "Bad data"
+      }
+    }
+  }
+}
+
+#-------------------------------------------------------------------------
+# Test error handling when increasing the size of the database. If
+# enough pages are added to the database file, zipvfs is forced to shift
+# pages from the start of the file to the end to make room for the
+# growing page-map. This test tests error handling in the code that
+# implements this.
+#
+# Test case 4.2 is a special case of the same. When the first record
+# in the data area is a page (not a free-slot), zipvfs looks up the 
+# corresponding entry in the page-map to determine the size of the record.
+# Test 4.2 aims to provoke an error during this lookup. It assumes the
+# page-size used by the zipvfs file is 1024 bytes.
+#
+# 
+#
+do_test 4.1.0 {
+  forcedelete test.db
+  sqlite3 db test.db
+  execsql { CREATE TABLE x1(x) }
+} {}
+faultsim_save_and_close
+do_zip_faultsim_test zipvfs3-4.1 -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+} -body {
+  execsql { INSERT INTO x1 VALUES(zeroblob(128*1024)) }
+} -test {
+  faultsim_test_result {0 {}}
+  faultsim_integrity_check
+}
+
+set nPage [expr int(13267)]
+set pending_page [expr ([sqlite3_test_control_pending_byte 0] / 1024) + 1]
+do_test 4.2.0 {
+  catch {db close}
+  catch {zip_unregister}
+  catch {noop_register "" 0}
+  forcedelete test.db
+  sqlite3 db test.db -vfs noop
+  execsql {
+    PRAGMA page_size = 1024;
+    PRAGMA auto_vacuum = 0;
+    BEGIN;
+      CREATE TABLE t1(x);
+      INSERT INTO t1 VALUES(
+        randomblob(($nPage-2-($nPage>=$pending_page))*1020 + 512)
+      );
+    COMMIT;
+    PRAGMA page_count;
+  }
+} $nPage
+do_test 4.2.1 {
+  execsql { PRAGMA freelist_count }
+} {0}
+faultsim_save_and_close
+do_noop_faultsim_test zipvfs3-4.2 -faults ioerr-transient -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+} -body {
+  execsql { CREATE TABLE t3(x) }
+} -test {
+  faultsim_test_result {0 {}}
+}
+catch {noop_unregister}
+zip_register "" 1
+
+#-------------------------------------------------------------------------
+# Test error handling in the integrity-check and structure-traversal 
+# (another test function used for debuggging) code. 
+#
+#   5.1: Errors in the integrity-check when it is automatically invoked 
+#        internally (file-control ZIPVFS_CTRL_DETECT_CORRUPTION). 
+#   5.2: Errors in integrity-check when run explicitly (file-control 
+#        ZIPVFS_CTRL_INTEGRITY_CHECK).
+#   5.3: Errors in structure traversal (error code ZIPVFS_CTRL_STRUCTURE).
+#
+# Each of the above tests is run twice - once in wal mode and once in
+# rollback mode.
+#
+foreach mode {rollback wal} {
+  do_test 5.$mode.1.0 {
+    forcedelete test.db
+    sqlite3 db test.db
+    if {$mode=="wal"} {
+      execsql { PRAGMA zipvfs_journal_mode = wal }
+    }
+    execsql { 
+      CREATE TABLE x1(x);
+      INSERT INTO x1 VALUES(123);
+      INSERT INTO x1 VALUES(456);
+    }
+  } {}
+  faultsim_save_and_close
+
+  do_zip_faultsim_test 5.$mode.1 -prep {
+    faultsim_restore_and_reopen
+    reset_prng_state
+    zip_control db main detect_corruption 1
+  } -body {
+    execsql { INSERT INTO x1 VALUES(789) }
+  } -test {
+    zip_control db main detect_corruption 0
+    faultsim_test_result {0 {}}
+    faultsim_integrity_check
+  }
+  
+  do_test 5.$mode.2.0 {
+    forcedelete test.db
+    sqlite3 db test.db
+    execsql { 
+      CREATE TABLE x1(x PRIMARY KEY);
+      INSERT INTO x1 VALUES(randomblob(800));
+      INSERT INTO x1 SELECT randomblob(800) FROM x1;
+      INSERT INTO x1 SELECT randomblob(800) FROM x1;
+      INSERT INTO x1 SELECT randomblob(800) FROM x1;
+      INSERT INTO x1 SELECT randomblob(800) FROM x1;
+      INSERT INTO x1 SELECT randomblob(800) FROM x1;
+    }
+    zip_control db main compact
+  } {}
+  faultsim_save_and_close
+  do_zip_faultsim_test 5.$mode.2 -faults ioerr-transient -prep {
+    faultsim_restore_and_reopen
+    reset_prng_state
+    zip_control db main cache_size 2
+  } -body {
+    zip_control db main integrity_check
+  } -test {
+    faultsim_test_result {0 {}} {1 {disk I/O error}}
+  }
+  
+  do_test 5.$mode.3.0 {
+    faultsim_restore_and_reopen
+    execsql { DELETE FROM x1 }
+    faultsim_save_and_close
+  } {}
+  proc xStructure {pg off nbyte npadding desc} { return 0 }
+  do_zip_faultsim_test zipvfs3-5.$mode.3 -prep {
+    faultsim_restore_and_reopen
+    reset_prng_state
+    zip_control db main cache_size 2
+  } -body {
+    zip_control db main structure xStructure
+  } -test {
+    faultsim_test_result {0 {}} {1 {disk I/O error}}
+  }
+}
+
+#-------------------------------------------------------------------------
+# Test error handling during an explicit ROLLBACK. Use very small cache
+# sizes for both the user and zipvfs pagers. This ensures the rollback
+# has to perform some IO.
+#
+do_test 6.0 {
+  forcedelete test.db
+  sqlite3 db test.db
+  execsql { 
+    CREATE TABLE x1(x PRIMARY KEY);
+    INSERT INTO x1 VALUES(randomblob(800));
+    INSERT INTO x1 SELECT randomblob(800-10*rowid) FROM x1;
+    INSERT INTO x1 SELECT randomblob(800-10*rowid) FROM x1;
+    INSERT INTO x1 SELECT randomblob(800-10*rowid) FROM x1;
+  }
+  zip_control db main compact
+} {}
+faultsim_save_and_close
+do_zip_faultsim_test zipvfs3-6 -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+  zip_control db main cache_size 1
+  execsql { 
+    PRAGMA cache_size = 1;
+    BEGIN ; 
+      UPDATE x1 SET x = randomblob(600-rowid);
+  }
+} -body {
+  execsql ROLLBACK
+} -test {
+  faultsim_test_result {0 {}}
+  faultsim_integrity_check
+}
+
+#-------------------------------------------------------------------------
+# Test error handling during incremental compaction.
+#
+do_test 7.0 {
+  forcedelete test.db
+  sqlite3 db test.db
+  execsql { 
+    CREATE TABLE x1(x PRIMARY KEY);
+    INSERT INTO x1 VALUES(randomblob(800));
+  }
+  for {set i 0} {$i < 30} {incr i} {
+    execsql { INSERT INTO x1 VALUES(randomblob(800 - $i*10)) }
+  }
+} {}
+faultsim_save_and_close
+do_zip_faultsim_test 7 -faults oom* -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+  zip_control db main cache_size 2
+} -body {
+  while { 1 } {
+    set rem [zip_control db main compact [expr 10000*1024]]
+    if {$rem == 0} break
+  }
+} -test {
+  faultsim_test_result {0 {}} {1 {disk I/O error}}
+  faultsim_integrity_check
+  if {$testrc == 0} {
+    array set A [zip_control db main stat]
+    set freebytes $A(nFreeByte);
+    set freeslots $A(nFreeSlot);
+    set fragslots $A(nFragByte);
+
+    if {$freebytes || $freeslots || $fragslots} {error "compaction failed"}
+  }
+}
+
+#-------------------------------------------------------------------------
+# Test that if an error occurs during a write operation, all read 
+# attempts return an error until the file is unlocked. 
+#
+# This test doesn't actually work. At present there is no way to get the
+# user-level pager to call zipvfsRead() after an error has occured in
+# a write function (zipvfsWrite, zipvfsTruncate or zipvfsSync).
+#
+do_test 8.0 {
+  forcedelete test.db
+  sqlite3 db test.db
+  execsql { 
+    CREATE TABLE x1(x);
+    INSERT INTO x1 VALUES(randomblob(800));
+    INSERT INTO x1 VALUES(randomblob(800));
+    INSERT INTO x1 VALUES(randomblob(800));
+    INSERT INTO x1 VALUES(randomblob(800));
+  }
+} {}
+faultsim_save_and_close
+
+do_zip_faultsim_test zipvfs3-8 -faults ioerr* -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+  db eval { PRAGMA journal_mode = OFF }
+  set ::fd [db incrblob -readonly x1 x 1]
+} -body {
+  execsql { INSERT INTO x1 VALUES(randomblob(500)) }
+} -test {
+  faultsim_test_result {0 {}}
+  catch { read $::fd }
+  catch { close $::fd }
+}
+
+#-------------------------------------------------------------------------
+# Test that errors that occur within multi-file transactions are handled
+# correctly. The transaction will not be atomic across both files, but 
+# each database will be either committed or not.
+#
+if {[uses_8_3_names]==0} {
+  catch {db close}
+  eval forcedelete [glob -nocomplain test.db*]
+  eval forcedelete [glob -nocomplain sv_test.db*]
+  do_test 9.0 {
+    sqlite3 db test.db
+    execsql { 
+      CREATE TABLE x1(x PRIMARY KEY);
+      INSERT INTO x1 VALUES(randomblob(800));
+      INSERT INTO x1 VALUES(randomblob(750));
+      INSERT INTO x1 VALUES(randomblob(700));
+      INSERT INTO x1 VALUES(randomblob(650));
+      ATTACH 'test.db1' AS aux;
+      CREATE TABLE aux.x2(x PRIMARY KEY);
+      INSERT INTO x2 SELECT x FROM x1;
+    }
+  } {}
+  faultsim_save_and_close
+  do_zip_faultsim_test 9 -prep {
+    faultsim_restore_and_reopen
+    reset_prng_state
+    execsql { ATTACH 'test.db1' AS aux }
+  } -body {
+    execsql {
+      BEGIN;
+        UPDATE x1 set x = ' ' || x;
+        UPDATE x2 set x = ' ' || x;
+      COMMIT;
+    }
+  } -test {
+    faultsim_test_result {0 {}} {1 {out of memory}}
+    faultsim_integrity_check
+    zip_control db main integrity_check
+    zip_control db aux integrity_check
+    set res [db one "PRAGMA aux.integrity_check"]
+    if {"ok" != $res} { error $res }
+  }
+}
+
+#-------------------------------------------------------------------------
+# The following tests are engineered to provoke an error while writing
+# a new version of the zipvfs header. This only happens if page 1 of
+# the zipvfs file (i.e. the first 1024 bytes of it) has not yet been
+# written during the transaction. As well as the header, page 1 contains
+# the page-map entries for the first ((pgsz-200)/8) pages in the database 
+# file.
+#
+zip_register "" 1
+do_test 10.0 {
+  catch {db close}
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql {
+    PRAGMA page_size = 1024;
+    PRAGMA auto_vacuum = 0;
+    BEGIN;
+      CREATE TABLE t1(x);
+      INSERT INTO t1 VALUES(randomblob(800));
+      INSERT INTO t1 VALUES(randomblob(800));
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  --   4
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  --   8
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  --  16
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  --  32
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  --  64
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  -- 128
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  -- 256
+      INSERT INTO t1 SELECT randomblob(800) FROM t1;  -- 512
+    COMMIT;
+    CREATE TABLE t2(x);
+  }
+} {}
+faultsim_save_and_close
+do_zip_faultsim_test zipvfs3-10.1 -faults ioerr* -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+} -body {
+  execsql { 
+    UPDATE t1 
+    SET x = randomblob(800) 
+    WHERE rowid = (SELECT max(rowid) FROM t1)
+  }
+} -test {
+  faultsim_test_result {0 {}}
+  faultsim_integrity_check
+}
+do_zip_faultsim_test zipvfs3-10.2 -faults ioerr-transient -prep {
+  faultsim_restore_and_reopen
+  reset_prng_state
+  execsql { PRAGMA cache_size = 2 }
+} -body {
+  execsql { 
+    BEGIN;
+      UPDATE t1 SET x = randomblob(800) 
+      WHERE rowid > (SELECT max(rowid) FROM t1) - 10;
+    ROLLBACK;
+  }
+} -test {
+  faultsim_test_result {0 {}}
+  faultsim_integrity_check
+}
+
+#-------------------------------------------------------------------------
+# Test error handling in the zipvfs xOpen() method.
+#
+do_test 11.0 {
+  forcedelete test.db
+  sqlite3 db test.db -vfs zip
+  execsql { CREATE TABLE t1(x) }
+} {}
+faultsim_save_and_close
+
+do_zip_faultsim_test zipvfs3-11.1 -prep {
+  catch { db close }
+  reset_prng_state
+} -body {
+  sqlite3 db test.db -vfs zip
+  execsql { SELECT * FROM t1 }
+} -test {
+  faultsim_test_result {0 {}} {1 {SQL logic error}} \
+    {1 {}} {1 {automatic extension loading failed: }}
+}
+
+do_zip_faultsim_test zipvfs3-11.2 -prep {
+  catch { db close }
+  reset_prng_state
+} -body {
+  sqlite3 db file:test.db?nolock=1 -vfs zip
+  execsql { SELECT * FROM t1 }
+} -test {
+  faultsim_test_result {0 {}} {1 {SQL logic error}} \
+    {1 {}} {1 {automatic extension loading failed: }}
+}
+
+#-------------------------------------------------------------------------
+# Test the potential OOM error in zipvfs_create_vfs().
+#
+catch { db close }
+do_zip_faultsim_test zipvfs3-12 -prep {
+  catch { zip_unregister }
+  catch { sqlite3_shutdown }
+} -body {
+  zip_register "" 0
+} -test {
+  faultsim_test_result {0 {}} {1 {SQL logic error}}
+}
+
+#-------------------------------------------------------------------------
+# The point of this test case is to cause SQLite to extend a database
+# file as part of a ROLLBACK operation. It does this by writing a single
+# byte to the new end of the file. This is a special case for zipvfs, as
+# it assumes that the database file is written only in page-sized chunks.
+#
+# The only way to get this to happen is to provoke an IO error in a
+# transaction involving two databases in which one of the databases is
+# made smaller as part of the COMMIT operation (due to an incremental
+# or auto-vacuum). If the IO error occurs while attempting to commit
+# the other of the two databases, SQLite tries to roll-back the transaction
+# on the incr-vacuumed db, extending it in the process.
+#
+# This will not work with a single database transaction, as zipvfs puts
+# a connection in "error-state" after the first IO error during a write
+# operation.
+#
+if {[uses_8_3_names]==0} {
+  do_test 13.0 {
+    forcedelete test.db test.db2
+      sqlite3 db test.db -vfs zip
+      execsql {
+        PRAGMA auto_vacuum = incremental;
+        CREATE TABLE t1(x INTEGER PRIMARY KEY, y);
+        INSERT INTO t1 VALUES(1, randomblob(800));
+        INSERT INTO t1 VALUES(2, randomblob(801));
+        INSERT INTO t1 VALUES(3, randomblob(802));
+        INSERT INTO t1 VALUES(4, randomblob(803));
+        INSERT INTO t1 VALUES(5, randomblob(804));
+        INSERT INTO t1 VALUES(6, randomblob(805));
+        INSERT INTO t1 VALUES(7, randomblob(806));
+        ATTACH 'test.db2' AS aux;
+        CREATE TABLE aux.t2(a, b);
+        DELETE FROM t1 WHERE x<7;
+      }
+    faultsim_save_and_close
+  } {}
+  do_zip_faultsim_test 13 -prep {
+    faultsim_restore_and_reopen
+      execsql { ATTACH 'test.db2' AS aux }
+  } -body {
+    execsql {
+      BEGIN;
+      INSERT INTO t2 VALUES(1, 2);
+      PRAGMA main.incremental_vacuum;
+      COMMIT;
+    }
+  } -test {
+    faultsim_test_result {0 {}} {1 {out of memory}}
+    faultsim_integrity_check
+      zip_control db main integrity_check
+  }
+}
+
+}
+
+do_test 14.0 {
+  forcedelete test.db 
+  sqlite3 db test.db -vfs zip
+
+  execsql {
+    CREATE TABLE t1(a PRIMARY KEY, b UNIQUE);
+    INSERT INTO t1 VALUES(randomblob(16), randomblob(256));
+  }
+  set SQL {
+    INSERT INTO t1 
+    SELECT randomblob((rowid % 32)+8), randomblob((rowid % 512)+128) FROM t1;
+  }
+  execsql $SQL        ;#    2
+  execsql $SQL        ;#    4
+  execsql $SQL        ;#    8
+  execsql $SQL        ;#   16
+  execsql $SQL        ;#   32
+  execsql $SQL        ;#   64
+  faultsim_save_and_close
+} {}
+
+do_zip_faultsim_test 14 -prep {
+  faultsim_restore_and_reopen
+  zip_control db main cache_size 2
+  execsql {PRAGMA cache_size = 2}
+} -body {
+  execsql VACUUM
+} -test {
+  faultsim_test_result {0 {}} {1 {disk I/O error}}
+  if {$testrc==0} {
+    faultsim_integrity_check
+    set c [db one {SELECT count(*) FROM t1}]
+    if {$c!=64} { error "count(*) mismatch" }
+  } 
+}
+
+do_zip_faultsim_test 14.2 -prep {
+  faultsim_restore_and_reopen
+  zip_control db main cache_size 2
+  execsql {SELECT * FROM sqlite_master}
+} -body {
+  execsql VACUUM
+} -test {
+  faultsim_test_result {0 {}} {1 {disk I/O error}}
+  if {$testrc==0} {
+    faultsim_integrity_check
+    set c [db one {SELECT count(*) FROM t1}]
+    if {$c!=64} { error "count(*) mismatch" }
+  } 
+}
+
+#-------------------------------------------------------------------------
+# Test error handling in opening a passthrough file.
+#
+do_test 15.0 {
+  zip_unregister
+  zip_register "" 0
+  forcedelete test.db
+
+  sqlite3 db test.db
+  execsql { 
+    CREATE TABLE t1(x);
+    INSERT INTO t1 VALUES('abc');
+  }
+  db close
+} {}
+do_zip_faultsim_test 15 -prep {
+  catch { db close }
+} -body {
+  sqlite3 db test.db -vfs zip
+  execsql { SELECT * FROM t1 }
+} -test {
+  faultsim_test_result {0 abc} {1 {}} {1 {SQL logic error}}
+  catch { execsql { PRAGMA xyz=1 } }
+}
+
+catch {db close}
+zip_unregister
+finish_test

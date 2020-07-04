@@ -1,0 +1,10 @@
+
+To update this project to a new SQLite version:
+
+  * Run [update-src.sh] in the src/ directory to update files.
+
+  * Update the version number near the top of configure.ac at the top
+    of the source tree.
+
+  * Run [autoreconf].
+

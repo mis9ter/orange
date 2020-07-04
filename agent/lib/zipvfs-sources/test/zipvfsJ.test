@@ -1,0 +1,76 @@
+
+# This file contains a test that was at one point failing if SQLite was
+# built with SQLITE_DIRECT_OVERFLOW_READ defined.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfsJ
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+autoinstall_test_functions
+zip_register "" 1
+
+sqlite3 db test.db
+
+set iStart 500
+set iFin   5000
+
+do_execsql_test 1.0 {
+  CREATE TABLE t1(k INTEGER PRIMARY KEY, v);
+} {}
+
+proc int_to_val {i} {
+  string range [string repeat $i. $i] 0 $i
+}
+
+do_test 1.1 {
+  execsql { BEGIN }
+  for {set i $iStart} {$i < $iFin} {incr i} {
+    set val [int_to_val $i]
+    execsql { INSERT INTO t1 VALUES($i, $val) }
+  }
+  execsql { COMMIT }
+} {}
+
+do_test 1.2 {
+  for {set i $iStart} {$i < $iFin} {incr i} {
+    set val [int_to_val $i]
+    set rval [db one { SELECT v FROM t1 WHERE k=$i }]
+    if {$val != $rval} {
+      error "mismatch at $i"
+    }
+  }
+} {}
+
+do_test 1.3 {
+  execsql { BEGIN }
+  execsql { 
+    DROP TABLE t1;
+    CREATE TABLE t1(a INTEGER PRIMARY KEY, b, c);
+  }
+  for {set i $iStart} {$i < $iFin} {incr i} {
+    set val1 [int_to_val $i]
+    set val2 [int_to_val [expr ($iFin - $i)]]
+    execsql { INSERT INTO t1 VALUES($i, $val1, $val2) }
+  }
+  execsql { COMMIT }
+} {}
+
+do_test 1.4 {
+  for {set i $iStart} {$i < $iFin} {incr i} {
+    set val1 [int_to_val $i]
+    set val2 [int_to_val [expr ($iFin - $i)]]
+    set rval1 [db one { SELECT b FROM t1 WHERE a=$i }]
+    set rval2 [db one { SELECT c FROM t1 WHERE a=$i }]
+
+    if {$val1 != $rval1 || $val2 != $rval2} {
+      error "mismatch at $i"
+    }
+  }
+} {}
+
+db close
+zip_unregister
+finish_test

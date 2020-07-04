@@ -1,0 +1,43 @@
+
+
+# This file tests backup up from a normal WAL-mode database into a
+# ZIPVFS database.  The bits on the header should flip to rollback mode.
+#
+
+source [file join [file dirname [info script]] zipvfs_common.tcl]
+source $testdir/malloc_common.tcl
+set ::testprefix zipvfsM
+
+db close
+sqlite3 db test.db -uri 1
+zipvfs_register 1
+
+do_execsql_test 1.0 {
+  PRAGMA journal_mode=WAL;
+  CREATE TABLE t1(a INTEGER PRIMARY KEY, b UNIQUE);
+  WITH s(x) AS (
+    SELECT 1
+    UNION ALL
+    SELECT x+1 FROM s WHERE x<100
+  )
+  INSERT INTO t1(a,b) SELECT x, printf('a%04xz',x) FROM s;
+  PRAGMA integrity_check;
+} {wal ok}
+
+forcedelete bu.db
+do_test 1.1 {
+  db backup file:bu.db?vfs=zipvfs&zv=rle
+} {}
+
+do_test 1.2 {
+  sqlite3 db2 file:bu.db?vfs=zipvfs -uri 1
+  db2 eval {
+    PRAGMA quick_check;
+    SELECT sum(a), count(*) FROM t1;
+  }
+} {ok 5050 100}
+
+db close
+db2 close
+zipvfs_unregister
+finish_test

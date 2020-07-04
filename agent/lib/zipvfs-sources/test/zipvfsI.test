@@ -1,0 +1,132 @@
+
+# This file contains simple test cases for zipvfs.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfsI
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+zip_register "" 1
+
+sqlite3 db test.db
+
+do_execsql_test 1.0 {
+  PRAGMA cache_size = 200;
+  BEGIN;
+  CREATE TABLE t1(x, y);
+  INSERT INTO t1 VALUES(randomblob(100), randomblob(100));
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   2
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   4
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   8
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   16
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   32
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   64
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   128
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   256
+  INSERT INTO t1 SELECT randomblob(100), randomblob(100) FROM t1; --   512
+  PRAGMA page_count;
+} {131}
+
+do_execsql_test 1.1 { 
+  INSERT INTO t1 VALUES(randomblob(100), randomblob(5000)) 
+}
+
+do_execsql_test 1.2 {
+  CREATE TABLE t2(x, y);
+  INSERT INTO t2 VALUES(randomblob(100), randomblob(100));
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   2
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   4
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   8
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   16
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   32
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   64
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   128
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   256
+  INSERT INTO t2 SELECT randomblob(100), randomblob(100) FROM t1; --   512
+  PRAGMA page_count;
+} {1302}
+
+do_execsql_test 1.3 { COMMIT }
+do_test 1.4 { zip_control db main integrity_check } {}
+
+#-------------------------------------------------------------------------
+# Check that the two types of  blocking  checkpoints work.
+#
+catch {db close}
+do_test 7.1 {
+  forcedelete test.db
+  sqlite3 db test.db 
+  sqlite3 db2 test.db
+
+  execsql { 
+    PRAGMA zipvfs_journal_mode = WAL;
+    CREATE TABLE t1(x, y);
+  }
+  for {set i 0} {$i < 100} {incr i} {
+    execsql { INSERT INTO t1 VALUES($i, $i*2) }
+  }
+  execsql {
+    BEGIN;
+    INSERT INTO t1 VALUES(100, 101);
+  } db
+
+  execsql { PRAGMA wal_checkpoint = FULL } db2
+} {1}
+
+do_test 7.2 {
+  execsql { PRAGMA wal_checkpoint = RESTART } db2
+} {1}
+
+do_test 7.3 {
+  execsql {
+    COMMIT;
+    BEGIN;
+      SELECT max(x) FROM t1;
+  }
+} {100}
+
+do_test 7.4 { execsql { PRAGMA wal_checkpoint = TRUNCATE } db2 } {1}
+do_test 7.5 { execsql { PRAGMA wal_checkpoint = FULL } db2 } {0}
+do_test 7.6 { execsql COMMIT } {}
+do_test 7.7 { execsql { PRAGMA wal_checkpoint = RESTART } db2 } {0}
+
+db2 close
+db close
+
+#-------------------------------------------------------------------------
+# Check that when opening a non-zipvfs database in pass-through mode,
+# no checkpoint is performed as part of discovering that the db is
+# not a zipvfs db.
+#
+zip_unregister
+
+reset_db
+do_test 8.1 {
+  execsql {
+    PRAGMA page_size = 1024;
+    PRAGMA journal_mode = wal;
+    CREATE TABLE t1(a, b);
+    INSERT INTO t1 VALUES(1, 2);
+    INSERT INTO t1 VALUES(3, 4);
+  }
+  sqlite3_db_config db NO_CKPT_ON_CLOSE 1
+  db close
+  list [file exists test.db-wal] [file size test.db]
+} {1 1024}
+
+zip_register "" 1
+sqlite3 db test.db
+do_execsql_test 8.2 {
+  SELECT * FROM t1
+} {1 2 3 4}
+
+do_test 8.3 {
+  list [file exists test.db-wal] [file size test.db]
+} {1 1024}
+
+db close
+zip_unregister
+
+finish_test

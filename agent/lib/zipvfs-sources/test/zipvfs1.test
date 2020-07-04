@@ -1,0 +1,193 @@
+
+# This file contains simple test cases for zipvfs.
+#
+
+set testdir $env(SQLITE_TEST_DIR)
+source $testdir/tester.tcl
+set ::testprefix zipvfs1
+db close
+sqlite3_shutdown
+sqlite3_config_uri 1
+
+# Return a string based on the integer value passed as an argument.
+#
+proc int_to_string {i} {
+  set integers [list zero one two three four five six seven eight nine]
+
+  set out [list]
+  lappend out [lindex $integers [expr ($i/1000)%10]]
+  lappend out [lindex $integers [expr ($i/100)%10]]
+  lappend out [lindex $integers [expr ($i/10)%10]]
+  lappend out [lindex $integers [expr ($i/1)%10]]
+}
+
+# Backup a database file.
+#
+proc backup {destdb destfile srcdb srcfile } {
+  sqlite3_backup B $destdb $destfile $srcdb $srcfile
+  B step -1
+  B finish
+}
+
+
+# Test organization:
+# 
+#    zipvfs1-x.1.*: Simple tests. Read and write a database file.
+#
+#    zipvfs1-x.2.*: Test the backup API. And the compact-db operation.
+#
+#    zipvfs1-x.3.*: Test involving many UPDATE statements. Check that the
+#                   database file can be closed and then opened and reread.
+#
+# The tests above are run several times with different compression callbacks
+# and page sizes.
+# 
+
+zip_register "" 0
+rle_register "" 0
+noop_register "" 0
+padded_register "" 0
+
+foreach {tn vfs pgsz} {
+  1  noop   2048
+  2  zip    2048
+  3  rle    2048
+  4  padded 2048
+
+  5  zip    1024
+  6  noop   1024
+  7  rle    1024
+
+  8  noop   65536
+  9   zip   65536
+  10  rle   65536
+  11 padded 32768
+} {
+
+  set ::testprefix zipvfs1-$tn
+
+  catch { db close }
+  forcedelete test.db
+  sqlite3 db test.db -vfs $vfs
+  execsql "PRAGMA page_size = $pgsz"
+
+  #zip_control db main detect_corruption 1
+
+  #-------------------------------------------------------------------------
+  # Simple warm-body tests. Read and write a database file.
+  #
+  do_execsql_test 1.0.1 { CREATE TABLE t1(a, b); }
+  do_execsql_test 1.0.2 { CREATE INDEX i1 ON t1(a); }
+  do_execsql_test 1.0.3 { CREATE INDEX i2 ON t1(b); }
+
+  do_test 1.1 { 
+    execsql {PRAGMA cache_size = 40}
+    execsql BEGIN
+    for {set i 0} {$i < 10000} {incr i} {
+      set t [int_to_string $i]
+      execsql {INSERT INTO t1 VALUES($i, $t)}
+    }
+    execsql COMMIT
+  } {}
+  do_execsql_test 1.2 { PRAGMA integrity_check } {ok}
+
+
+  array set A [zip_control db main stat]
+
+  db close
+  sqlite3 db file:test.db?vfs=$vfs
+  do_execsql_test 1.3 { PRAGMA integrity_check } {ok}
+
+  array set B [zip_control db main stat]
+
+  do_test 1.4 { set A(nFreeSlot) } $B(nFreeSlot)
+  do_test 1.5 { set A(nFreeByte) } $B(nFreeByte)
+  db close
+
+  #-------------------------------------------------------------------------
+  # Cursory test of the backup API. By using one regular and one $vfs vfs,
+  # the backup API can be used to compress or decompress an existing 
+  # database.
+  #
+  forcedelete test.db2 test.db3
+  sqlite3 db1 test.db -vfs $vfs
+  sqlite3 db2 test.db2
+  sqlite3 db3 file:test.db3?vfs=$vfs
+
+  do_test 2.0 { execsql { PRAGMA integrity_check } db1 } {ok}
+  do_test 2.1 { backup db2 main db1 main } {SQLITE_OK}
+  do_test 2.2 { backup db3 main db2 main } {SQLITE_OK}
+  do_test 2.3 { execsql { PRAGMA integrity_check } db2 } {ok}
+  do_test 2.4 { execsql { PRAGMA integrity_check } db3 } {ok}
+
+  if {$vfs != "noop" && $vfs != "padded"} {
+    do_test 2.6 { expr [file size test.db] < [file size test.db2] } 1
+    do_test 2.7 { expr [file size test.db3] <= [file size test.db] } 1
+  }
+
+  # Now test the ZIP_CTRL_COMPACT xFileControl method.
+  #
+  set orig_size [file size test.db]
+  do_test 2.8  { zip_control db1 main compact } {}
+  if {$vfs != "noop" && $vfs != "padded" && $pgsz!=65536} {
+    do_test 2.9a  { expr {[file size test.db]<$::orig_size} } 1
+  } else {
+    do_test 2.9b  { expr {[file size test.db]<=$::orig_size} } 1
+  }
+  do_test 2.10 { execsql { PRAGMA integrity_check } db1 } {ok}
+  db1 close
+  db2 close
+  db3 close
+  sqlite3 db1 test.db -vfs $vfs
+  do_test 2.11 { execsql { PRAGMA integrity_check } db1 } {ok}
+  db1 close
+
+  #-------------------------------------------------------------------------
+  # Test updating an existing db.
+  #
+  forcedelete test.db
+  sqlite3 db test.db -vfs $vfs
+  do_test 3.1 { 
+    execsql {
+      BEGIN;
+      CREATE TABLE t1(a, b); 
+      CREATE INDEX i1 ON t1(a);
+      CREATE INDEX i2 ON t1(b);
+    }
+    for {set i 0} {$i < 10000} {incr i} {
+      set t [int_to_string $i]
+      execsql {INSERT INTO t1 VALUES($i, $t)}
+    }
+    execsql COMMIT
+  } {}
+
+  zip_control db main max_free 50
+
+  do_test 3.2 { 
+  expr srand(0)
+    for {set x 0} {$x < 1000} {incr x} {
+      set i [expr int(rand()*10000.0)]
+      set t [int_to_string [expr int(rand()*10000.0)]]
+      execsql {UPDATE t1 SET b=$t WHERE a=$i}
+    }
+  } {}
+
+  do_test 3.3 { execsql { PRAGMA integrity_check } } {ok}
+  do_test 3.4 { execsql { PRAGMA integrity_check } } {ok}
+  do_test 3.5 { zip_control db main compact } {}
+
+  db close
+  sqlite3 db test.db -vfs $vfs
+  do_test 3.6 { execsql { PRAGMA integrity_check } } {ok}
+
+}
+
+#-------------------------------------------------------------------------
+# 
+db close
+
+zip_unregister
+noop_unregister
+rle_unregister
+padded_unregister
+finish_test
