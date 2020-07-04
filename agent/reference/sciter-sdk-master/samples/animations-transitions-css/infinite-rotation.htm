@@ -1,0 +1,51 @@
+<html>
+  <head>
+    <title></title>
+    <style>
+
+      @keyframes rotate { 
+        from { transform: rotate(0deg); } 
+        to { transform: rotate(360deg); }
+      }
+          
+      div.spin 
+      { 
+        size:100dip;
+        background:gold;
+        border:2dip solid;
+        margin:*;
+      }
+
+      div.spin.animate {
+        animation: 3s infinite linear rotate;      
+      }
+
+      div.spin.animate.paused {
+        animation-play-state: paused;
+      }
+    
+    </style>
+    <script type="text/tiscript">
+
+    self.timer(20ms, function() {
+      $(div.spin).attributes.addClass("animate");
+    });
+    
+    $(#pause).on("click", function() {
+      $(div.spin).attributes.toggleClass("paused", this.value);
+    });
+    
+    
+    </script>
+  </head>
+<body>
+  <button|checkbox #pause>Pause</button>
+
+  <div.spin>
+    Voulez-Vous Danser?
+  </div>
+  
+  
+
+</body>
+</html>

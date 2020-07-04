@@ -1,0 +1,61 @@
+<html window-frame="solid" window-resizable >
+  <head>
+    <title>Hello world!</title>
+    <style>
+    
+      html { background: orange; width: 400dip; height:300dip; }
+
+
+      body {  flow:vertical;
+              size:*; 
+              margin:3dip; }
+              
+      body > header { width:*; line-height:1.6em; background:gold; 
+                      flow:horizontal; }
+      body > header > caption { width:*; }
+      body > main { size:*; background:white; overflow:hidden;}
+
+      html:hover > body > main { background: yellow; }
+
+      button.window { display:block; size:24dip; margin:0; padding:0; background:50% 50% no-repeat; background-size:24dip;  }
+      button.window:hover { background-color:orange; } 
+      button.window#minimize  { background-image:url(icons/icon-minimize.png); } 
+      button.window#maximize  { background-image:url(icons/icon-maximize.png); } 
+      button.window#maximize.restore  { background-image:url(icons/icon-restore.png); }
+      button.window#close     { background-image:url(icons/icon-close.png); }
+    
+    </style>
+    <script type="text/tiscript">
+
+    var x = 0;
+
+    function change() {
+     x = x + 1;
+     $(p).value = x;
+     return true;
+    }
+    
+    function self.ready() {
+      view.state = View.WINDOW_SHOWN;
+
+      view << event statechange {
+        $(button#maximize).attributes.toggleClass("restore", view.windowState == View.WINDOW_MAXIMIZED); 
+      } 
+    
+      self.timer(1s, change);
+    }
+
+    </script>
+  </head>
+<body>
+  <header>
+    <caption role="window-caption" title="FooBar">Caption</caption>
+    <button.window role="window-minimize" #minimize></button>
+    <button.window role="window-maximize" #maximize></button>
+    <button.window role="window-close" #close></button>
+  </header>
+  <main>  
+    <p/>
+  </main>
+</body>
+</html>

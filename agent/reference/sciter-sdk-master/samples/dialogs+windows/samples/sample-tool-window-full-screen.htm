@@ -1,0 +1,50 @@
+<html window-resizable >
+  <head>
+    <title>Hello world!</title>
+    <style></style>
+    <script type="text/tiscript">
+    
+    function self.ready() {
+      view.state = View.WINDOW_SHOWN;
+    }
+    
+    event click $(#full-screen) 
+    {
+      //view.state = this.value ? View.WINDOW_FULL_SCREEN : View.WINDOW_SHOWN;
+      view.state = View.WINDOW_FULL_SCREEN
+    }
+
+    event click $(#full-workspace) 
+    {
+      view.state = View.WINDOW_MAXIMIZED;
+      //var (x,y,w,h) = view.screenBox(#workarea,#rectw);
+      //view.move(x,y,w,h); 
+    }
+
+    event click $(#normal) 
+    {
+      view.state = View.WINDOW_SHOWN;
+      //var (x,y,w,h) = view.screenBox(#workarea,#rectw);
+      //view.move(x,y,w,h); 
+    }
+
+
+    event click $(#close) {
+      view.close();
+    }
+    
+    </script>
+  </head>
+<body>
+  Hello world!
+  
+  Test of animation <img src="../loading-16.png">
+  
+  <br>Test of external image <img src="http://www.terrainformatica.com/res/terrainformatica.gif">
+  
+  <button|radio(mode) #full-screen>Full screen</button>
+  <button|radio(mode) #full-workspace>Full workspace</button>
+  <button|radio(mode) #normal checked>Normal</button>
+  <button #close>Close</button>
+</body>
+</html>

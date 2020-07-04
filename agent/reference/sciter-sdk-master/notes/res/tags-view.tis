@@ -1,0 +1,178 @@
+include "libs/vtree.tis";
+include "libs/formation.tis";
+
+class TagsTree : Element 
+{
+
+  function attached() {
+
+    var kind = this.attributes["name"] == "tags" ? Tag.KIND_CUSTOM : Tag.KIND_SYSTEM;
+
+    function setupCaption(data,elCaption) 
+    {
+      var tag, nitems, name;
+      if( typeof data == #array ) // tags intersection
+        { tag = data[0]; nitems = ""; name = data[1].name + " & " + data[0].name; }
+      else //if(data instanceof Tag) 
+        { tag = data; nitems = tag.itemsCount.toString(); name = data.name; }
+
+      elCaption.$content(<span.tag.name>{name}</span><span.count>{nitems}</span>);
+      elCaption.parent.attributes["color"] = (tag.color || 0).toString();
+      
+    }
+
+    function eachRoot(cb) {
+
+      var tl = [];
+
+      if( currentBook ) {
+        var tagsMap = currentBook.getTagsMap(kind);
+        for(var (t,c) in tagsMap) tl.push(t);
+        tl.sort(:a,b: a.name.lexicalCompare(b.name) );
+        for( var t in tl ) {
+          var option = cb(t, true);
+          option.$(span.count).text = tagsMap[t].toString(); 
+        }
+      } else {
+        db.selectTags(:tag: tl.push(tag), kind );
+        tl.sort(:a,b: a.name.lexicalCompare(b.name) );
+        for( var t in tl )
+          cb(t, t.hasIntersections);
+      }
+
+    }
+
+    function eachChild(data,cb) 
+    {
+      var tl = [];
+
+      if( data instanceof Tag ) 
+      {
+        var andTags = data.getIntersections(currentBook);
+        for(var (t,c) in andTags) tl.push(t);
+        tl.sort(:a,b: a.name.lexicalCompare(b.name) );
+        for( var t in tl ) {
+          var option = cb([t,data], false);
+          option.$(span.count).text = andTags[t].toString(); 
+        }
+      }
+      else // data is array of tags
+      {
+        //db.selectTags(:tag: tl.push(tag), data.kind );
+        //tl.sort(:a,b: a.name.lexicalCompare(b.name) );
+        //for( var t in tl )
+        //  cb(t, t.hasIntersections);
+      }
+    }
+
+    var updater = VirtualTree {
+      container: this,
+      eachChild: eachChild,      
+      eachRoot: eachRoot,
+      setupOptionCaption: setupCaption,
+      autoExpandRoots: false
+    };
+
+    var me = this;
+
+    function throttledUpdate() { me.timer(100ms,updater); }
+
+    // in all these cases we need to update tags view
+    self << event tag-created { throttledUpdate(); }     
+    self << event tag-assigned { throttledUpdate(); }
+    self << event tag-removed { throttledUpdate(); } 
+    self << event tag-updated { throttledUpdate(); } 
+    self << event book-selected { throttledUpdate(); } 
+    self << event notes-filter-changed { 
+      if( var current = me.$(option:current)) {
+        if( current.data != filterTags ) 
+          me.value = undefined;
+      } 
+    }
+  }  
+
+  event change 
+  {
+    var current = this.$(option:current);
+    if( !current )
+      setFilterTags(null);
+    else {
+      current = current.data;
+      if( current instanceof Tag )
+        setFilterTags(current);
+      else if( typeof current == #array )
+        setFilterTags(current);
+    }
+  }
+
+  // code that allows to toggle current option in Tags
+  var currentOptionMouseDown;
+  event mousedown $(option) (evt, option) { currentOptionMouseDown = option.state.current ? option : null; }
+  event mouseup $(option) (evt, option) { 
+    if( currentOptionMouseDown === option) { // second click (mouse down and up) on current item 
+      this.value = undefined;  // unselect all selected items
+      setFilterTags(null);
+      currentOptionMouseDown = null;
+    }
+  }
+
+  event click $(menu#tag > li[name=rename-tag]) (evt) {
+    var option = evt.target.$p(menu).owner.$p(option);
+    this.post( ::EditTag(option) ); 
+    return true;
+  }
+
+  event click $(menu#tag > li[name=delete-tag]) (evt) {
+    var option = evt.target.$p(menu).owner.$p(option);
+    var tag = option.data;
+    db.removeTag(tag);
+  }
+
+  event click $(menu#tag > div.colors > li) (evt,li) {
+    var option = evt.target.$p(menu).owner.$p(option);
+    var tag = option.data;
+    tag.update { color: li.index };
+    return true;
+  }
+
+  event popuprequest $(menu#tag) (evt,menu) {
+
+    var option = evt.target.$p(menu).owner.$p(option);
+    var tag = option.data;
+
+    if( var ci = menu.$(li[color]:checked))
+       ci.state.checked = false;
+
+    menu.$(li[color={tag.color || 0}]).state.checked = true; 
+    menu.$(li[name=delete-tag]).state.disabled = tag.itemsCount > 0; 
+    
+  }  
+
+  function EditTag(option) {
+    var tag = option.data;
+    var caption = option.$(span.name);
+    caption.attributes.addClass("editing");
+    function commit(text) {
+      caption.attributes.removeClass("editing"); 
+      caption.off(".tagedit");
+      if( text && (tag.name != text) )
+        tag.update { name: db.getUniqueTagName(text) };
+    }
+
+    function startEditing() {
+      caption.state.focus = true;
+      caption.on("focusout.tagedit", function() { commit(this.value) });
+      caption.on("keydown.tagedit", function(evt) { 
+        switch( evt.keyCode ) {
+          case Event.VK_RETURN: commit( this.value ); return true;
+          case Event.VK_ESCAPE: commit( tag.name ); return true;
+        }
+      });
+    }
+    caption.post(startEditing);
+  }
+
+}
+
+
+

@@ -1,0 +1,62 @@
+<html>
+<head>
+  <style>
+  
+    div.grid
+    {
+      flow: "1 2 3"
+            "4 5 6" 
+            "7 8 9";
+      margin:20dip;
+      border-spacing:2dip;
+    }    
+    div.cell
+    {
+      behavior:switch; /* only one child has :checked state */
+      font-size:30dip;
+      size:60dip;
+      margin:0dip;
+      padding:0dip;
+      vertical-align:middle;
+      text-align:center;
+      background-color:gold;
+      border:2dip solid brown;
+      transition: transform quad-in 0.4s,
+                  font-size quad-in 0.4s,
+                  background-color linear 0.4s,
+                  border-radius quad-in 0.4s; 
+
+    }
+    div.cell:hover
+    {
+      background-color:yellow;
+    }
+
+    div.cell:checked 
+    {
+      position:relative;
+      font-size:40dip;
+      background-color:rgba(255,0,0,0.75);
+      border-radius: 50%; /* so it is a disk */ 
+      transform: scale(1.5);
+    }
+  
+  </style>  
+</head>
+<body>
+  <h1>Complex animation: transform(scale),font-size, background-color and border-radius</h1>
+  <p>Click on one of the cells</p>
+  <div .grid>
+    <div .cell>1</div>
+    <div .cell>2</div>
+    <div .cell>3</div>
+    <div .cell>4</div>
+    <div .cell>5</div>
+    <div .cell>6</div>
+    <div .cell>7</div>
+    <div .cell>8</div>
+    <div .cell>9</div>
+  </div>
+
+</body>
+</html>

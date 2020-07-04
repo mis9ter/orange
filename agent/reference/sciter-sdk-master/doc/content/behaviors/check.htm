@@ -1,0 +1,32 @@
+﻿<html>
+  <head>
+    <meta name="source" content="http://www.terrainformatica.com/wiki/doku.php?id=h-smile:built-in-behaviors:checkbox"/>
+    <meta name="generator" content="h-smile:richtext"/>
+  </head>
+<body>
+  <h1>behavior:check</h1>
+  <p>Standard checkbox button implementation. Can be applied to any element to toggle :checked state on it.</p>
+  <h2>Elements</h2>
+  <p>that have this behavior applied by default:</p>
+  <ul>
+    <li><code>&lt;input type=&quot;checkbox&quot;&gt;</code> - standard HTML inline checkbox button;</li>
+    <li><code>&lt;button type=&quot;checkbox&quot;&gt;</code> - Windows like inline checkbox button, use it as <code>&lt;button type=checkbox &gt;caption&lt;/button&gt;</code>.</li></ul>
+  <h2>Attributes</h2>
+  <p>that this behavior knows about:</p>
+  <ul>
+    <li><code>checked</code> - if provided will initialize value of runtime state of the flag <em>checked</em>.</li>
+    <li><code>name=&quot;name&quot;</code> - standard attribute <em>name</em> - name of the input element on a form.</li>
+    <li><code>value=&quot;...&quot;</code> - standard value attribute (used by <code>behavior:form</code>).</li>
+		<li><code>as=&quot;string | integer | float | numeric | auto&quot;</code> - defines how <i>value</i> attribute is reported to script. By default value of element with  <code>value=&quot;42&quot;</code> will be just as a string <code>&quot;42&quot;</code> but&nbsp;<code>value=&quot;42&quot; as=&quot;integer&quot;</code> will yield integer <code>42</code>.</li></ul>
+  <h2>Events</h2>
+  <p>Together with the standard set of events (mouse, keyboard, focus) <em>behavior:check</em> generates:</p>
+  <ul>
+    <li><code>BUTTON_STATE_CHANGED</code> event - the button just changed its state to checked. Asynchronous event.</li>
+    <li><code>BUTTON_PRESS</code> event - mouse down or <code>spacebar</code> key down when button is in focus. Synchronous event.</li></ul>
+  <h2>Value</h2>
+  <p><code>true/false</code>, reflects current status of <code>:checked</code> state flag.</p>
+  <h2>Methods</h2>
+  <p>N/A - behavior:check does not introduce any specific methods.</p>
+  <p></p>
+</body>
+</html>

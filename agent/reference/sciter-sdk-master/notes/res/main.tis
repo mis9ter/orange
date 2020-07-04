@@ -1,0 +1,305 @@
+include "config.tis";
+
+include "db/db.tis";
+include "libs/settings.tis";
+include "libs/net.tis";
+include "navigate.tis";
+
+var currentBook = null; 
+var currentNote = null;
+
+var filterTags = null; 
+var filterWords = null; // ["word1","word2"]
+var filterEvents = false;
+
+const WorkerFrame = $(frame#worker); 
+
+// this user id
+const PRINCIPAL = String.$({Sciter.userName()}@{Sciter.machineName(true)});
+
+const RE_HTTP = /((?:https?:\/\/)?(([a-z0-9.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)\/?))/;
+const RE_MAIL = /([a-z0-9_\.-]+)@([a-z0-9.-]+)\.([a-z\.]{2,6})/;
+
+function PopulteNotesList(array) {
+  array.length = 0;
+  //db.selectItems(:note: array.push(note), filterTags, filterWords, currentBook, filterEvents);
+  for(var note in db.matchingItems(filterTags, filterWords, currentBook, filterEvents))
+    array.push(note);
+}
+
+function UpdateNotesList(array) {
+  var idx = 0;
+  var idxToGo = null;
+  if( filterEvents ) 
+    for(var note in db.matchingItems(filterTags, filterWords, currentBook, filterEvents))
+    {
+      if(idxToGo === null) {
+        if( note.hasActiveEvent )
+          idxToGo = idx;
+      }
+      if( idx >= array.length ) 
+        array.push(note);    
+      else if( array[idx] !== note )
+        array.splice(idx,0,note);
+      ++idx;
+    }
+  else
+    for(var note in db.matchingItems(filterTags, filterWords, currentBook, filterEvents))
+    {
+      if( idx >= array.length ) 
+        array.push(note);    
+      else if( array[idx] !== note )
+        array.splice(idx,0,note);
+      ++idx;
+    }
+  array.length = idx; // prune the rest
+  return idxToGo;
+}
+
+function GetFilteredNotesSet() {
+  var rs = [];
+  var idxToGo = null;
+  var idx = 0;
+  if( filterEvents ) {
+    for(var note in db.matchingItems(filterTags, filterWords, currentBook, filterEvents))
+    {
+      if(idxToGo === null) {
+        if( note.hasActiveEvent )
+          idxToGo = idx;
+      }
+      rs.push(note);    
+      ++idx;
+    }
+  } else {
+    for(var note in db.matchingItems(filterTags, filterWords, currentBook, filterEvents))
+      rs.push(note);
+  }
+  return (rs,idxToGo);
+}
+
+
+function setFilterTags(tags)
+{
+  if(filterTags != tags) {
+    filterTags = tags;
+    self.postEvent("notes-filter-changed", #tags);
+  }
+}
+
+function setFilterText(text)
+{
+  if( !text || text.trim() == "" ) {
+    if(filterWords) {
+      filterWords = null;
+      self.postEvent("notes-filter-changed", #words);
+    }
+  }
+  else {
+    var words = text.toLowerCase().split(/\s+/);
+    if(filterWords != words) {
+      filterWords = words;
+      self.postEvent("notes-filter-changed", #words);
+    }
+  }
+}
+
+function setFilterEvents(onOff, dropOtherFilters = false)
+{
+  if(filterEvents != onOff) {
+    filterEvents = onOff;
+    if( dropOtherFilters ) {
+      setFilterText(null);
+      //setCurrentBook(null);
+      setFilterTags(null);
+    }
+    self.postEvent("notes-filter-changed", #events);
+  }
+}
+
+
+function setCurrentBook(book)
+{
+  if( currentBook != book ) {
+    currentBook = book;
+    setFilterTags(null); 
+    self.postEvent("book-selected");
+  }
+}
+
+function showOverlay(url) {
+  var overlay = self.$(frame#overlay);
+  overlay.loadDocument(url);
+  self.$(body).attributes.addClass("overlay-shown");
+  return overlay.first; // return ref to root element (document)
+}
+
+function closeOverlay() {
+  var overlay = self.$(frame#overlay);
+  overlay.clear();
+  self.$(body).attributes.removeClass("overlay-shown");
+}
+
+event click $(#close-overlay) { closeOverlay(); }
+
+function highlight(element) {
+  
+}
+
+event click $(#print-note) {
+  showOverlay("printing/pager.htm");
+}
+
+//function handleNewNoteHotkey() {
+//  self.timer(100ms, function() { self.postEvent("start-new-note", #from-clipboard) }); 
+//}
+
+function importNotes(fn) 
+{
+
+  var noteframe = $(frame#worker);
+  if( typeof fn == #string ) {
+    var (note,action) = noteframe.createNoteFromFile(fn);
+    switch(action) {
+      case #created: Notifications.note("created:" + note.caption.toHtmlString()); break;
+      case #skipped: Notifications.info("already here:" + note.caption.toHtmlString()); break;
+      case #updated: Notifications.warning("updated:" + note.caption.toHtmlString()); break;
+    }
+  }
+  else if( typeof fn == #array ) {
+    var map = { created:0, skipped:0, updated:0 };
+    for(var f in fn) { 
+      var (note,action) = noteframe.createNoteFromFile(f);
+      ++map[action];
+    }
+    if( map.created ) Notifications.note("imported " + map.created.toString() + " notes"); 
+    if( map.skipped ) Notifications.info("already here " + map.skipped.toString() + " notes"); 
+    if( map.updated ) Notifications.warning("updated " + map.updated.toString() + " notes"); 
+  }
+}
+
+event new-db-initialized {
+  //showOverlay("overlays/intro.htm");
+  if( view.importDocs ) // importDocs var is passed by boot.htm
+    Net.importInitialNotes();
+}
+
+function exportNote(note,fn)
+{
+  var noteframe = $(frame#worker);
+  if( typeof fn == #string ) 
+    noteframe.saveNoteToFile(note,fn);
+}
+
+// loads dialog HTML/CSS/script into frame#loadable-dialogs
+// returns 'self' of loaded document
+function loadDialog(url) {
+  var holder = $(frame#loadable-dialogs);
+  var toload = self.url(url);
+  if( !holder.first || holder.first.url() != toload )
+    holder.load(toload);
+  return holder.first;
+}
+
+function self.ready() {
+  db.purgeDeletedItems();
+
+  view.animationsEnabled = false; // disable CSS animations for initial setup
+  Settings.restore(); // restore UI layout
+  // let's start with new note
+  this.sendEvent("start");
+
+  this.postEvent("start-new-note");
+
+  if( "-debug" in argv ) {
+      const inspector = System.PLATFORM == "Windows" ? "inspector.exe" : "inspector";
+      System.exec( System.home("inspector.exe") );
+      // give it a time to start ...
+      this.timer(200ms, function() {
+        if( var connectToInspector = view.connectToInspector )
+            connectToInspector($(frame#content));
+        });
+  }
+
+  view.windowCaption = String.printf("%s %d.%d.%d.%d", 
+      view.windowCaption,
+      (Sciter.VERSION >> 16) & 0xffff, Sciter.VERSION & 0xffff,
+      (Sciter.REVISION >> 16) & 0xffff, Sciter.REVISION & 0xffff);
+
+
+  // this has to be delayed on Windows otherwise caption will be transparent too, why?
+
+  //if(!this.parent)
+  //  this.post(:: view.windowBlurbehind = #ultra-dark );
+
+  view.animationsEnabled = true; // enable CSS animations
+
+  // events monitoring ++++
+  var previousTime = 0.0;
+  var previousActiveEvents = 0;
+  var previousTotalEvents = 0;
+
+  const EVENT_CHECK_PERIOD = 300s; // each 5 minutes
+
+  function checkEventsState() 
+  {
+    var now = (new Date()).valueOf();
+    var justStartedEvents = 0;
+    var activeEvents = 0;
+    var totalEvents = 0; // total pending events
+    for(var note in db.matchingItems(null, null, null, true))
+    {
+      if( note.hasActiveEvent)
+        ++activeEvents;
+      ++totalEvents;
+    }  
+
+    /*function cb(note) {
+      if( note.hasActiveEvent)
+        ++activeEvents;
+      ++totalEvents;
+    }
+    db.selectItems(cb,null, null, null, true); */
+
+    if( previousActiveEvents < activeEvents ) // the event started in between previous and this time.
+       justStartedEvents = activeEvents - previousActiveEvents;
+
+    // notify interested parties:
+    if( justStartedEvents > 0 || previousActiveEvents != activeEvents || previousTotalEvents != totalEvents) {
+      if(justStartedEvents && (view.windowState == View.WINDOW_HIDDEN || view.windowState == View.WINDOW_MINIMIZED)) 
+        view.windowState == View.WINDOW_SHOWN; // show it
+      self.postEvent("events-status-changed", { startedEvents: justStartedEvents, activeEvents: activeEvents, totalEvents : totalEvents });
+    }
+        
+    previousTotalEvents = totalEvents;
+    previousActiveEvents = activeEvents;
+    previousTime = now;
+    return totalEvents > 0; // keep checking
+  }
+
+  checkEventsState(); // check it now
+  self.timer(EVENT_CHECK_PERIOD,checkEventsState); // and in 5 minutes
+
+  self << event events-changed { // yet do the same if events were changed in editor
+    checkEventsState(); 
+    self.timer(EVENT_CHECK_PERIOD,checkEventsState); 
+  }  
+  // events monitoring ----
+
+  /*self.timer(400ms, function() {
+    var book = db.getBookByName("docs");
+    assert book;
+    book.mappedTo = "D:\\mapped\\docs\\";
+    BookMapping.scanMappedFolder(book);
+  });*/
+
+  this.postEvent("started");
+  Navigate.goTo("note:blank");
+
+}
+
+function self.closing() {
+  this.sendEvent("shutdown");
+  db.commit();
+  db.close();
+}
+

@@ -1,0 +1,32 @@
+<html>
+  <head>
+    <title></title>
+    <style></style>
+    <script type="text/tiscript">
+    
+      view.root << event closerequest (evt) {
+      
+        const REASONS = ["BY CHROME", "BY CODE", "BY LOAD"];
+
+        var result = view.msgbox { 
+          type:#question, 
+          content:"closing " + REASONS[evt.reason], 
+          buttons:[#yes,#no]
+        };
+
+        if(result === #no)
+           evt.cancel = true ; //to cancel closing
+        
+      };
+      
+      $(button).on("click", function() {
+        view.close();
+      });
+    
+    
+    </script>
+  </head>
+<body>
+  <button>Close me</button>
+</body>
+</html>

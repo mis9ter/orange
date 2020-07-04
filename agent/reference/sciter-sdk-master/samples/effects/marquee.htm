@@ -1,0 +1,202 @@
+<html>
+<head>
+  <style>
+
+    body > section { flow:horizontal; size:*; }
+  
+    div.marquee-h 
+    {
+      border:1px solid black;
+      background: gold;
+      behavior: marquee;
+      width:100px;
+      overflow:hidden;
+      flow:horizontal;
+      -marquee: horizontal;
+      -marquee-direction: forward;
+      -marquee-style: scroll;
+    }
+    
+    div.marquee-v 
+    {
+      border:1px solid black;
+      background: gold;
+      behavior: marquee;
+      height:100px;
+      width:max-intrinsic;
+      overflow:hidden;
+      flow:vertical;
+      -marquee: vertical;
+      -marquee-direction: forward;
+      -marquee-style: scroll;
+    }
+    
+    
+    div.marquee-h > p
+    {
+      margin:10px 20px;
+    }
+    
+    div.slide 
+    { 
+      -marquee-style: slide;
+      -marquee-play-count:1; /* playing once */
+    }
+    div.alternate 
+    { 
+      -marquee-style: alternate;
+    }    
+
+    span#blinker {
+      display: inline-block;
+      vertical-align:middle;
+      size:1.2em;
+      background:red;
+    }
+
+    span#blinker:checked {
+      background:green; 
+    }
+  
+  </style>  
+  <script type="text/tiscript">
+    event click $(button) {
+      view.msgbox(#information,"I am here");
+    }
+
+    function self.ready() {
+      var blinker = $(span#blinker);
+      blinker.timer(1s, function() {
+        blinker.state.checked = !blinker.state.checked;
+        return true;
+      });
+    }
+
+  </script>
+</head>
+<body>
+
+  <button>test: Show message box</button> and this <span#blinker /> shall blink with near 1s interval (test of timers using permanent animations). 
+
+  <section>
+  
+  <div #horizontal>
+    <h1>-marquee: horizontal</h1> 
+    marquee-style: scroll
+    <div .marquee-h>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+    </div>
+    marquee-style: slide
+    <div .marquee-h .slide>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+    </div>
+    marquee-style: alternate
+    <div .marquee-h .alternate >
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+    </div>
+  </div>  
+  <div #vertical>
+    <h1>-marquee: vertical</h1> 
+    marquee-style: scroll
+    <div .marquee-v>
+      <p>A</p>
+      <p>Ab</p>
+      <p>Abr</p>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+      <p>Abrakada</p>
+      <p>Abrakadab</p>
+      <p>Abrakadabr</p>
+      <p>Abrakadabra</p>
+    </div>
+    marquee-style: slide
+    <div .marquee-v .slide>
+      <p>A</p>
+      <p>Ab</p>
+      <p>Abr</p>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+      <p>Abrakada</p>
+      <p>Abrakadab</p>
+      <p>Abrakadabr</p>
+      <p>Abrakadabra</p>
+    </div>
+    marquee-style: alternate
+    <div .marquee-v .alternate >
+      <p>A</p>
+      <p>Ab</p>
+      <p>Abr</p>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+      <p>Abrakada</p>
+      <p>Abrakadab</p>
+      <p>Abrakadabr</p>
+      <p>Abrakadabra</p>
+    </div>
+  </div>  
+
+  <div #vertical>
+    <h1>-marquee: vertical, various speeds</h1> 
+    marquee-speed:slow
+    <div .marquee-v marquee-speed="slow">
+      <p>A</p>
+      <p>Ab</p>
+      <p>Abr</p>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+      <p>Abrakada</p>
+      <p>Abrakadab</p>
+      <p>Abrakadabr</p>
+      <p>Abrakadabra</p>
+    </div>
+    marquee-speed:normal
+    <div .marquee-v marquee-speed="normal">
+      <p>A</p>
+      <p>Ab</p>
+      <p>Abr</p>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+      <p>Abrakada</p>
+      <p>Abrakadab</p>
+      <p>Abrakadabr</p>
+      <p>Abrakadabra</p>
+    </div>
+    marquee-speed:fast
+    <div .marquee-v marquee-speed="fast" >
+      <p>A</p>
+      <p>Ab</p>
+      <p>Abr</p>
+      <p>Abra</p>
+      <p>Abrak</p>
+      <p>Abraka</p>
+      <p>Abrakad</p>
+      <p>Abrakada</p>
+      <p>Abrakadab</p>
+      <p>Abrakadabr</p>
+      <p>Abrakadabra</p>
+    </div>
+  </div>  
+
+</section>  
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+﻿  colorizer.tis 6396 compressed to 2331 (36%)
+  components.tis 2922 compressed to 1365 (46%)
+  debugger-view.htm 872 compressed to 436 (50%)
+  decorators.tis 5028 compressed to 1382 (27%)
+  dom-element-details.tis 5541 compressed to 2205 (39%)
+  dom-element-path.tis 1298 compressed to 841 (64%)
+  dom-tree.tis 5548 compressed to 2657 (47%)
+  dom-view.htm 64
+  facade.css 20229 compressed to 6775 (33%)
+  facade.htm 3273 compressed to 1611 (49%)
+  images/log-arrow-right-light.png 129
+  images/log-arrow-right.png 115
+  images/log-arrow-up-light.png 130
+  images/log-error.png 1870
+  images/log-info.png 1441
+  images/log-warning.png 1366
+  intro.htm 1316 compressed to 902 (68%)
+  log.tis 5692 compressed to 3000 (52%)
+  main.tis 3 compressed to 0 (0%)
+  resource-list.tis 2253 compressed to 1177 (52%)
+  resources-view.htm 1687 compressed to 786 (46%)
+  resources-view.tis 5189 compressed to 2325 (44%)
+  script-debugger.tis 3128 compressed to 1500 (47%)
+  server.htm 267 compressed to 190 (71%)
+  server.tis 1227 compressed to 753 (61%)
+  settings.tis 1664 compressed to 947 (56%)
+  source-code.css 1904 compressed to 1060 (55%)
+  styles-view.htm 1539 compressed to 603 (39%)
+  tabs.css 696 compressed to 363 (52%)
+  tabs.tis 5388 compressed to 2369 (43%)
+  value-view.tis 7027 compressed to 2406 (34%)
+  view-driver.css 3 compressed to 0 (0%)
+  view-driver.htm 791 compressed to 422 (53%)
+  view-driver.tis 6373 compressed to 3048 (47%)
+  -----------------------------
+  compressed size 50109 bytes
+  inspector.cpp
+  sciter-win-main.cpp
+  코드를 생성하고 있습니다.
+  All 209 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  코드를 생성했습니다.
+  inspector.vcxproj -> D:\WORK\ORANGE\agent\reference\sciter-sdk-master\build.windows\..\bin.win\x32\inspector.exe

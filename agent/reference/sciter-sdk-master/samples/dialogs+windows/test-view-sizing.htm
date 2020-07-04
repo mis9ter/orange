@@ -1,0 +1,54 @@
+<html>
+  <head>
+    <title></title>
+    <style>
+    
+    html[replacing] {
+      background:gold; // marking replacement mode
+    }
+    
+    
+    </style>
+    <script type="text/tiscript">
+    
+    function self.ready() {
+    
+      var (ix,iy,iw,ih) = view.box(#rectw,#border,#screen);
+    
+      function setWindowSize(nw,nh) {
+        var (x,y,w,h) = view.box(#rectw,#border,#screen);
+        view.move(x,y,nw,nh);
+      }
+      
+      $(input#delta) << event change {
+        stdout.println(this.value);
+        setWindowSize(iw + this.value, ih + this.value);
+      } 
+      
+      $(#resizeable).value = view.windowResizable;
+      
+      $(#resizeable) << event change {
+        view.windowResizable = this.value;
+      }
+
+      view.windowMinSize = (self.toPixels(160dip),self.toPixels(100dip));
+      view.windowMaxSize = (self.toPixels(1600dip),self.toPixels(1000dip));
+
+      // test of UI replacement view events
+      view.on("replacement-start", :: self.attributes["replacing"] = true)
+          .on("replacement-end", :: self.attributes["replacing"] = undefined);
+
+    }
+    
+    </script>
+  </head>
+<body>
+
+  Change window size: <input|hslider #delta value=0 min=-10 max=100 >  
+  
+  Window resizeable <input|checkbox #resizeable> 
+  
+  <p>Window resizing constraints: <code>view.minSize = (160,100)</code> and <code>view.maxSize = (1600,1000)</code>
+
+</body>
+</html>

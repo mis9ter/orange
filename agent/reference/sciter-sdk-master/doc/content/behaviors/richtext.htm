@@ -1,0 +1,124 @@
+﻿<html>
+  <head>
+    <meta name="source" content="http://www.terrainformatica.com/wiki/doku.php?id=h-smile:built-in-behaviors:edit"/>
+    <meta name="generator" content="h-smile:richtext"/>
+  </head>
+<body>
+  <h1>behavior: htmlarea</h1>
+  <p>HTML WYSIWYG  editing behavior.</p><p>The behavior supports document container&nbsp;mode similar to &lt;frame&gt;/behavior:frame - it supports loading full &lt;html&gt;...&lt;/html&gt; document in it.</p>
+  <h2>Elements</h2>
+  <p>that have this behavior applied by default:</p>
+  <ul>
+    <li><code>&lt;htmlarea&gt;...&lt;/htmlarea&gt;</code> editor;</li></ul>
+  <h2>Attributes</h2>
+  <p>that this behavior knows about:</p>
+  <ul>
+    <li><code>readonly</code> - &nbsp;declares that element is read only;</li>
+		<li><code>content-style</code> - string, URL of .css file to apply to content of the editor. Use it when you need to apply editing specific styling.</li>
+		<li><code>spellcheck</code> - boolean, &quot;true&quot; | &quot;false&quot;, enable/disable spell checking</li></ul>
+  <h2>Model</h2>
+  <p>Richtext supports two content models, HTML fragment: </p>
+  <pre>&lt;htmlarea&gt;
+   &lt;h2&gt;Some HTML content&lt;/h2&gt;
+   &lt;p&gt;Line 2&lt;/p&gt;
+   &lt;p&gt;Line 3&lt;/p&gt;
+&lt;/htmlarea&gt;
+</pre>
+	<p>and full document. In this case <code>&lt;htmlarea&gt;</code> behaves as a <code>&lt;frame&gt;</code> containing the document:</p>
+	<pre>&lt;htmlarea&gt;
+   &lt;html&gt;
+      &lt;body&gt;
+        &lt;h2&gt;Some HTML content&lt;/h2&gt;
+        &lt;p&gt;Line 2&lt;/p&gt;
+        &lt;p&gt;Line 3&lt;/p&gt;
+      &lt;/body&gt;
+   &lt;/html&gt;
+&lt;/htmlarea&gt;
+</pre><p>Content model is determined by content loaded in it.</p>
+<h2>Events</h2>
+  <p>Together with the standard set of events (mouse, keyboard, focus) <em>behavior: richtext</em> generates:</p>
+  <ul>
+    <li>EDIT_VALUE_CHANGED event - value of the element was changed due to user actions. Posted (asynchronous) event.</li>
+    <li>EDIT_VALUE_CHANGING event - sent when value of the element is about to change. Synchronous event.</li></ul>
+  <h2>Value</h2>
+  <p>string, reflects current status of content DOM&nbsp;- value gets/sets current HTML content.&nbsp; For the richtext DOM element property <i>value</i> is an alias of property  <i>html.</i></p>
+  <h2>Special key combinations</h2>
+  <ul>
+    <li>LEFT, CTRL+LEFT, SHIFT+LEFT, CTRL+SHIFT+LEFT</li>
+    <li>RIGHT, CTRL+RIGHT, SHIFT+RIGHT, CTRL+SHIFT+RIGHT</li>
+    <li>HOME, SHIFT+HOME</li>
+    <li>END, SHIFT+END</li>
+    <li>BACKSPACE, ALT+BACKSPACE, CTRL+BACKSPACE</li>
+    <li>CTRL+A</li>
+    <li>DELETE, SHIFT+DELETE, CTRL+DELETE</li>
+    <li>INSERT, SHIFT+INSERT, CTRL+INSERT</li>
+    <li>CTRL+X</li>
+    <li>CTRL+V</li>
+    <li>CTRL+Z</li>
+		
+    
+		<p>Formatting commands:</p>
+		<li><code>CTRL+D</code> - wraps current text run into <code>&lt;code&gt;text&lt;/code&gt;</code>;</li><li><code>CTRL+NUMPAD1...6</code> - converts current text block to <code>&lt;h1&gt;</code>...<code>&lt;h6&gt;</code>;</li>
+		<li><code>CTRL+NUMPAD7</code>&nbsp;- converts current block or text run to <code>&lt;pre&gt;</code>;</li>
+		<li><code>CTRL+NUMPAD0 </code>- converts current block or text run to <code>&lt;p&gt;</code>;</li>
+		<li><code>CTRL+NUMPAD+</code> - indent current selection;</li>
+		<li><code>CTRL+NUMPAD-</code> - unindent current selection;</li>
+		<li><code>CTRL+NUMPAD.</code> - convert current selection to ordered list&nbsp;<code>&lt;ol&gt;</code><code>/&lt;li&gt;</code>;</li>
+		<li><code>CTRL+NUMPAD*</code> - convert current selection to unordered list&nbsp;<code>&lt;ul&gt;</code><code>/&lt;li&gt;</code>;</li>
+		<li><code>CTRL+NUMPAD/</code> - convert current selection to definition list&nbsp;<code>&lt;dl&gt;</code><code>/&lt;dt&gt;/&lt;dd&gt;</code>;</li>
+		</ul>
+	<h2>Commands</h2>
+	<p>The <code>htmlarea.execCommand(command,attributes)</code> method executes undoable editing command. The <em>command</em> string identifies command to execute.</p><p>Editing commands common to all editable elements ( &lt;input|text&gt;, &lt;textarea&gt;, &lt;plaintext&gt;, &lt;htmlarea&gt; ):</p><ul>
+        <li><code>&quot;edit:cut&quot;</code> - cut selection - copy selection to the clipboard and remove it;</li>
+        <li><code>&quot;edit:copy&quot;</code> - copy selection to the clipboard;</li>
+        <li><code>&quot;edit:paste&quot;</code> - paste content of the clipboard;</li>
+        <li><code>&quot;edit:selectall&quot;</code> - select whole content of the element;</li>
+        <li><code>&quot;edit:undo&quot;</code> - undo last editing operation;</li>
+        <li><code>&quot;edit:redo&quot;</code> - redo last operation that was undone;</li>
+        <li><code>&quot;edit:delete-next&quot;</code> - if there is a selection - delete selected content, otherwise delete next character;</li>
+        <li><code>&quot;edit:delete-prev&quot;</code> - if there is a selection - delete selected content, otherwise delete previous character;</li>
+        <li><code>&quot;edit:delete-word-next&quot;</code> - if there is a selection - delete selected content, otherwise delete next word;</li>
+        <li><code>&quot;edit:delete-word-prev&quot;</code> - if there is a selection - delete selected content, otherwise delete previous word;</li></ul><p>Commands specific to&nbsp;<code>behavior:richtext</code> ( <code>&lt;htmlarea&gt;</code> ):</p><ul>
+        <li><code>&quot;edit:insert-break&quot;</code> - essentially this is &quot;ENTER&quot; (VK_RETURN) command, actual DOM modification depends on context;</li>
+        <li><code>&quot;edit:insert-soft-break&quot;</code> - &quot;SHIFT+ENTER&quot; command, inserts <code>&lt;br&gt;</code> separator but actual DOM modification depends on context;</li>
+        <li><code>&quot;format:apply-span:{tag-list}&quot;</code> - wrap selection into span element, if the selection contains one of tags they will be removed.<ul><li><code>{tag-list}</code> is a pipe (<code>|</code>) &nbsp;separated list of tag names. Example:<br/><code>execCommand(&quot;format:apply-span:b|strong&quot;)</code> - will wrap selection into <code>&lt;b&gt;...&lt;/b&gt;</code> while removing any other <code>&lt;b&gt;</code> and <code>&lt;strong&gt;</code> elements from the selection.</li><li>Additional map parameter may contain list of DOM attributes to add to wrapping element, Example:<br/><code>execCommand(&quot;format:apply-span:font&quot;,{color:&quot;#F00&quot;})</code> - will wrap selection into <code>&lt;font color=&quot;#F00&quot;&gt;...&lt;/font&gt;</code> element.</li></ul></li>
+        
+        <li><code>&quot;format:toggle-span:{tag-list}&quot;</code> - if selection contains one of the tags - removes them, otherwise it does <code>&quot;format:apply-span:...&quot;</code> action.</li>
+        <li><code>&quot;format:toggle-list:{list-tag}&quot;</code> - converts paragraphs in selection into a list. If selection is already a list of that type then items of the list will be converted tp simple paragraphs;<ul><li><code>{list-tag}</code> can be either <code>ul</code>, <code>ol</code> or <code>dl</code>.</li></ul></li>
+        
+        <li><code>&quot;format:toggle-pre&quot;</code> - converts selection to or from <code>&lt;pre&gt;</code> block.</li>
+        <li><code>&quot;format:indent&quot;</code> - &nbsp;wraps selected paragraphs into <code>&lt;blockquote&gt;</code> or sub-list.</li>
+        <li><code>&quot;format:unindent&quot;</code> - &nbsp;unwraps selected paragraphs from <code>&lt;blockquote&gt;</code> or moves sub-list to one level up.</li>
+        <li><code>&quot;format:morph-block:{tag}&quot;</code> - changes tags of selected block elements. This way current <code>&lt;blockquote&gt;</code> &nbsp;can be changed to <code>&lt;p&gt;</code> for example. Only block element that do not contain other <code>display:block</code> elements can be morphed.</li>
+			<li><code>&quot;format:unwrap-element:{tag}&quot;</code> - moves content of the element to element's parent and removes (now empty) element from the DOM.</li>
+		</ul>
+	<p>Table editing operations. These operations are available only if selection is inside a table:</p>
+	<ul><li><code>edit:insert-table-row:{before|after}</code> - inserts row before of after selected cells;</li>
+		<li><code>edit:insert-table-column:{before|after}</code> - inserts column before of after selected cells;</li>
+		<li><code>edit:merge-table-cells</code> - merge selected cell range into single cell (will add rowspan/colspan to the cell);</li>
+		<li><code>edit:delete-table-rows</code> - deletes selected rows;</li>
+		<li><code>edit:delete-table-columns</code> - deletes selected columns;</li>
+		<li><code>edit:split-table-cells</code> - splits spanned cell into multiple cells.</li></ul>
+  
+	<h2>Properties</h2>
+	<dl><dt><code>richtext.url</code></dt>
+		<dd>- r/w, string, url of loaded document.</dd></dl><h2>Methods</h2>
+  <dl>
+    <dt><code>richtext.load</code></dt>
+    <dd><code>(url:string): true|false</code> 
+        <p>loads file from URL into the editor;</p></dd>
+    <dt><code>richtext.load</code></dt>
+    <dd><code>(html: string | bytes, url: string): true|false</code> 
+        <p>loads content from bytes or string (html source) into the editor;</p></dd><dt><code>richtext.save</code></dt>
+    <dd><code>(fileUrl:string): true|false</code> 
+        <p>saves content to a file;</p></dd>
+    <dt><code>richtext.loadEmpty</code></dt>
+    <dd><code>():&nbsp;true|false</code>
+        <p>initializes the editor by empty document;</p></dd>
+    <dt><code>richtext.sourceToContent</code></dt>
+    <dd><code>(html:string, url:string, selStart:integer, selEnd:integer):&nbsp;true|false</code>
+        <p>The method&nbsp;sets content from the <i>html</i> and selection from given <i>selStart</i> and <i>selEnd</i>.&nbsp;</p></dd><dt><code>richtext.contentToSource</code></dt><dd><code>() : [html:string, url:string, selStart:integer, selEnd:integer] </code><p>returns content and selection as an array of three elements;</p>
+        </dd>
+    </dl>
+</body>
+</html>

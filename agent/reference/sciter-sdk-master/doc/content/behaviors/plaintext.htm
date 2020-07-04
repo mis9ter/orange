@@ -1,0 +1,98 @@
+﻿<html>
+  <head>
+    <meta name="source" content="http://www.terrainformatica.com/wiki/doku.php?id=h-smile:built-in-behaviors:edit"/>
+    <meta name="generator" content="h-smile:richtext"/>
+  </head>
+<body>
+  <h1>behavior: plaintext</h1>
+  <p>Multiline editting behavior that is optimized to handle relatively large (thousands of lines) texts. </p>
+  <h2>Elements</h2>
+  <p>that have this behavior applied by default:</p>
+  <ul>
+    <li><code>&lt;plaintext&gt;...&lt;/plaintext&gt;</code> display:block editor;</li></ul>
+  <h2>Attributes</h2>
+  <p>that this behavior knows about:</p>
+  <ul>
+    <li><code>readonly</code> - &nbsp;declares that element is read only.</li>
+		<li><code>spellcheck</code> - boolean, &quot;true&quot; | &quot;false&quot;, enable/disable spell checking.</li></ul>
+  <h2>Model</h2>
+  <p>Plaintext parses each line of text into separate &lt;text&gt; element: </p>
+  <pre>&lt;plaintext&gt;
+   &lt;text&gt;Line 1&lt;/text&gt;
+   &lt;text&gt;Line 2&lt;/text&gt;
+   &lt;text&gt;Line 3&lt;/text&gt;
+&lt;/plaintext&gt;
+</pre>
+  <h2>Events</h2>
+  <p>Together with the standard set of events (mouse, keyboard, focus) <em>behavior: button</em> generates:</p>
+  <ul>
+    <li>EDIT_VALUE_CHANGED event - value of the element was changed due to user actions. Posted (asynchronous) event.</li>
+    <li>EDIT_VALUE_CHANGING event - sent when value of the element is about to change. Synchronous event.</li></ul>
+  <h2>Value</h2>
+  <p>string, reflects current status of internal editing buffer.</p>
+  <h2>Special key combinations</h2>
+  <ul>
+    <li>LEFT, CTRL+LEFT, SHIFT+LEFT, CTRL+SHIFT+LEFT</li>
+    <li>RIGHT, CTRL+RIGHT, SHIFT+RIGHT, CTRL+SHIFT+RIGHT</li>
+    <li>HOME, SHIFT+HOME</li>
+    <li>END, SHIFT+END</li>
+    <li>BACKSPACE, ALT+BACKSPACE, CTRL+BACKSPACE</li>
+    <li>CTRL+A</li>
+    <li>DELETE, SHIFT+DELETE, CTRL+DELETE</li>
+    <li>INSERT, SHIFT+INSERT, CTRL+INSERT</li>
+    <li>CTRL+X</li>
+    <li>CTRL+V</li>
+    <li>CTRL+Z</li>
+    <li>CTRL+(LEFT)SHIFT and CTRL+(RIGHT)SHIFT - in forms having the <code>dir</code> attribute these key combinations switches between <code>dir=&quot;ltr&quot;</code> and <code>dir=&quot;rtl&quot;</code>.</li></ul><h2>Commands</h2><p>Commands supported by the behavior through <code>Element.execCommand()</code> and <code>Element.queryMethods()</code>:&nbsp;</p><ul><li><code>&quot;edit:cut&quot;</code> - cut selection - copy selection to the clipboard and remove it;</li><li><code>&quot;edit:copy&quot;</code> - copy selection to the clipboard;</li><li><code>&quot;edit:paste&quot;</code> - paste content of the clipboard;</li><li><code>&quot;edit:selectall&quot;</code> - select whole content of the element;</li><li><code>&quot;edit:undo&quot;</code> - undo last editing operation;</li><li><code>&quot;edit:redo&quot;</code> - redo last operation that was undone;</li><li><code>&quot;edit:delete-next&quot;</code> - if there is a selection - delete selected content, otherwise delete next character;</li><li><code>&quot;edit:delete-prev&quot;</code> - if there is a selection - delete selected content, otherwise delete previous character;</li><li><code>&quot;edit:delete-word-next&quot;</code> - if there is a selection - delete selected content, otherwise delete next word;</li><li><code>&quot;edit:delete-word-prev&quot;</code> - if there is a selection - delete selected content, otherwise delete previous word;</li>
+		<li><code>&quot;edit:insert-break&quot;</code> - inserts line break;</li>
+		<li><code>&quot;edit:insert-text&quot;</code> - inserts text at current position:&nbsp;<code>element.execCommand(&quot;edit:insert-text&quot;, text);</code> </li>
+		<li>navigational commands, move caret:<ul><li><code>&quot;navigate:backward&quot;</code>&nbsp;</li><li><code>&quot;navigate:word-start</code></li><li><code>&quot;navigate:forward&quot;</code></li><li><code>&quot;navigate:word-end</code></li><li><code>&quot;navigate:up&quot;</code></li><li><code>&quot;navigate:down&quot;</code></li><li><code>&quot;navigate:line-start&quot;</code></li><li><code>&quot;navigate:line-end&quot;</code></li><li><code>&quot;navigate:start</code></li><li><code>&quot;navigate:end&quot;</code></li></ul></li>
+		</ul>
+        
+        
+        
+        
+        
+        
+        
+        
+        
+  <h2>Script API</h2>
+	<p>Note: API of plaintext is accessible on element by using <i>.plaintext.</i> interface modifier:</p>
+	
+	
+	<pre>const editor = $(plaintext#editor);
+editor.<u>plaintext</u>.load(&quot;file://users/documents/readme.txt&quot;);</pre>
+	<h3>Index accessor and enumeration</h3>
+	<dl><dt><code>plaintext[index:integer]</code></dt><dd>string, get/set text line at given position. Use it as: <code>var firstLine = el.plaintext[0];</code></dd>
+		<dt><code>for(var line in el.plaintext)</code>&nbsp;</dt>
+		<dd>string, allows to enumerate text lines one by one.&nbsp;</dd></dl>
+	<h3>Properties</h3>
+	<dl><dt><code>plaintext.content</code></dt><dd> <ul><li>read, returns <b>string</b> - text with \r\n line separators; &nbsp;</li><li>write, accepts either <b>string</b> with \r\n line separators or <b>array of strings</b>.</li></ul>
+			</dd>
+		<dt><code>plaintext.lines</code></dt>
+		<dd>read-only, <b>integer</b>, reports number of lines;</dd>
+		<dt><code>plaintext.selectionStart<br/>plaintext.selectionEnd</code></dt>
+		<dd>read-only, [lineNumber, linePosition], returns array that contains two elements: line number and position inside the line;</dd>
+		<dt><code>plaintext.selectionText</code></dt>
+		<dd>read-only, selected text or empty sting if there is no selection or selection is collapsed.</dd></dl>
+	<h3>Methods</h3>
+  <dl>
+    <dt><code>plaintext.load</code></dt>
+    <dd><code>(url:string): true|false</code> 
+        <p>loads file from URL into the editor;</p></dd>
+    <dt><code>plaintext.save</code></dt>
+    <dd><code>(url:string): true|false</code> 
+        <p>saves content to file defined by the file url;</p></dd>
+    
+		
+		<dt><code>plaintext.selectRange</code></dt><dd><code>(startLine:integer, startPosition:integer, endLine:integer, endPosition:integer)</code> <p>selects text range;</p></dd><dt><code>plaintext.appendLine</code></dt>
+    <dd><code>(text:string | lines: array): true|false</code>
+        <p>appends line at the end of the text;</p></dd>
+    <dt><code>plaintext.insertLine</code></dt>
+    <dd><code>(at: integer, text:string | lines: array): true|false</code>
+        <p>inserts line at position <i>n</i>;</p></dd><dt><code>plaintext.removeLine</code></dt><dd><code>(at : integer [, count: integer) : true|false </code><p>removes line[s] at position;</p>
+        </dd>
+    </dl>
+</body>
+</html>

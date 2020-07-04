@@ -1,0 +1,240 @@
+include "libs/reactor/list.tis";
+//include "sciter:reactor.tis";
+
+// single book in book view
+class BookView : Reactor.Component 
+{
+  this var book;
+  this var isCurrent;
+
+  function this(props) {
+    this.book = props.book;
+    this.current = props.current;
+  }
+
+  function render() {
+    var book = this.book;
+    var count = db.getBookItemsCount(book); 
+
+    if( this.book ) {
+
+      if(book.isDeleted)
+        return <option.trash key={book.id} :current={this.current}>
+          <i.trash> </i>
+          <span.name>{book.name}</span>
+          <span.count>{count}</span></option>;
+      else {
+        var atts = book.mappedTo ? {class:"mapped"}:{};
+        function firstChar() { for(var ucode in book.name) return String.fromCharCode(ucode); }
+
+        return <option key={book.id} {atts} :current={this.current}>
+           <i color={book.color || 0}>{firstChar()}</i>
+           <span.name>{book.name}</span>
+           <span.count>{count}</span></option>;
+      }
+    } 
+    else 
+      return <option #all :current={this.current}>
+           <i color="0"> </i>
+           <span.name>All</span>
+           <span.count>{count}</span></option>;
+  }
+
+
+  // static method, used by NoteView.populateBooks()
+  static function bookBriefHtml(book) {
+    if(book.id == DELETED_BOOK_ID)
+      return String.$(<option value="{book.id}"><span.name.deleted-notes>Deleted</span></option>);
+    else
+      return String.$(<option value="{book.id}"><span.name color={book.color || 0}>{book.name.toHtmlString()}</span></option>);
+  }
+
+  function EditBookName() 
+  {
+    var option = this;
+    var book = option.book;
+    var caption = option.$(span.name);
+    caption.attributes.addClass("editing");
+
+    function commit(text) {
+      caption.attributes.removeClass("editing"); 
+      caption.off(".booknameedit");
+      text = text.trim();
+      if( !book && text ) 
+        db.addBook( option.book = book = new Book(db.getUniqueBookName(text)) );
+      else if( book && text && book.name != text)
+        book.update{ name: db.getUniqueBookName(text) };
+      option.parent.show();
+    }
+
+    function startEditing() {
+      caption.state.focus = true;
+      caption.on("focusout.booknameedit", function() { commit(this.value) });
+      caption.on("keydown.booknameedit", function(evt) { 
+        switch( evt.keyCode ) {
+          case Event.VK_RETURN: commit( this.value ); option.execCommand("set-current"); setCurrentBook(book); return true;
+          case Event.VK_ESCAPE: commit( book ? book.name: "" ); return true;
+        }
+      });
+    }
+    caption.post( startEditing );
+  }
+
+  event popuprequest $(menu.context#book) (evt,menu) {
+
+    var option = this;
+    var thisbook = option.book;
+    var books = db.getBooks();
+
+    if( thisbook && books.length >= 2 && thisbook.itemsCount != 0) {
+      menu.$(li[name=move-notes]).state.disabled = false;
+      var moveMenu = menu.$(menu#move-notes-to);
+      moveMenu.clear();
+      for(var book in books) {
+        if( book !== thisbook )
+          moveMenu.$append(<li bookid={book.id}>{book.name}</li>);
+      }
+    } else
+      menu.$(li[name=move-notes]).state.disabled = true;
+
+    if( var ci = menu.$(li[color]:checked))
+       ci.state.checked = false;
+
+    if(thisbook)
+    {
+      menu.$(li[name=delete-book]).state.disabled = thisbook.itemsCount > 0;      
+      menu.$(li[color={thisbook.color || 0}]).state.checked = true;
+      if(var mappedTo = thisbook.mappedTo) {
+        menu.attributes.addClass("mapped");
+        menu.$(li[name=unmap-book] > text.mapped-folder).value = mappedTo;
+      }
+      else 
+        menu.attributes.removeClass("mapped");
+    } else 
+      menu.attributes.removeClass("mapped");
+
+  }
+
+  event click $(menu#move-notes-to > li[bookid]) (evt,li) {
+    //stdout.println(li, li.attributes["bookid"]);
+    var option = this;
+    var fromBook = option.book;
+    var toBook = db.getBook(li.attributes["bookid"]);
+    db.mergeBookItems(fromBook, toBook); 
+    db.commit();
+    this.parent.updateCounters();
+  }
+
+  event click $(menu#book > li[name=rename-book]) (evt) {
+    this.EditBookName(); 
+    return true;
+  }
+
+  event click $(menu#book li[color]) (evt,ic) {
+    var option = this;
+    var book = option.book;
+    if( book ) 
+      book.update {color: ic.index}
+    return true;
+  }
+
+  event click $(menu#book > li[name=delete-book]) (evt) {
+    var option = this;
+    var book = option.book;
+    db.deleteBook(book);
+    return true;
+  }
+
+  event click $(menu#book > li[name=map-book]) (evt) {
+    var path = view.dialog {
+      url: self.url("dialogs/select-mapped-folder.htm"),
+      alignment: 5,
+      parameters: { book: this.book },
+    };
+    if(path) 
+    {
+      var r = makeFolder(path);
+      if( r )
+        this.book.addMapping(path);
+      else 
+        view.msgbox(#alert, "Failed to create folder:<br>" + path.toHtmlString());
+    }
+  }
+
+  event click $(menu#book > li[name=unmap-book]) (evt) {
+    this.book.removeMapping();
+  }
+}
+
+class BooksView : List 
+{
+ 
+  function attached() {
+
+    super.attached();
+
+    //super({ items:[] });
+    //this.$content(<option#all><i color=0>&nbsp;</i><span.name>All</span><span.count>{ db.getBookItemsCount(null) }</span></option>);
+    //var optionAll = this[0];
+    var me = this;
+    self << event book-selected { me.show();  } 
+    self << event notes-filter-changed { me.show(); } 
+    self << event note-book-changed { me.show(); } 
+    self << event book-removed { me.show(); }
+    self << event book-updated { me.show(); }
+    self << event book-created { me.show(); }
+    self << event book-mapping-added { me.show(); }
+    self << event book-mapping-removed { me.show(); }
+
+    //var isCurrent = book === currentBook;
+
+    //this.show();
+    //optionAll.execCommand("set-current");
+    this.show();
+  }
+
+  function render() {
+    var current = this.currentItem;
+    var books = this.items.map( book => <BookView book={book} current={book===current} /> );
+    return <books-view>{books}</books-view>;
+  }
+
+  function show() 
+  {
+    var books = [null, ...db.getBooks()];
+    this.update { items:books };
+  }
+
+  event item-click (evt) {
+    var option = evt.target;  
+    if( option.book )
+      setCurrentBook(option.book); 
+    else {
+      setCurrentBook(null);
+      setFilterTags(null);
+      setFilterText(null);
+    }
+    return true;
+  }
+
+  function updateCounters() {
+    for( var option in this )
+      option.updateCounter(); 
+  }
+
+  function updateMapping() {
+    for( var option in this ) {
+      option.updateMapping(); 
+    }
+  }  
+
+  event click $(menu#book > li[name=add-book])  (evt) 
+  {
+    this.insert("<option><i> </i><span.name> </span></option>",1);
+    var option = this[1];
+    this.post(::option.EditBookName());
+    return true;
+  }
+
+}
+

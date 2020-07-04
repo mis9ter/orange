@@ -1,0 +1,17 @@
+class RootPopupMenu : Element {
+
+  function paintContent(gfx) {
+    var li = this.$o(li);
+    var pw = li.box(#width,#padding);
+    var pix = self.toPixels(1dip);
+    var (x,y,w,h) = this.box(#rectw,#border);
+    var borderColor = this.style.variable("menu-popup-border");
+    gfx.fillColor(borderColor)
+       .strokeWidth(0)
+       .rectangle(pw-pix,y,w-pw,pix)
+       .rectangle(x+w-pix,y,pix,h)
+       .rectangle(x-pix,y+h-pix,w,pix)
+       .rectangle(x,y-pix,pix,h)
+  }
+
+}

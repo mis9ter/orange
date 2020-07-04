@@ -225,7 +225,12 @@ NTSTATUS	SendMessage(
 	*/
 	FILTER_REPLY_DATA	reply	= {0,};
 	ULONG				nSize	= sizeof(FILTER_REPLY_DATA);
-	return SendMessage(pCause, p, pSendData, nSendDataSize, &reply, &nSize);
+	NTSTATUS			status	= SendMessage(pCause, p, pSendData, nSendDataSize, &reply, &nSize);
+	if (NT_SUCCESS(status))
+	{
+		__log("%s ret=%d", __FUNCTION__, reply.bRet);
+	}
+	return status;
 }
 NTSTATUS	SendMessage(
 	IN	PCSTR				pCause,
@@ -250,7 +255,7 @@ NTSTATUS	SendMessage(
 	CAutoReleaseSpinLock(&p->lock);
 	{
 		LARGE_INTEGER	timeout;
-		timeout.QuadPart	= 0; //3 * 1000 * 1000 * 10;
+		timeout.QuadPart	= 30 * 1000 * 1000 * 10;
 		__try
 		{
 			if (NULL == p->pPort) 
@@ -258,20 +263,18 @@ NTSTATUS	SendMessage(
 				//__log("%s ERROR p->pPort=%p", __FUNCTION__, p->pPort);
 				__leave;
 			}
-			//__log("%s FltSendMessage %p(%d) %p(%d)", __FUNCTION__, 
-			//	pSendData, nSendDataSize, pSendData, pnRecvDataSize? *pnRecvDataSize:0);
 			status = FltSendMessage(Config()->pFilter,
 				&p->pPort,
 				pSendData, nSendDataSize,
-				pRecvData, pnRecvDataSize, &timeout);
+				pRecvData, pnRecvDataSize, NULL);
 			STATUS_BUFFER_OVERFLOW;
 			STATUS_TIMEOUT;
 			if (STATUS_SUCCESS == status)
 			{
 				if (pRecvData && pnRecvDataSize)
 				{
-					__log("%s pRecvData=%p, *pnRecvDataSize=%d", __FUNCTION__,
-						pRecvData, *pnRecvDataSize);
+					//__log("%s STATUS_SUCCESS pRecvData=%p, *pnRecvDataSize=%d", __FUNCTION__,
+					//	pRecvData, *pnRecvDataSize);
 				}
 				__leave;
 			}
@@ -286,7 +289,9 @@ NTSTATUS	SendMessage(
 					
 				}
 			}
-			__log("%s ERROR FltSendMessage(%s)=%x", __FUNCTION__, pCause ? pCause : "", status);
+			__log("%s ERROR FltSendMessage(%s)=%x, pRecvData=%p,pnRecvDataSize=%p(%d)", 
+				__FUNCTION__, pCause ? pCause : "", status, 
+				pRecvData, pnRecvDataSize, (pnRecvDataSize? *pnRecvDataSize : -1));
 		}
 		__finally
 		{

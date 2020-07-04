@@ -1,0 +1,225 @@
+<html>
+  <head>
+    <title></title>
+    <style>
+    
+      body > button { display:block; }
+    
+    </style>
+    <script type="text/tiscript">
+    
+      var other;
+    
+      event click $(#simple) {
+        other = view.window{
+				  type:View.TOOL_WINDOW,
+          url: self.url("samples/sample-tool-window.htm"),
+          //x:100,
+          //y:100,
+          width : 640,
+          height : 480,
+					alignment: 5
+        };
+      }  
+      
+      event click $(#frame){
+        other = view.window{
+          type:View.FRAME_WINDOW,
+          url: self.url("samples/sample-frame-window.htm"),
+          x:100,
+          y:100,
+          width : 480,
+          height : 320,
+          state: View.WINDOW_SHOWN,
+          alignment:3,
+        };
+      }  
+      
+      event click $(#frame-detached) {
+        other = View.window // note .window() methods is called as a static method of View class here
+        {                   // and so the window will be created in detached mode - will stay on screen even its owner is closed 
+          type:View.FRAME_WINDOW,
+          url: self.url("samples/sample-frame-window.htm"),
+          x:100,
+          y:100,
+          width : 480,
+          height : 320,
+          state: View.WINDOW_SHOWN,
+          alignment:3,
+        };
+      }  
+
+      var sidebar = null;      
+      
+      event click $(#frame-sidebar) {
+      
+        var (screenX1,screenY1,screenX2,screenY2) = view.screenBox(#workarea,#rect);
+      
+        if(!sidebar)
+          sidebar = View.window // note .window() methods is called as a static method of View class here
+          {                   // and so the window will be created in detached mode - will stay on screen even its owner is closed 
+            type:View.POPUP_WINDOW,
+            url: self.url("samples/sample-glassy-window.htm"),
+            x:screenX2 - 480 + 1,
+            y:screenY1,
+            width : 480,
+            height : screenY2 - screenY1,
+            state: View.WINDOW_SHOWN,
+            alignment:7,
+          };
+        
+        //sidebar.display(#show, #slide, #from-right, 300ms); 
+        //function sidebar(progress) {
+        //  sidebar.move((screenX2 - progress * 480).toInteger(),screenY1);
+        //  return true;
+        //}
+        //sidebar.root.animate(step, 600ms);
+        
+      }        
+      
+    
+     event click $(#custom-tool) {
+        other = view.window{
+          type:View.TOOL_WINDOW,
+          url: self.url("samples/sample-window-custom.htm"),
+          alignment: 5,
+          screen:1,
+          //x:200,
+          //y:100,
+          //width : 200,
+          //height : 200
+        };
+      }      
+
+     event click $(#custom-frame) {
+        other = view.window{
+          type:View.FRAME_WINDOW,
+          url: self.url("samples/sample-window-custom.htm"),
+          alignment: 5,
+          screen:1,
+          //x:200,
+          //y:100,
+          //width : 200,
+          //height : 200
+        };
+      }      
+      
+     event click $(#popup) {
+        other = view.window{
+          url: self.url("samples/sample-popup.htm"),
+          type: View.POPUP_WINDOW,
+          state: View.WINDOW_HIDDEN, // initially hidden (for testing)
+          alignment: 5,
+          //x:200,
+          //y:100,
+          width : 200,
+          height : 200
+        };
+      }      
+      
+
+     event click $(#with-params) {
+     
+        function onCloseCallback() {
+          debug log: "other window closed";
+        }
+     
+        // opening window with passing additional onClose callback parameter
+        other = view.window{
+          url: self.url("samples/sample-params-window.htm"),
+          x:200,
+          y:100,
+          width : 200,
+          height : 200,
+          parameters: { // view.parameters inside new window
+            onClose: onCloseCallback 
+          }
+        };
+      }      
+      
+      
+    event click $(#tool-full-screen) {
+     
+        other = view.window{
+          url: self.url("samples/sample-tool-window-full-screen.htm"),
+          x:200,
+          y:100,
+          width : 200,
+          height : 200,
+        };
+      }      
+      
+    event click $(#tool-layered) {
+     
+        other = view.window{
+          url: self.url("samples/sample-layered-tool.htm"),
+          alignment:5,
+          direct:false
+         };
+      }      
+
+    event click $(#ext-frame) {
+     
+        other = view.window {
+          type:View.FRAME_WINDOW,
+          url: self.url("samples/sample-window-extended-frame.htm"),
+          width : 640,
+          height : 480,
+          alignment:5,
+         };
+      }   
+      
+    event click $(#hide) {
+      if(other)
+        other.state = View.WINDOW_HIDDEN;
+    }
+    event click $(#show) {
+      if(other)
+        other.state = View.WINDOW_SHOWN;
+    }
+      
+    event click $(#custom-frame-round) {   
+      view.window {
+            type:View.FRAME_WINDOW,
+            url: self.url("samples/sample-window-custom-frame.htm"),
+            width : 640,
+            height : 480,
+            alignment: 5
+          };
+      }
+
+    event click $(button#list-all) {
+      var list = View.all.map( v => <li>caption: "{v.caption}" url: "{v.root.url()}"</li> );
+      $(ol#all).content(list);
+    }
+    
+    </script>
+  </head>
+<body>
+  <button #simple>Tool window</button>
+  <button #frame>Frame window</button>
+  <button #custom-tool>Custom tool window</button>
+  <button #custom-frame>Custom frame window</button>
+  <button #popup>Popup window</button>
+  <button #with-params>window with parameters</button>
+  <button #ext-frame>window-frame=extended</button>
+
+  <button #custom-frame-round>window-frame=transparent /round corners</button>
+
+  <hr>
+  <button #tool-full-screen>tool + full screen</button>
+  <button #tool-layered>tool + layered</button>
+  <hr>
+  <button #frame-detached>"Detached" frame window</button>
+  <button #frame-sidebar>"Detached" glassy sidebar window</button>
+  
+  <hr>
+  <button #hide>hide last window</button>
+  <button #show>show last window</button>
+
+  <button #list-all>List all windows</button>
+
+  <ol #all></ol>
+  
+</body>
+</html>

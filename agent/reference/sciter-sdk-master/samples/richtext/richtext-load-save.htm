@@ -1,0 +1,34 @@
+<html>
+  <head>
+  <title></title>
+  <style> 
+    richtext { 
+      behavior:richtext; 
+      size:*; border:1px solid blue; 
+      overflow:auto;
+    }
+  </style>
+  <script type="text/tiscript">
+   
+    const HTML_FILES = "HTML Files (*.htm,*.html)|*.HTM;*.HTML|All Files (*.*)|*.*";
+
+    event click $(#load) {
+      var fn = view.selectFile(#load, HTML_FILES , "html" );
+      if( fn ) $(richtext).load(fn);
+    }
+    
+    event click $(#save) {
+      var fn = view.selectFile(#save, HTML_FILES , "html", "rtext.htm", "‘File name:");
+      if( fn ) $(richtext).save(fn);
+    }
+    
+  </script>
+  </head>
+<body>
+  <button #load>Load</button>
+  <button #save>Save</button>
+  <richtext src="test-doc.htm" />
+
+
+</body>
+</html>

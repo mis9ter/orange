@@ -1,0 +1,59 @@
+<html>
+<head>
+    <meta name="generator" content="microsoft visual studio 8.0">
+    <title>plain-api demo</title>
+    <script type="text/tiscript">
+
+      namespace Test {
+        function add(n1,n2) { return n1+n2; }
+        // function add(n1,n2) { return n / 0; } // error simulation, will throw sciter::script_error with .what() -> stack trace
+      }
+      
+      event click $(#test) {
+        var data = self.request(5000, #get, "res:test.json");
+        $(pre#out).text = data.toString();
+      };
+
+      event click $(#dependent-window) {
+        view.window {
+          url: self.url(),
+          type: View.FRAME_WINDOW,
+          alignment: -5,
+          width:800, 
+          height:600,
+        };
+      }
+
+    </script>
+    <style>
+        html { background:white; font:system; }
+        
+        frameset { border:3dip solid; }
+        frameset > div { background:#fff; }
+        
+    </style>
+    <popup>
+       Test of popup 
+    <popup>
+</head>
+<body>
+
+  <img src="res:go.png">
+
+  <em>Test</em> document content.
+  
+  <p>Test Element.request(#get) for local resource: <button #test>Test rq</button></p>
+
+  <p>Test view.window {} call: <button #dependent-window>Show secondary window</button></p>
+
+  
+
+  <pre#out /> 
+  frameset demo:
+  <frameset cols="200dip,*">
+    <div #first>1</div>
+    <div #second>2</div>
+  </frameset>
+
+</body>
+</html>

@@ -1,0 +1,159 @@
+
+
+function checkForImageMagic( resultCb ) {
+  var signatureFound = false;
+
+  if( System.PLATFORM != #Windows )
+    return; // we need it only on Windows so far
+  
+  var proc = System.Process.exec("magick",["-version"]); // 'convert' is an IM utility we need
+  if(!proc) { self.post( :: resultCb(false) ) }
+  else {       
+    proc << event stdout(text) { signatureFound = signatureFound || text.indexOf("ImageMagic") >= 0; };
+    proc << event terminate(status) { resultCb(signatureFound) };
+  }
+}
+
+function checkFolder(folderPath, forWriting = false) 
+{
+  const S_IFDIR = 0x4000;
+  const S_IWRITE = 0x0080;
+  const S_IREAD = 0x0100;
+
+  const modes = forWriting ? (S_IFDIR | S_IWRITE) : (S_IFDIR | S_IREAD);
+
+  if(var stat = System.sync.stat(folderPath))
+    return (stat.mode & modes) == modes;
+  return false;
+}
+
+
+async function convertSvgToIco(inp,outp) {
+  const args = ["-density","256x256","-background","transparent",inp,"-define","icon:auto-resize","-colors","256",outp];
+  var r = await LogRunner.run("magick",args);
+  if(r != 0) throw "convertSvgToIco: failed to produce .ICO file";
+}
+
+function checkFile(path) {
+  if(System.scanFiles(path)) return path;
+  return false;
+}
+
+function getPackfolderPath() {
+  if(System.PLATFORM == #Windows)
+    return checkFile(System.home("../packfolder.exe") ) 
+        || checkFile(System.home("../../bin.win/packfolder.exe"));
+  else if(System.PLATFORM == #OSX)
+    return checkFile(System.home("packfolder") ) 
+        || checkFile(System.home("../../bin.osx/packfolder"));
+  else if(System.PLATFORM == #Linux)
+    return  checkFile(System.home("../packfolder") ) 
+        || checkFile(System.home("../../bin.lnx/packfolder"));
+}
+
+function getScappPath(target) {
+  switch(target) {
+    case "winX32": return checkFile( System.home("../x32/scapp.exe") ) || checkFile( System.home("../../bin.win/x32/scapp.exe"));
+    case "winARM64": return checkFile( System.home("../arm64/scapp.exe") ) || checkFile(System.home("../../bin.win/arm64/scapp.exe"));
+    case "macX64": return checkFile( System.home("scapp") ) || checkFile(System.home("../../bin.osx/scapp"));
+    case "linuxX64": return checkFile( System.home("../x64/scapp") ) || checkFile( System.home("../../bin.lnx/x64/scapp"));
+    case "linuxARM32": return checkFile( System.home("../arm32/scapp") ) || checkFile( System.home("../../bin.lnx/arm32/scapp"));
+  }
+}
+
+async function packageResources(folder,datfile) {
+
+  const packfolder = getPackfolderPath();
+  if(!packfolder)
+    throw "packageResources: no packfolder executable found";
+  const args = [folder,datfile,"-binary"];
+  var r = await LogRunner.run(packfolder,args);
+  if(r != 0) throw String.$(packfolder: failed to produce {datfile} file);
+}
+
+function makePath(dir,subdirs,nameext) {
+  var path = dir;
+  for(var sub in subdirs) {
+    path += "/";
+    path += sub;
+    if(System.scanFiles(path)) continue;
+    if(!System.sync.mkdir(path)) throw "makePath: cannot create dir:" + path; 
+  }
+  //debug log: dir, path,nameext;
+  return path + "/" + nameext;
+}
+
+function assembleExe(target,scapp,datfile,exefile, params = null) {
+
+  var r = view.scapp.assembleExe(scapp,datfile,exefile,params);
+  var msg;
+  switch(r) {
+    case 0: LogRunner.add(String.$({target} Done!),#result); break;
+    case 1: LogRunner.add(String.$({target} Done, but no metadata update),#result); break;
+    case -1: LogRunner.add(String.$({target} FAILURE, no .dat file), #stderr); break;
+    case -2: LogRunner.add(String.$({target} FAILURE opening output file), #stderr); break;
+    case -3: LogRunner.add(String.$({target} FAILURE writing output file), #stderr); break;
+  }
+}
+
+async function assemble(params) {
+
+  LogRunner.clear();
+
+  if(!checkFolder(params.resources, false)) {
+    LogRunner.add(String.$(Error: {params.resources} is not a readable folder), #stderr);
+    return;
+  }
+
+  if(!checkFolder(params.out, true)) {
+    LogRunner.add(String.$(Error: {params.out} is not a writeable folder), #stderr);
+    return;
+  }
+
+
+  const datfile = params.out + "/" + params.exe + ".dat";
+  const icofile = params.out + "/" + params.exe + ".ico";
+
+  try {
+    await packageResources(params.resources,datfile);
+    for( var target in params.targets ) 
+    {
+      switch(target) {
+        case "winX32": {
+          await convertSvgToIco(params.logo,icofile);
+          const scapp = checkFile( System.home("../x32/scapp.exe") ) || checkFile( System.home("../../bin.win/x32/scapp.exe"));
+          const exefile = makePath(params.out, ["windows","x32"], params.exe + ".exe");
+          var p = {}.extend(params,{icofile:icofile});
+          assembleExe(target,scapp,datfile,exefile,p);
+        } break;
+        case "winARM64": {
+          await convertSvgToIco(params.logo,icofile);
+          const scapp = checkFile( System.home("../arm64/scapp.exe") ) || checkFile(System.home("../../bin.win/arm64/scapp.exe"));
+          const exefile = makePath(params.out, ["windows","arm64"], params.exe + ".exe");
+          var p = {}.extend(params,{icofile:icofile});
+          assembleExe(target,scapp,datfile,exefile,p);
+        } break;
+        case "macX64": { // TODO: build proper .app bundle folder here
+          const scapp = checkFile( System.home("scapp") ) || checkFile( System.home("../../bin.osx/scapp"));
+          const exefile = makePath(params.out, ["macos","x64"], params.exe);
+          assembleExe(target,scapp,datfile,exefile);
+        } break;
+        case "linuxX64": {
+          const scapp = checkFile( System.home("../x64/scapp") ) || checkFile( System.home("../../bin.lnx/x64/scapp"));
+          const exefile = makePath(params.out, ["linux","x64"], params.exe);
+          assembleExe(target,scapp,datfile,exefile);
+        } break;
+        case "linuxARM32": {
+          const scapp = checkFile( System.home("../arm32/scapp") ) || checkFile( System.home("../../bin.lnx/arm32/scapp"));
+          const exefile = makePath(params.out, ["linux","arm32"], params.exe);
+          assembleExe(target,scapp,datfile,exefile);
+        } break;
+      }
+    }
+  } 
+  catch(e) 
+  {
+    LogRunner.add(e, #stderr);
+  }
+}
+

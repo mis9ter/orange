@@ -1,0 +1,161 @@
+
+  function SQLite.isRecordset(rs) {
+    return rs && (rs instanceof Asset) && (Asset.typeOf(rs) == #Recordset);
+  }
+
+  function SQLite.isDatabase(db) {
+    return db && (db instanceof Asset) && (Asset.typeOf(db) == #DB);
+  }
+
+  // returns map of table definitions found in the DB
+  function SQLite.tablesIn(db)
+  {
+    assert SQLite.isDatabase(db);
+    var rs = db.exec("SELECT name,sql FROM sqlite_master WHERE type='table' ORDER BY name;" );
+    var names = {};
+    if ( SQLite.isRecordset(rs) )
+      do names[rs["name"]] = rs["sql"] while( rs.next() );
+    return names;
+  }
+  // returns map of indexes found in the DB
+  function SQLite.indexesIn(db)
+  {
+    assert SQLite.isDatabase(db);
+    var rs = db.exec("SELECT name,sql FROM sqlite_master WHERE type='index' ORDER BY name;" );
+    var names = {};
+    if ( SQLite.isRecordset(rs) )
+      do names[rs["name"]] = rs["sql"] while( rs.next() );
+    return names;
+    
+  }
+  
+  // fills the table DOM element by data from the Recordset: 
+
+  function SQLite.tableFrom(rs) // returns VDOM of table
+  {
+    var headers = [];
+    for (var n in rs.length)
+    {
+      const title = String.printf("%s:%s:%s", rs.name(n,#database), rs.name(n,#table), rs.name(n,#field));
+      headers.push(<th title={title}>{rs.name(n)}</th>);
+    } 
+
+    var rows = [];
+   
+    function cells() {
+      var list = [];
+      for (var v in rs)
+        list.push(<td>{v}</td>);
+      return list;
+    }
+
+    do { rows.push(<tr>{cells()}</tr>); } while( rs.next() );
+    
+    return <table>
+      <thead><tr>{headers}</tr></thead>
+      <tbody>{rows}</tbody>
+    </table>;
+  }
+
+  // Returns object constructed from current row as { field1: value1, field2: value2, etc. }
+  // Not too much effective but someone may need it
+  function SQLite.rowAsObject(rs)
+  {
+    var names = [];
+    for (var n in rs.length)
+      names.push(rs.name(n));
+    var obj = {};
+    var n = 0;
+    for (var v in rs)
+      obj[names[n++]] = v;
+    return obj;
+  }
+  
+  function SQLite.rowsAsArray(rs)
+  {
+    var data = [];
+    do {
+      var row = [];
+      for( var v in rs ) row.push(v);
+      data.push(row);
+    } while( rs.next() );
+    return data;
+  }
+
+/*
+  // TODO: it is more optimal to store in Julian datetime format,
+  // unfortunetly nor class Data neither Datetime control do not support Julian calendar
+  function obj2str(p)
+  {
+    if( p instanceof Date )
+    {
+      return String.printf("%.2d-%.2d-%.2d %.2d:%.2d:%.2d", p.UTCyear, p.UTCmonth, p.UTCday, p.UTChour, p.UTCminute, p.UTCsecond);
+    } else
+    if( typeof p == #boolean )
+      return p ? 1 : 0;
+    else
+      return p;
+  }
+  
+  function DB.bindParams(table_name, data_object, data)
+  {
+    // get columns information
+    var sql = "(";
+    var rs = this.exec(String.printf("pragma table_info(%s);", table_name));
+    assert rs instanceof Recordset;
+    var i = 0;
+    do {
+      if( i > 0 ) sql += ",";
+      var field_name = symbol(rs[1]);
+      var f = data_object[field_name];
+      if( f !== null && f !== undefined )
+      {
+        sql += "?";
+        data.push(obj2str(data_object[field_name]));
+      }
+      else
+        sql += "NULL";
+      i++;
+    } while( rs.next() );
+    sql += ")";
+    return sql;
+  }
+  
+  function DB.insert(table_name, data_object)
+  {
+    var sql = String.printf("insert into %s values", table_name);
+    var data = [];
+    sql += this.bindParams(table_name, data_object, data);
+    this.exec(sql, data) == SQLite.DONE;
+  }
+  
+  function DB.update(table_name, dataSource, gridRowIndex, dataObject)
+  {
+    var sql = String.printf("update %s set ", table_name);
+    i = 0;
+    for( var field_name in dataObject )
+    {
+      var f = dataObject[field_name];
+      if( f === null || f === undefined )
+        sql += String.printf("%s = NULL", field_name);
+      else
+      {
+        var obj = obj2str(f);
+        if( i > 0 ) sql += ", ";        
+        sql += String.printf("%s = '%s'", field_name, obj);
+      }
+      ++i;
+    }
+    
+    sql += String.printf(" where rowid = %d;", dataSource.rowid[gridRowIndex]);
+    var result = this.exec(sql) == DB.DONE;
+    if( result )
+    {
+      // update data source & grid
+      dataSource.updateRow(gridRowIndex, dataObject);
+    }
+    return result;
+  }
+*/  
+ 
+

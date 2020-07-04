@@ -1,0 +1,27 @@
+<html>
+<head>
+<style>
+</style>
+<script type="text/tiscript">
+
+  include "sqlite.tis";
+
+  event click $(#test) ()
+  {
+    var db = SQLite.open(":memory:");
+    db.exec("create table employee (name text, surname text)" );
+    db.exec("insert into employee values ('abcd','efgh')" );
+    var rs = db.exec("SELECT name,surname FROM employee");
+    
+    var obj = SQLite.rowAsObject(rs);
+
+    view.msgbox(#information, String.printf("%V",obj));
+    rs.close();
+    db.close();
+  }
+</script>
+</head>
+<body>
+  <button #test>Test it</button>
+</body>
+</html>

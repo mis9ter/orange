@@ -1,0 +1,50 @@
+<html>
+	<head>
+		<title>Select table</title>
+		<style>
+        
+        select
+        { 
+          display:block;
+          flow: table;
+          
+          height:max-content; 
+          width:250dip;
+          
+          padding:0; 
+          border-collapse:collapse;
+          border:1dip solid grey;
+        }
+        select option { flow:table-row; }
+        select option span { border:1dip solid grey; padding:4dip 8dip; }
+        select option:current span:last-child { background:green; }
+        select option span:nth-child(2) 
+        { 
+          width:*;
+          overflow-x:hidden;
+          white-space: nowrap;
+          text-overflow:ellipsis;
+        } 
+		</style>
+	</head>
+	<body>
+    <p>Table as select|list</p>
+		<select|list multiple>
+        <option value="1">
+            <span>Option 1</span>
+            <span>*Short*</span>
+            <span>123456</span>
+        </option>
+        <option value="2">
+            <span>Option 2</span>
+            <span>******* LOONG ********</span>
+            <span>123456</span>
+        </option>
+        <option value="3">
+            <span>Option 3</span>
+            <span>*Short*</span>
+            <span>123456</span>
+        </option>
+		</select>
+	</body>
+</html>

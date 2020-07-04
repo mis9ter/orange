@@ -1,0 +1,33 @@
+<html>
+  <head>
+    <title></title>
+    <style>
+    
+      div { 
+        background:gold;
+        content: attr(caption); 
+        width:max-content;
+      }
+
+      div::before { content: attr(before); }
+      div::after { content: attr(after); }
+    
+    </style>
+    <script type="text/tiscript">
+
+      event click $(button) {
+        $(div).@#before = "<<<"; 
+        $(div).@#after = ">>>"; 
+        $(div).@#caption = "test";
+      }
+
+    </script>
+  </head>
+<body>
+  DIV below has content defined by its 'content' attribute:  
+  <div caption="caption attribute value" after="}" before="{"></div>
+
+  <button>Change</button>
+
+</body>
+</html>

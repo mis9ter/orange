@@ -135,6 +135,7 @@ typedef struct {
 	ULONG						size;			//	MESSAGE_HEADER + 알파
 } YFILTER_MESSAGE_HEADER;
 
+
 typedef struct YFILTER_MESSAGE_PROCESS
 {
 	YFilter::Message::Type	type;				//	메세지 유형

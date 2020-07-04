@@ -1,0 +1,11 @@
+@ stdcall LpkInitialize(long)
+@ stdcall LpkTabbedTextOut(long long long long long long long long long long long long)
+@ stdcall LpkDllInitialize(ptr long ptr)
+@ stdcall LpkDrawTextEx(long long long long long long long long long long)
+@ extern LpkEditControl
+@ stdcall LpkExtTextOut(long long long long ptr wstr long ptr long)
+@ stdcall LpkGetCharacterPlacement(long wstr long long ptr long long)
+@ stdcall LpkGetTextExtentExPoint(long wstr long long ptr ptr ptr long long)
+@ stdcall LpkPSMTextOut(long long long wstr long long)
+@ stdcall LpkUseGDIWidthCache(long long long long long)
+@ stdcall ftsWordBreak(long long long long long)

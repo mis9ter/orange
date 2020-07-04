@@ -10,12 +10,13 @@
 
 #define MESSAGE_DATA_SIZE	(MESSAGE_MAX_SIZE - sizeof(OVERLAPPED) - sizeof(FILTER_MESSAGE_HEADER) - sizeof(MESSAGE_HEADER))
 
-typedef struct YFILTER_MESSAGE : 
-	OVERLAPPED
+#pragma pack(1)
+typedef struct YFILTER_MESSAGE
 {
 	FILTER_MESSAGE_HEADER	_header;
 	YFILTER_MESSAGE_HEADER	header;
 	YFILTER_MESSAGE_PROCESS	data;
+	OVERLAPPED				ov;
 } YFILTER_MESSAGE, *PYFILTER_MESSAGE;
 #define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS))
 
@@ -24,6 +25,8 @@ typedef struct YFILTER_REPLY
 	FILTER_REPLY_HEADER		_header;
 	YFILTER_REPLY_DATA		data;
 } YFILTER_REPLY, * PYFILTER_REPLY;
+
+#pragma pack()
 
 class CFilterCtrlImpl;
 typedef struct {
@@ -205,7 +208,7 @@ public:
 					__FUNCTION__, GetLastError());
 				__leave;
 			}
-			Log("%s connected to %ws", __FUNCTION__, p->szName);
+			Log("%s connected to %ws, %p", __FUNCTION__, p->szName, p->hPort);
 			p->pClass			= this;
 			p->hInit			= CreateEvent(NULL, FALSE, FALSE, NULL);
 			p->hShutdown		= CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -347,22 +350,24 @@ private:
 		WaitForSingleObject(p->hInit, 30 * 1000);
 		p->pClass->Log("%s begin", __FUNCTION__);
 
-		PYFILTER_MESSAGE	pMessage	= &p->message;
+		LPOVERLAPPED		pOv		= NULL;
 		bool				bRet	= true;
 		DWORD				dwBytes;
 		ULONG_PTR			pCompletionKey;
 		DWORD				dwError;
 
+		PYFILTER_MESSAGE	pMessage	= &p->message;
 		YFILTER_REPLY		reply;
 
 		HRESULT	hr;
 
 		while (true)
 		{
-			ZeroMemory(pMessage, sizeof(OVERLAPPED));
-			hr = FilterGetMessage(p->hPort, &p->message._header,
-				MESSAGE_GET_SIZE,
-				dynamic_cast<LPOVERLAPPED>(&p->message));
+			ZeroMemory(&p->message.ov, sizeof(OVERLAPPED));
+			hr = FilterGetMessage(p->hPort, 
+				&p->message._header,
+				FIELD_OFFSET(YFILTER_MESSAGE, ov),
+				&p->message.ov);
 			if (HRESULT_FROM_WIN32(ERROR_IO_PENDING) != hr)
 			{
 				//	[TODO] 실패인데.. 이를 어쩌나. 
@@ -371,7 +376,7 @@ private:
 			}
 
 			bRet	= GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, 
-							(LPOVERLAPPED *)&pMessage, INFINITE);
+							(LPOVERLAPPED *)&pOv, INFINITE);
 			dwError	= GetLastError();
 			if( (false == bRet && ERROR_INSUFFICIENT_BUFFER != dwError) || 
 				NULL == pCompletionKey )	{
@@ -380,6 +385,7 @@ private:
 					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
 				break;
 			}
+			pMessage	= CONTAINING_RECORD(pOv, YFILTER_MESSAGE, ov);
 			//p->pClass->Log("HEADER: category=%d, type=%d, size=%d", 
 			//	pMessage->header.category, pMessage->header.type, pMessage->header.size);
 			reply.data.bRet			= false;
@@ -392,6 +398,7 @@ private:
 						{
 							PYFILTER_MESSAGE_PROCESS	pData	= &pMessage->data;
 							p->pClass->Log("PROCESS_START:%d", pData->dwProcessId);
+							p->pClass->Log("MessageId    :%I64d", pMessage->_header.MessageId);
 							p->pClass->Log("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 								pData->uuid.Data1, pData->uuid.Data2, pData->uuid.Data3,
 								pData->uuid.Data4[0], pData->uuid.Data4[1], pData->uuid.Data4[2], pData->uuid.Data4[3],
@@ -420,7 +427,8 @@ private:
 							{
 								//	드라이버 로드전에 이미 생성되었던 프로세스
 							}
-							p->pClass->Log("PROCESS_STOP:%d", pData->dwProcessId);
+							p->pClass->Log("PROCESS_STOP :%d", pData->dwProcessId);
+							p->pClass->Log("MessageId    :%I64d", pMessage->_header.MessageId);
 							p->pClass->Log("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 								pData->uuid.Data1, pData->uuid.Data2, pData->uuid.Data3,
 								pData->uuid.Data4[0], pData->uuid.Data4[1], pData->uuid.Data4[2], pData->uuid.Data4[3],
@@ -453,17 +461,24 @@ private:
 				both to sizeof(FILTER_REPLY_HEADER) + sizeof(MY_STRUCT) instead of sizeof(REPLY_STRUCT). 
 				This ensures that any extra padding at the end of the REPLY_STRUCT structure is ignored.
 			*/
-			reply._header.Status = 0;
+			reply._header.Status = ERROR_SUCCESS;
 			reply._header.MessageId = pMessage->_header.MessageId;
 			hr	= FilterReplyMessage(p->hPort, (PFILTER_REPLY_HEADER)&reply,
-					sizeof(FILTER_REPLY_HEADER) + sizeof(YFILTER_REPLY_DATA));
+					sizeof(reply));
 			if (SUCCEEDED(hr) || ERROR_IO_PENDING == hr || ERROR_FLT_NO_WAITER_FOR_REPLY == hr)
 			{
-
-			}
+				//p->pClass->Log("FilterReplyMessage(SUCCESS)=%08x", hr);
+			}	
 			else
 			{
-				p->pClass->Log("FilterReplyMessage=%08x", hr);
+				//	E_INVALIDARG
+				//	https://yoshiki.tistory.com/entry/HRESULT-%EC%97%90-%EB%8C%80%ED%95%9C-%EB%82%B4%EC%9A%A9
+				p->pClass->Log("FilterReplyMessage(FAILURE)=%08x, E_INVALIDARG=%08x", 
+					hr, E_INVALIDARG);
+				p->pClass->Log("reply hPort=%p, Status=%d, MessageId=%I64d, size: %d %d",
+					p->hPort, reply._header.Status, reply._header.MessageId,
+					sizeof(FILTER_REPLY_HEADER) + sizeof(YFILTER_REPLY_DATA),
+					sizeof(YFILTER_REPLY));
 			}
 			ERROR_MORE_DATA;
 		}

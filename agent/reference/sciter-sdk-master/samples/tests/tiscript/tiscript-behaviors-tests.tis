@@ -1,0 +1,13 @@
+
+class bhvA : Element 
+{
+	function attached(){ this.text = "A";}
+}
+class bhvB : bhvA 
+{
+	function attached(){ super.attached(); this.text += "B";}
+}
+function Super_Behavior_test()
+{
+  if( $(#behavior-test).text != "AB" ) throw "Behavior super.foo";  
+}

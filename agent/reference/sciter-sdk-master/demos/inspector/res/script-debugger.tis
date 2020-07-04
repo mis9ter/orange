@@ -1,0 +1,108 @@
+﻿include "value-view.tis";
+
+function ScriptDebugger() 
+{
+  var me = this;
+  var driver = this.$p(.view-driver);
+  
+  //var breakpoints = [];
+
+  var breakpointsList = this.$(.debugger-breakpoints);
+  var stacktraceList = this.$(.debugger-stacktrace);
+  var varsList = this.$(.debugger-vars); 
+  var debuggerToolbar = this.$(.debugger-toolbar);  
+
+  function updateBreakpointsList() {
+    breakpointsList.clear();
+    var breakpoints = driver.breakpoints || [];
+    for( var (n,bp) in breakpoints ) {
+      var url = bp.url; 
+      breakpointsList.$append(<li res="{url}" line-no={bp.lineNo} value={n}><span.lineNo>{bp.lineNo}</span><span.path>{url /~ "/"}</span><span.file>{url %~ "/"}</span></li>);
+    }
+  }
+  
+  function updateStacktrace(stacktrace)
+  {
+    stacktraceList.clear();
+    if(stacktrace)
+      for( var (n,st) in stacktrace ) {
+        var lineNo = st[0];
+        var funcName = st[1] || "";
+        var fileUrl = st[2];
+        stacktraceList.$append(<li><span.lineNo>{lineNo}</span>
+                                   <span.funcName>{funcName}</span>
+                                   <span.path>{fileUrl /~ "/"}</span><span.file>/{fileUrl %~ "/"}</span></li>);
+      }
+  }
+
+  function updateVars(locals)
+  {
+    varsList.clear();
+    if(locals)
+      for( var frame in locals )
+        ValueView.renderVars(varsList,frame);
+  }
+  
+  function showCodePosition(fileUrl,lineNo) {
+    //driver.navigateToSource(fileUrl,lineNo);
+    me.postEvent("navigate-to-source", 
+      {
+        url: fileUrl,
+        lineNo: lineNo,
+        setCurrent:true 
+      });
+  }
+  
+ 
+  driver.on("breakpoint-list-change",function(evt) {
+    updateBreakpointsList();
+  });
+ 
+  var debugCommand = 0;
+
+  // attach breakpointHitHandler to the driver:
+  
+  driver.breakpointHitHandler = function(inFile,onLine,envData)
+  { 
+    me.postEvent("debugger-enter");
+    me.postEvent("ensure-visible");
+
+    debuggerToolbar.state.disabled = false;
+    debuggerToolbar.state.focus = true;
+    
+    //me.timer(100ms, function() {debuggerToolbar.state.focus = true;});
+
+    showCodePosition(inFile, onLine);
+    updateStacktrace(envData.stacktrace);
+    updateVars(envData.locals);
+	
+    debugCommand = 0;
+
+    function loop() {
+      // run modal loop until we get next debugCommand response
+      while(!debugCommand && driver.active) 
+        view.doEvent();
+        
+      me.postEvent("debugger-leave");
+
+      //stdout.println("scriptDebugger_breakpointHit, got it");
+      if(driver.active) {
+        updateStacktrace(null);
+        updateVars(null);
+        debuggerToolbar.state.disabled = true;
+        driver.sendBreakpointHitResponse(debugCommand);
+      } else {
+        driver.sendBreakpointHitResponse(DEBUG_COMMAND.CONTINUE);
+      }
+    }
+    me.post(loop);
+
+  }
+  
+  me.$(.debug-continue).onClick = function() { debugCommand = DEBUG_COMMAND.CONTINUE; }
+  me.$(.debug-step-in).onClick = function() { debugCommand = DEBUG_COMMAND.STEP_INTO; }
+  me.$(.debug-step-over).onClick = function() { debugCommand = DEBUG_COMMAND.STEP_OVER; }
+  me.$(.debug-step-out).onClick = function() { debugCommand = DEBUG_COMMAND.STEP_OUT; }
+  
+  
+}

@@ -1,0 +1,26 @@
+<toolbar>
+  <band.common>
+    <knob.list #go-back accesskey="LEFT"></knob>
+    <knob.list #go-fore accesskey="RIGHT"></knob>
+    <select|dropdown.book as="string" title="Note's book"/>
+    <tags></tags>
+    <button.anchor #hyperlink-note title="Copy note's hyperlink to clipboard"/>
+    <button.open #import-note title="Import note(s) from file(s)"/>
+    <button.save #export-note title="Export note(s) to file(s)"/>
+    <button.print #print-note title="Print note"/>
+    <button.edit title="Edit note"/>    
+  </band>
+  <div.stack>
+    <band.editing>
+      <include src="htmlarea/editing-toolbar.htm" />
+    </band>
+    <band.viewing>
+      <label.created>created</label><output|date(cdate).created format="MMMM d, yyyy"/>
+      <label.created.person>by</label><output|text(cwhom).created.person />
+      <label.modified>modified</label><output|date(mdate).modified format="MMMM d, yyyy"/>      
+      <label.modified.person>by</label><output|text(mwhom).modified.person />
+    </band>
+  </div>
+</toolbar>
+<htmlarea initial content-style="htmlarea/htmlarea.css"></htmlarea>
+
