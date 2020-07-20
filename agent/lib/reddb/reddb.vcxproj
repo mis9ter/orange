@@ -105,7 +105,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>copy /v /y ..\zipvfs-sources\src\sqlite3.h ..\include</Command>
+      <Command>copy /v /y ..\zipvfs-sources\src\sqlite3.h ..\include
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib64
+copy /v /y "$(IntDir)$(ProjectName).pdb" "..\binary\lib64</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
