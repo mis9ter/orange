@@ -35,6 +35,8 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
+#pragma warning(disable:4819)
+
 /*
 ** Determine if we are dealing with WinRT, which provides only a subset of
 ** the full Win32 API.
@@ -19163,9 +19165,9 @@ static char *cmdline_option_value(int argc, char **argv, int i){
 #endif
 
 #if SQLITE_SHELL_IS_UTF8
-int SQLITE_CDECL main(int argc, char **argv){
+int SQLITE_CDECL __main(int argc, char **argv){
 #else
-int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
+int SQLITE_CDECL __wmain(int argc, wchar_t **wargv){
   char **argv;
 #endif
   char *zErrMsg = 0;
@@ -19375,7 +19377,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       sqlite3_vfs *p;
       zipvfsInit_v2();
       p = sqlite3_vfs_find(z+1);
-      sqlite3_vfs_register(p, 1);
+      if( p ) sqlite3_vfs_register(p, 1);
+
 #ifdef SQLITE_HAVE_ZLIB
     }else if( strcmp(z,"-zip")==0 ){
       data.openMode = SHELL_OPEN_ZIPFILE;
@@ -19403,6 +19406,12 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     }
   }
   verify_uninitialized();
+  {
+      sqlite3_vfs* p;
+      zipvfsInit_v2();
+      p = sqlite3_vfs_find("redeye");
+      if (p) sqlite3_vfs_register(p, 1);
+  }
 
 #ifdef SQLITE_SHELL_INIT_PROC
   {
@@ -19419,7 +19428,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   sqlite3_initialize();
 #endif
 
-  zipvfsInit_v3(1);
+  zipvfsInit_v2();
   sqlite3_auto_extension((void(*)(void))zipvfs_sqlcmd_autoinit);
 
   if( zVfs ){
@@ -19427,7 +19436,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     if( pVfs ){
       sqlite3_vfs_register(pVfs, 1);
     }else{
-      utf8_printf(stderr, "no such VFS: \"%s\"\n", argv[i]);
+      utf8_printf(stderr, "no such VFS: \"%s\"\n", zVfs);
       exit(1);
     }
   }

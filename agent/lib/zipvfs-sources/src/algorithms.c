@@ -1377,6 +1377,38 @@ static int lrrUncompress(
 }
 /* End the LRR compression routines.
 ******************************************************************************/
+/*
+    REDEYE
+*/
+#include "Lz4Lib/lz4.h"
+static	int		REDEYE_Bound(void* pCtx, int nByte)
+{
+    return nByte ? LZ4_compressBound(nByte) : 0;
+}
+static	int		REDEYE_Compress(void* pCtx, char* pDest, int* pnDest, const char* pSrc, int nSrc)
+{
+    int			nRet;
+    //int LZ4_compress_default(const char* source, char* dest, int sourceSize, int maxDestSize);
+    nRet = LZ4_compress_fast(pSrc, pDest, nSrc, *pnDest, 1);
+    if (nRet > 0)
+    {
+        *pnDest = nRet;
+        return SQLITE_OK;
+    }
+    return SQLITE_ERROR;
+}
+static	int		REDEYE_Uncompress(void* pCtx, char* pDest, int* pnDest, const char* pSrc, int nSrc)
+{
+    int			nRet;
+    //	int LZ4_decompress_safe (const char* source, char* dest, int compressedSize, int maxDecompressedSize);
+    nRet = LZ4_decompress_safe(pSrc, pDest, nSrc, *pnDest);
+    if (nRet > 0)
+    {
+        *pnDest = nRet;
+        return SQLITE_OK;
+    }
+    return SQLITE_ERROR;
+}
 
 /*
 ** The following is the array of available compression and encryption 
@@ -1425,6 +1457,18 @@ static const ZipvfsAlgorithm aZipvfs[] = {
   /* xCryptoCleanup */  aesEncryptionCleanup
   },
 
+    /* Longest-Run Removal */ {
+    /* zName          */  "redeye",
+    /* xBound         */  REDEYE_Bound,
+    /* xComprSetup    */  0,
+    /* xCompr         */  REDEYE_Compress,
+    /* xComprCleanup  */  0,
+    /* xDecmprSetup   */  0,
+    /* xDecmpr        */  REDEYE_Uncompress,
+    /* xDecmprCleanup */  0,
+    /* xCryptoSetup   */  aesEncryptionSetup,
+    /* xCryptoCleanup */  aesEncryptionCleanup
+},
 #ifndef SQLITE_OMIT_ZLIB
   /* ZLib */ {
   /* zName          */  "zlib",
@@ -1590,7 +1634,16 @@ static int zipvfsLegacyOpen(
 ** Only initialize ZIPVFS once.  Set this variable to true after the
 ** first initialization to prevent a second.
 */
-static int zipvfsIsInit = 0;
+static int _zipvfsIsInit = 0;
+
+inline  void    SetInitFlag(const char * pCause, int nFlag) {
+    printf("%s %d", pCause, nFlag);
+    _zipvfsIsInit   = nFlag;
+}
+inline  int     GetInitFlag() {
+    return _zipvfsIsInit;
+}
+
 
 /*
 ** Register all ZipVFS algorithms, if we have not done so already.
@@ -1600,8 +1653,8 @@ __declspec(dllexport)
 #endif
 void zipvfsInit_v2(void){
   unsigned int i;
-  if( zipvfsIsInit ) return;
-  zipvfsIsInit = 0;
+  if( GetInitFlag() ) return;
+  SetInitFlag(__FUNCTION__, 1);
   for(i=0; i<sizeof(aZipvfs)/sizeof(aZipvfs[0]); i++){
     zipvfs_create_vfs_v2(
         aZipvfs[i].zName, 0, (void*)&aZipvfs[0],
