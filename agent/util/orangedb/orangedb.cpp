@@ -15,13 +15,18 @@ int		sqlite3_open_db(const char* zName, sqlite3** pDb)
 }
 
 #if SQLITE_SHELL_IS_UTF8
-int SQLITE_CDECL __main(int argc, char** argv);
+extern "C" int SQLITE_CDECL __main(int argc, char** argv);
 #else
-int SQLITE_CDECL __wmain(int argc, wchar_t** wargv);
+extern "C" int SQLITE_CDECL __wmain(int argc, wchar_t** wargv);
 #endif
 
+#if SQLITE_SHELL_IS_UTF8
+int SQLITE_CDECL main(int argc, char** argv)
+#else
 int SQLITE_CDECL wmain(int argc, wchar_t** wargv)
+#endif
 {
+#ifdef TEST
 	CDB		db("event.db");
 	if (db.IsOpened()) {
 		PCWSTR			pQuery	= L"select ProcName, ProcPath from PROCESS_CREATE_LOG";
@@ -37,4 +42,11 @@ int SQLITE_CDECL wmain(int argc, wchar_t** wargv)
 		});
 	}
 	return 0;
+#else 
+	#if SQLITE_SHELL_IS_UTF8
+		return __main(argc, argv);
+	#else
+		return __wmain(argc, wargv);
+	#endif
+#endif
 }
