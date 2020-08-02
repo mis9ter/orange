@@ -8,25 +8,23 @@
 
 #pragma comment(lib, "FltLib.lib")
 
-#define MESSAGE_DATA_SIZE	(MESSAGE_MAX_SIZE - sizeof(OVERLAPPED) - sizeof(FILTER_MESSAGE_HEADER) - sizeof(MESSAGE_HEADER))
-
-#pragma pack(1)
-typedef struct YFILTER_MESSAGE
+#pragma pack(push, 1)
+typedef struct YFILTERCTRL_MESSAGE
 {
 	FILTER_MESSAGE_HEADER	_header;
-	YFILTER_MESSAGE_HEADER	header;
-	YFILTER_MESSAGE_PROCESS	data;
+	YFILTER_HEADER			header;
+	YFILTER_DATA			data;
 	OVERLAPPED				ov;
-} YFILTER_MESSAGE, *PYFILTER_MESSAGE;
-#define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS))
+} YFILTERCTRL_MESSAGE, *PYFILTERCTRL_MESSAGE;
+#define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(YFILTER_HEADER) + sizeof(YFILTER_DATA))
 
-typedef struct YFILTER_REPLY
+typedef struct YFILTERCTRL_REPLY
 {
 	FILTER_REPLY_HEADER		_header;
-	YFILTER_REPLY_DATA		data;
-} YFILTER_REPLY, * PYFILTER_REPLY;
+	YFILTER_REPLY			data;
+} YFILTERCTRL_REPLY, * PYFILTERCTRL_REPLY;
 
-#pragma pack()
+#pragma pack(pop)
 
 class CFilterCtrlImpl;
 typedef struct {
@@ -37,7 +35,7 @@ typedef struct {
 	HANDLE				hPort;
 	DWORD				dwThreadCount;
 	HANDLE *			hThreads;
-	YFILTER_MESSAGE		message;
+	YFILTERCTRL_MESSAGE	message;
 	CFilterCtrlImpl		*pClass;
 } PORT_INFO, *PPORT_INFO;
 
@@ -52,6 +50,7 @@ public:
 	{
 		Log(__FUNCTION__);
 		ZeroMemory(&m_driver, sizeof(m_driver));
+		ZeroMemory(&m_callback, sizeof(m_callback));
 	}
 	~CFilterCtrlImpl()
 	{
@@ -126,22 +125,6 @@ public:
 					__leave;
 				}
 			}
-			if (DriverIsRunning())
-			{
-
-			}
-			else
-			{
-				if (DriverStart())
-				{
-
-				}
-				else
-				{
-					Log("error: can not start.");
-					__leave;
-				}
-			}
 			bRet	= true;
 		}
 		__finally
@@ -168,15 +151,23 @@ public:
 		}
 		return bRet;
 	}
-	bool	Start()
+	bool	Start(
+		IN PVOID pCommandCallbackPtr, IN CommandCallbackProc pCommandCallback,
+		IN PVOID pEventCallbackPtr, IN EventCallbackProc pEventCallback
+	)
 	{
-		Log("%s", __FUNCTION__);
+		Log("%s pEventCallback=%p, pEventCallbackPtr=%p", 
+			__FUNCTION__, pEventCallbackPtr, pEventCallback);
+		m_callback.command.pCallback		= pCommandCallback;
+		m_callback.command.pCallbackPtr		= pCommandCallbackPtr;
+		m_callback.event.pCallback			= pEventCallback;
+		m_callback.event.pCallbackPtr		= pEventCallbackPtr;
 		if (DriverIsRunning())	return true;
 		return DriverStart();
 	}
 	void	Shutdown()
 	{
-		Log("%s", __FUNCTION__);
+		Log("%s begin", __FUNCTION__);
 		if (IsConnected())
 		{
 			Disconnect();
@@ -185,6 +176,7 @@ public:
 		{
 			DriverStop();
 		}
+		Log("%s end", __FUNCTION__);
 	}
 
 	bool	CreatePortInfo(PPORT_INFO p, PCWSTR pPortName, DWORD dwThreadCount,
@@ -210,6 +202,7 @@ public:
 			}
 			Log("%s connected to %ws, %p", __FUNCTION__, p->szName, p->hPort);
 			p->pClass			= this;
+			StringCbCopy(p->szName, sizeof(p->szName), pPortName);
 			p->hInit			= CreateEvent(NULL, FALSE, FALSE, NULL);
 			p->hShutdown		= CreateEvent(NULL, FALSE, FALSE, NULL);
 			p->dwThreadCount	= dwThreadCount;
@@ -218,7 +211,7 @@ public:
 				Log("%s error: CreateIoCompletionPort() failed. code=%d", __FUNCTION__, GetLastError());
 				__leave;
 			}
-			p->hThreads			= (HANDLE *)alloca(sizeof(HANDLE));
+			p->hThreads			= (HANDLE *)malloc(sizeof(HANDLE) * dwThreadCount);
 			if (NULL == p->hThreads) {
 				Log("%s error: alloca() failed. code=%d", __FUNCTION__, GetLastError());
 				__leave;
@@ -246,9 +239,12 @@ public:
 		{
 			for (DWORD i = 0; i < p->dwThreadCount; i++)
 			{
+				Log("%s waiting thread(%ws, %d) ..", __FUNCTION__, p->szName, i);
 				WaitForSingleObject(p->hThreads[i], 1000 * 3);
 				CloseHandle(p->hThreads[i]);
+				Log("%s terminated thread(%ws, %d) ..", __FUNCTION__, p->szName, i);
 			}
+			free(p->hThreads);
 		}
 		if (p->hPort && INVALID_HANDLE_VALUE != p->hPort)
 		{
@@ -267,6 +263,7 @@ public:
 	}
 	bool	Connect()
 	{
+		Log(__FUNCTION__);
 		__try
 		{
 			if (CreatePortInfo(&m_driver.command, DRIVER_COMMAND_PORT, 1, CommandThread))
@@ -317,6 +314,16 @@ private:
 		std::atomic<bool>	bConnected;
 	} m_driver;
 
+	struct {
+		struct {
+			PVOID				pCallbackPtr;
+			CommandCallbackProc	pCallback;
+		} command;
+		struct {
+			PVOID				pCallbackPtr;
+			EventCallbackProc	pCallback;
+		} event;
+	} m_callback;
 
 	static	unsigned	__stdcall	CommandThread(LPVOID ptr)
 	{
@@ -356,17 +363,19 @@ private:
 		ULONG_PTR			pCompletionKey;
 		DWORD				dwError;
 
-		PYFILTER_MESSAGE	pMessage	= &p->message;
-		YFILTER_REPLY		reply;
+		PYFILTERCTRL_MESSAGE	pMessage	= &p->message;
+		YFILTERCTRL_REPLY		reply;
 
 		HRESULT	hr;
+		DWORD	dwMessageSize;
 
 		while (true)
 		{
 			ZeroMemory(&p->message.ov, sizeof(OVERLAPPED));
+			dwMessageSize	= FIELD_OFFSET(YFILTERCTRL_MESSAGE, ov);
 			hr = FilterGetMessage(p->hPort, 
 				&p->message._header,
-				FIELD_OFFSET(YFILTER_MESSAGE, ov),
+				dwMessageSize,
 				&p->message.ov);
 			if (HRESULT_FROM_WIN32(ERROR_IO_PENDING) != hr)
 			{
@@ -374,7 +383,6 @@ private:
 				p->pClass->Log("%s FilterGetMessage()=%08x", __FUNCTION__, hr);
 				break;
 			}
-
 			bRet	= GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, 
 							(LPOVERLAPPED *)&pOv, INFINITE);
 			dwError	= GetLastError();
@@ -385,67 +393,37 @@ private:
 					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
 				break;
 			}
-			pMessage	= CONTAINING_RECORD(pOv, YFILTER_MESSAGE, ov);
-			//p->pClass->Log("HEADER: category=%d, type=%d, size=%d", 
-			//	pMessage->header.category, pMessage->header.type, pMessage->header.size);
+			pMessage	= CONTAINING_RECORD(pOv, YFILTERCTRL_MESSAGE, ov);
 			reply.data.bRet			= false;
-			if (YFilter::Message::Category::Event == pMessage->header.category)
+			if (YFilter::Message::Mode::Event == pMessage->header.mode)
 			{
-				switch (pMessage->header.type)
+				if (pMessage->header.size == sizeof(YFILTER_HEADER) + sizeof(YFILTER_DATA))
 				{
-					case YFilter::Message::Type::ProcessStart:
-						if (pMessage->header.size == sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS))
-						{
-							PYFILTER_MESSAGE_PROCESS	pData	= &pMessage->data;
-							p->pClass->Log("PROCESS_START:%d", pData->dwProcessId);
-							p->pClass->Log("MessageId    :%I64d", pMessage->_header.MessageId);
-							p->pClass->Log("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-								pData->uuid.Data1, pData->uuid.Data2, pData->uuid.Data3,
-								pData->uuid.Data4[0], pData->uuid.Data4[1], pData->uuid.Data4[2], pData->uuid.Data4[3],
-								pData->uuid.Data4[4], pData->uuid.Data4[5], pData->uuid.Data4[6], pData->uuid.Data4[7]);
-
-							p->pClass->Log("%ws", pData->szPath);
-							p->pClass->Log("%ws", pData->szCommand);
-							p->pClass->Log("%s", TEXTLINE);
-							reply.data.bRet = true;
-						}
-						else
-						{
-							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(YFILTER_MESSAGE_PROCESS));
-						}
-						break;
-					case YFilter::Message::Type::ProcessStop:
-						if (pMessage->header.size == sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS))
-						{
-							PYFILTER_MESSAGE_PROCESS	pData = &pMessage->data;
-							if ( pData->dwProcessId)
-							{
-								//	드라이버에서 생성을 감지했던 프로세스
-								
-							}
-							else
-							{
-								//	드라이버 로드전에 이미 생성되었던 프로세스
-							}
-							p->pClass->Log("PROCESS_STOP :%d", pData->dwProcessId);
-							p->pClass->Log("MessageId    :%I64d", pMessage->_header.MessageId);
-							p->pClass->Log("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-								pData->uuid.Data1, pData->uuid.Data2, pData->uuid.Data3,
-								pData->uuid.Data4[0], pData->uuid.Data4[1], pData->uuid.Data4[2], pData->uuid.Data4[3],
-								pData->uuid.Data4[4], pData->uuid.Data4[5], pData->uuid.Data4[6], pData->uuid.Data4[7]);
-							p->pClass->Log("%ws", pData->szPath);
-							p->pClass->Log("%ws", pData->szCommand);
-							p->pClass->Log("%s", TEXTLINE);
-							reply.data.bRet = true;
-						}
-						else
-						{
-							p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, 
-								sizeof(YFILTER_MESSAGE_HEADER) + sizeof(YFILTER_MESSAGE_PROCESS));
-						}
-						break;
+					PYFILTER_DATA	pData = &pMessage->data;
+					if (pData && p->pClass->m_callback.event.pCallback)
+					{
+						reply.data.bRet = p->pClass->m_callback.event.pCallback(
+							pMessage->_header.MessageId,
+							p->pClass->m_callback.event.pCallbackPtr,
+							pMessage->header.category,
+							pMessage->data.subType,
+							pData,
+							sizeof(YFILTER_DATA)
+						);
+					}
+					else {
+						printf("-- pData=%p, pCallback=%p\n", pData, p->pClass->m_callback.event.pCallback);
+						reply.data.bRet = true;
+					}
 				}
-			}		
+				else
+				{
+					p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(YFILTERCTRL_MESSAGE));
+				}
+			}	
+			else {
+				printf("-- unknown mode:%d", pMessage->header.mode);
+			}
 			/*		
 				FilterReplyMessage의 데이터 크기 부분 참고.
 				https://docs.microsoft.com/en-us/windows/win32/api/fltuser/nf-fltuser-filterreplymessage
@@ -475,10 +453,6 @@ private:
 				//	https://yoshiki.tistory.com/entry/HRESULT-%EC%97%90-%EB%8C%80%ED%95%9C-%EB%82%B4%EC%9A%A9
 				p->pClass->Log("FilterReplyMessage(FAILURE)=%08x, E_INVALIDARG=%08x", 
 					hr, E_INVALIDARG);
-				p->pClass->Log("reply hPort=%p, Status=%d, MessageId=%I64d, size: %d %d",
-					p->hPort, reply._header.Status, reply._header.MessageId,
-					sizeof(FILTER_REPLY_HEADER) + sizeof(YFILTER_REPLY_DATA),
-					sizeof(YFILTER_REPLY));
 			}
 			ERROR_MORE_DATA;
 		}

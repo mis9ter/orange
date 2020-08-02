@@ -56,20 +56,16 @@ bool	CAgent::Start(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 				break;
 			}
 		}
-
-		if (CFilterCtrl::IsRunning())
+		if (false == CFilterCtrl::Start(
+				NULL, NULL, 
+				dynamic_cast<CEventCallback *>(this),
+				EventCallbackProc
+			)
+		)
 		{
-
+			Log("%s start failure.", __FUNCTION__);
+			break;
 		}
-		else
-		{
-			if (false == CFilterCtrl::Start())
-			{
-				Log("%s start failure.", __FUNCTION__);
-				break;
-			}
-		}
-
 		if (CFilterCtrl::Connect())
 		{
 

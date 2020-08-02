@@ -45,6 +45,15 @@
     <ClInclude Include="..\include\CException.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CEventCallback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\orangedb.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CProcess.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">

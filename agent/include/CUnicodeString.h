@@ -125,6 +125,8 @@ public:
 		}
 		else
 		{
+			m_cbSize	= 0;
+			m_pStr		= NULL;
 			__log("%s PUNICODE_STRING is null.", __FUNCTION__);
 		}
 	}

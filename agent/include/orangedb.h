@@ -69,6 +69,13 @@ public:
 		}
 		return nRows;
 	}
+	void		Free(IN sqlite3_stmt* pStmt) {
+		if (pStmt)
+		{
+			sqlite3_reset(pStmt);
+			sqlite3_finalize(pStmt);
+		}
+	}
 	bool		IsOpened() {
 		return m_pDb? true : false;
 	}

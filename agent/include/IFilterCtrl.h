@@ -2,6 +2,19 @@
 #include "yagent.define.h"
 #include "IModule.h"
 #include "CAppLog.h"
+#include <functional>
+
+//typedef	std::function<bool (PVOID pCallbackPtr, int nType, int nSubType, PVOID pData, size_t nSize)>	EventCallbackProc;
+//typedef std::function<bool (PVOID pCallbackPtr)>		CommandCallbackProc;
+typedef	bool	(*EventCallbackProc	)(
+	ULONGLONG	nMessageId,
+	PVOID		pCallbackPtr, 
+	int			nType, 
+	int			nSubType, 
+	PVOID		pData, 
+	size_t		nSize
+);
+typedef bool	(*CommandCallbackProc)(PVOID pCallbackPtr);
 
 __interface IFilterCtrl
 	:
@@ -16,7 +29,9 @@ __interface IFilterCtrl
 	)		= NULL;
 	virtual	void	Uninstall()		= NULL;
 	virtual	bool	IsRunning()		= NULL;
-	virtual	bool	Start()			= NULL;
+	virtual	bool	Start(
+		IN PVOID pCommandCallbackPtr, IN CommandCallbackProc, 
+		IN PVOID pEventCallbackPtr, IN EventCallbackProc)			= NULL;
 	virtual	void	Shutdown()		= NULL;
 	virtual	bool	Connect()		= NULL;
 	virtual bool	IsConnected()	= NULL;
@@ -79,11 +94,14 @@ public:
 		if (NULL == m_pInstance)	return false;
 		return m_pInstance->IsRunning();
 	}
-	bool	Start()
+	bool	Start(
+		IN PVOID pCommandCallbackPtr, IN CommandCallbackProc pCommandCallback,
+		IN PVOID pEventCallbackPtr, IN EventCallbackProc pEventCallback
+	)
 	{
 		Log(__FUNCTION__);
 		if (NULL == m_pInstance)	return false;
-		return m_pInstance->Start();
+		return m_pInstance->Start(pCommandCallbackPtr, pCommandCallback, pEventCallbackPtr, pEventCallback);
 	}
 	void	Shutdown()
 	{

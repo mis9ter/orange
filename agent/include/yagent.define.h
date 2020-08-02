@@ -9,7 +9,7 @@ typedef GUID UUID;
 #define AGENT_SERVICE_NAME		L"xagent"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
-#define AGENT_LOG_NAME			L"xagent.log"
+#define AGENT_LOG_NAME			L"yagent.log"
 #define	AGENT_PATH_SIZE			1024
 #define AGENT_NAME_SIZE			64
 #define DRIVER_SERVICE_NAME		L"yfilter"
@@ -34,19 +34,55 @@ typedef GUID UUID;
 #define SAFEBOOT_REG_NETWORK	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Network"
 #define TEXTLINE				"--------------------------------------------------------------------------------"
 
+typedef union _PS_PROTECTION
+{
+	UCHAR Level;
+	struct
+	{
+		int Type : 3;
+		int Audit : 1;
+		int Signer : 4;
+	} Flags;
+} PS_PROTECTION, * PPS_PROTECTION;
+
+typedef enum _PS_PROTECTED_SIGNER
+{
+	PsProtectedSignerNone = 0,
+	PsProtectedSignerAuthenticode = 1,
+	PsProtectedSignerCodeGen = 2,
+	PsProtectedSignerAntimalware = 3,
+	PsProtectedSignerLsa = 4,
+	PsProtectedSignerWindows = 5,
+	PsProtectedSignerWinTcb = 6,
+	PsProtectedSignerMax = 7
+} PS_PROTECTED_SIGNER;
+
+typedef enum _PS_PROTECTED_TYPE
+{
+	PsProtectedTypeNone = 0,
+	PsProtectedTypeProtectedLight = 1,
+	PsProtectedTypeProtected = 2,
+	PsProtectedTypeMax = 3
+
+} PS_PROTECTED_TYPE;
+
 namespace YFilter
 {
 	namespace Message
 	{
-		enum Category {
+		enum Mode {
 			Command,
 			Event
 		};
-		enum Type {
+		enum Category {
+			Process,
+			Thread,
+		};
+		enum SubType {
 			ProcessStart,
 			ProcessStop,
 			ThreadStart,
-			ThreadStop,
+			ThreadStop
 		};
 	};
 	namespace Object
@@ -128,32 +164,58 @@ namespace YFilter
 /////////////////////////////////////////////////////////////////////////////////////////
 //	도라이버-에이전트 정보 구조체
 /////////////////////////////////////////////////////////////////////////////////////////
-#define MESSAGE_MAX_SIZE		(64 * 1024)		//	커널에서 전달 예상되는 최대 크기
-typedef struct {
-	YFilter::Message::Category	category;		//
-	YFilter::Message::Type		type;			//	
-	ULONG						size;			//	MESSAGE_HEADER + 알파
-} YFILTER_MESSAGE_HEADER;
+#pragma pack(push, 1)
+#define MESSAGE_MAX_SIZE		(64 * 1024)			//	커널에서 전달 예상되는 최대 크기
+typedef struct YFILTER_HEADER {
+	YFilter::Message::Mode		mode;				//
+	YFilter::Message::Category	category;			//	
+	ULONG						size;				//	MESSAGE_HEADER + 알파
+} YFILTER_HEADER, *PYFILTER_HEADER;
+/*
+	[TODO]	2020/08/01
 
+	생긴걸 아무리 쬐려봐도 FltSendMessage - FilterGetMessage 쌍은 정해진 크기로만
+	주고 받아야 하는 걸로 보인다.
 
-typedef struct YFILTER_MESSAGE_PROCESS
-{
-	YFilter::Message::Type	type;				//	메세지 유형
-	bool					bCreationSaved;		//	생성 정보의 기저장 여부
-	DWORD					dwProcessId;
-	DWORD					dwParentProcessId;
-	UUID					uuid;
-	wchar_t					szPath[AGENT_PATH_SIZE];
-	wchar_t					szCommand[AGENT_PATH_SIZE];
-} YFILTER_MESSAGE_PROCESS, *PYFILTER_MESSAGE_PROCESS;
+	그렇다면 한 구조체 안에 다양한 mode, category, subtype을 수용할 수 있도록 
+	아껴서 잘 만들어야 한다는 이야기.
 
-typedef struct YFILTER_MESSAGE_DATA
-{
-	YFILTER_MESSAGE_HEADER	header;
-	YFILTER_MESSAGE_PROCESS	data;
-} YFILTER_MESSAGE_DATA, *PYFILTER_MESSAGE_DATA;
+	아.. 그래서 xfilter 에서 주고 받는 구조체에 union이 많은 거구나.
+	서로 다른 애들끼리는 필드를 중첩 시키려고.
+*/
 
-typedef struct YFILTER_REPLY_DATA
+typedef struct YFILTER_DATA {
+	YFilter::Message::SubType	subType;
+
+	union {
+		bool					bCreationSaved;				//	process
+	};
+	DWORD						dwProcessId;				//	all
+	DWORD						dwThreadId;					//	all
+	union {
+		DWORD					dwParentProcessId;			//	process
+		DWORD					dwCreateProcessId;			//	thread
+	};
+	union {
+		ULONG_PTR				pBaseAddress;				//	module
+		PVOID					pStartAddress;				//	thread
+	};
+
+	wchar_t						szPath[AGENT_PATH_SIZE];
+	wchar_t						szCommand[AGENT_PATH_SIZE];
+
+#pragma pack(pop)
+	UUID						uuid;						//	process
+
+#pragma pack(push, 1)
+} YFILTER_DATA, *PYFILTER_DATA;
+typedef struct YFILTER_MESSAGE {
+	YFILTER_HEADER	header;
+	YFILTER_DATA	data;
+} YFILTER_MESSAGE, *PYFILTER_MESSAGE;
+
+typedef struct YFILTER_REPLY
 {
 	bool					bRet;
-} FILTER_REPLY_DATA;
+} FILTER_REPLY;
+#pragma pack(pop)

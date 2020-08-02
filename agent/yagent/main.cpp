@@ -27,6 +27,9 @@ void    AgentRunLoop(HANDLE hShutdown, void* pCallbackPtr)
 }
 #ifdef _CONSOLE
 int     main()
+#else 
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdParam, int nCmdShow)
+#endif
 {
    CAgent       agent;
    char         szCmd[100]  = "";
@@ -77,9 +80,9 @@ int     main()
            PostQuitMessage(0);
        });
        dialog.MessagePump([](IN HANDLE hShutdown, IN HWND hWnd, IN PVOID ptr) {
-           while (WAIT_TIMEOUT == WaitForSingleObject(hShutdown, 100))
+           while (WAIT_TIMEOUT == WaitForSingleObject(hShutdown, 1000))
            {
-               
+
            }
        });
        dialog.Destroy();
@@ -134,7 +137,7 @@ int     main()
    */
    return 0;
 }
-#else
+/*
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
                      _In_ LPWSTR    lpCmdLine,
@@ -173,7 +176,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     return (int) msg.wParam;
 }
-#endif
+*/
 //
 //  FUNCTION: MyRegisterClass()
 //

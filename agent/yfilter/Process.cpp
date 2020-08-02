@@ -77,8 +77,10 @@ public:
 		KIRQL			irql	= KeGetCurrentIrql();
 
 		//__dlog("%s %10d IRQL=%d", __FUNCTION__, h, KeGetCurrentIrql());
-		if( irql >= DISPATCH_LEVEL )	return false;
-
+		if( irql >= DISPATCH_LEVEL )	{
+			__dlog("%s DISPATCH_LEVEL", __FUNCTION__);
+			return false;
+		}
 		UNREFERENCED_PARAMETER(pPath);
 		UNREFERENCED_PARAMETER(pCommand);
 		RtlZeroMemory(&entry, sizeof(PROCESS_ENTRY));
@@ -114,6 +116,16 @@ public:
 					__leave;
 				}
 			}
+			PS_PROTECTED_SIGNER	signer;
+			if (NT_SUCCESS(GetProcessCodeSignerByProcessId(PID, &signer)))
+			{
+				//__log("%s %wZ signer:%d", __FUNCTION__, &entry.path, signer);
+			}
+			else
+			{
+				__log("%s GetProcessCodeSignerByProcessId() failed.", __FUNCTION__);
+			}
+
 			if (pCommand)
 			{
 				if( false == CMemory::AllocateUnicodeString(PoolType(), &entry.command, pCommand, 'PDDA') ) {
@@ -612,7 +624,7 @@ bool			CheckAccessMask(
 			{
 				//	죽입시다. 안그럼 날 죽일 수도 있는 놈. 정당방위
 				__log("KILLING:%ws", (PCWSTR)currentProcPath);
-				//KillProcess(hCurrentProcessId);
+				KillProcess(hCurrentProcessId);
 			}
 		}
 		else if (YFilter::Process::Type::Gray == type)
@@ -698,7 +710,7 @@ OB_PREOP_CALLBACK_STATUS	ProcessObjectPreCallback(
 			}
 			PrintMask("OriginalDesiredAccess", YFilter::Process::Context::Process, 
 				&pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess);
-			//if (FALSE = pOperationInformation->KernelHandle)
+			if (FALSE == pOperationInformation->KernelHandle)
 			{
 				DeleteAccessMask(&pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess, 
 					&pOperationInformation->Parameters->CreateHandleInformation.DesiredAccess, 
@@ -869,7 +881,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 
 			if( CreateInfo->FileOpenNameAvailable )
 			{
-				YFILTER_MESSAGE_DATA	msg;
+				YFILTER_MESSAGE	msg;
 				RtlZeroMemory(&msg, sizeof(msg));
 
 				ExUuidCreate(&msg.data.uuid);
@@ -877,16 +889,16 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				//	ProcessId, CreateInfo->ParentProcessId, sizeof(MESSAGE_PROCESS));
 				ProcessTable()->Add(ProcessId, CreateInfo->ParentProcessId, 
 					&msg.data.uuid, CreateInfo->ImageFileName, CreateInfo->CommandLine);
-				msg.header.category			= YFilter::Message::Category::Event;
-				msg.header.type				= YFilter::Message::Type::ProcessStart;
+				msg.header.mode				= YFilter::Message::Mode::Event;
+				msg.header.category			= YFilter::Message::Category::Process;
 				msg.header.size				= sizeof(msg);
-				msg.data.type				= YFilter::Message::Type::ProcessStart;
+
+				msg.data.subType			= YFilter::Message::SubType::ProcessStart;
 				msg.data.bCreationSaved		= true;
 				msg.data.dwProcessId		= (DWORD)ProcessId;
 				msg.data.dwParentProcessId	= (DWORD)CreateInfo->ParentProcessId;
 				RtlStringCbCopyUnicodeString(msg.data.szPath, sizeof(msg.data.szPath), CreateInfo->ImageFileName);
 				RtlStringCbCopyUnicodeString(msg.data.szCommand, sizeof(msg.data.szCommand), CreateInfo->CommandLine);
-				//__log("%ws", msg.data.szPath);
 				//__log("%ws", msg.data.szCommand);
 				SendMessage("PROCESS_START", &Config()->client.event, &msg, sizeof(msg));
 			}
@@ -897,20 +909,21 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		}
 		else
 		{
-			UNICODE_STRING	null		= {0,};
-			PYFILTER_MESSAGE_DATA		pMsg	= NULL;
-			pMsg	= (PYFILTER_MESSAGE_DATA)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE_DATA), TAG_PROCESS);
+			//	프로세스 종료
+			UNICODE_STRING		null	= {0,};
+			PYFILTER_MESSAGE	pMsg	= NULL;
+			pMsg	= (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
 			if( pMsg )
 			{
-				RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE_DATA));
-				pMsg->header.category = YFilter::Message::Category::Event;
-				pMsg->header.type = YFilter::Message::Type::ProcessStop;
-				pMsg->header.size = sizeof(YFILTER_MESSAGE_DATA);
-				pMsg->data.type = YFilter::Message::Type::ProcessStop;
+				RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
+				pMsg->header.mode			= YFilter::Message::Mode::Event;
+				pMsg->header.category		= YFilter::Message::Category::Process;
+				pMsg->header.size			= sizeof(YFILTER_MESSAGE);
+				pMsg->data.subType			= YFilter::Message::SubType::ProcessStop;
 				pMsg->data.bCreationSaved	= false;
-				pMsg->data.dwProcessId = (DWORD)ProcessId;
-				pMsg->data.dwParentProcessId = 0;
-				pMsg->data.szCommand[0]	= NULL;
+				pMsg->data.dwProcessId		= (DWORD)ProcessId;
+				pMsg->data.dwParentProcessId	= 0;
+				pMsg->data.szCommand[0]		= NULL;
 				pMsg->data.szPath[0]		= NULL;
 				if (ProcessTable()->Remove(ProcessId, true, pMsg, [](
 					bool bCreationSaved, PPROCESS_ENTRY pEntry, PVOID pCallbackPtr
@@ -919,7 +932,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 						//	이 람다 함수 안은 DISPATCH_LEVEL 입니다.
 						//	락을 걸고 있거든요.
 						PASSIVE_LEVEL;
-						PYFILTER_MESSAGE_DATA	pMsg = (PYFILTER_MESSAGE_DATA)pCallbackPtr;
+						PYFILTER_MESSAGE	pMsg = (PYFILTER_MESSAGE)pCallbackPtr;
 						if (pMsg)
 						{
 							pMsg->data.bCreationSaved	= bCreationSaved;
@@ -949,7 +962,8 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 					}
 					pMsg->data.dwParentProcessId	= (DWORD)GetParentProcessId(ProcessId);
 				}
-				if (MessageThreadPool()->Push(YFilter::Message::Category::Event, pMsg, sizeof(YFILTER_MESSAGE_DATA)))
+				if (MessageThreadPool()->Push(YFilter::Message::Mode::Event, 
+						pMsg, sizeof(YFILTER_MESSAGE)))
 				{
 					//	pMsg는 SendMessage 성공 후 해제될 것이다. 
 					MessageThreadPool()->Alert();
@@ -977,6 +991,9 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				}
 			}
 		}
+	}
+	else {
+		__log("%s filter.Reference() failed.", __FUNCTION__);
 	}
 }
 bool		StartProcessFilter()

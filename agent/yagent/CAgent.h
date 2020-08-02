@@ -13,11 +13,14 @@
 #include "yagent.common.h"
 #pragma comment(lib, "yagent.common.lib")
 
+#include "CEventCallback.h"
+
 typedef std::function<void(HANDLE hShutdown, void * pCallbackPtr)>	PFUNC_AGENT_RUNLOOP;
 
 class CAgent
 	:
-	public	CFilterCtrl
+	public	CFilterCtrl,
+	public	CEventCallback
 {
 public:
 	CAgent();

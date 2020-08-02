@@ -28,6 +28,8 @@ NTSTATUS	CommandConnected(
 		FLT_ASSERT(Config()->client.client.command.pPort == NULL);
 		Config()->client.command.pPort = ClientPort;
 		Config()->client.command.hProcess = PsGetCurrentProcessId();
+		RtlStringCbCopyW(Config()->client.command.szName, sizeof(Config()->client.command.szName), 
+			DRIVER_COMMAND_PORT);
 #ifndef _WIN64
 		__log("PsGetCurrentProcessId=%d", (int)(Config()->client.hProcessId));
 #endif
@@ -134,6 +136,8 @@ NTSTATUS	EventConnected(
 		FLT_ASSERT(Config()->client.pPort == NULL);
 		Config()->client.event.pPort = ClientPort;
 		Config()->client.event.hProcess = PsGetCurrentProcessId();
+		RtlStringCbCopyW(Config()->client.event.szName, sizeof(Config()->client.event.szName),
+			DRIVER_EVENT_PORT);
 #ifndef _WIN64
 		__log("PsGetCurrentProcessId=%d", (int)(Config()->client.hProcessId));
 #endif
@@ -223,12 +227,12 @@ NTSTATUS	SendMessage(
 		응답 필요 없으니 그냥 보내라. 
 		하지만 내부적으로는 늘 응답을 받는 구조로 되어 있다. 	
 	*/
-	FILTER_REPLY_DATA	reply	= {0,};
-	ULONG				nSize	= sizeof(FILTER_REPLY_DATA);
+	FILTER_REPLY		reply	= {0,};
+	ULONG				nSize	= sizeof(FILTER_REPLY);
 	NTSTATUS			status	= SendMessage(pCause, p, pSendData, nSendDataSize, &reply, &nSize);
 	if (NT_SUCCESS(status))
 	{
-		__log("%s ret=%d", __FUNCTION__, reply.bRet);
+		//__log("%s reply.bRet=%d", __FUNCTION__, reply.bRet);
 	}
 	return status;
 }
@@ -252,10 +256,11 @@ NTSTATUS	SendMessage(
 			__FUNCTION__, Config(), Config()? Config()->pFilter : NULL, p);
 		return status;
 	}
+	//__log("%s %ws %p %d", __FUNCTION__, p->szName, pSendData, nSendDataSize);
 	CAutoReleaseSpinLock(&p->lock);
 	{
 		LARGE_INTEGER	timeout;
-		timeout.QuadPart	= 30 * 1000 * 1000 * 10;
+		timeout.QuadPart	= 3 * 1000 * 1000;
 		__try
 		{
 			if (NULL == p->pPort) 
@@ -273,7 +278,7 @@ NTSTATUS	SendMessage(
 			{
 				if (pRecvData && pnRecvDataSize)
 				{
-					//__log("%s STATUS_SUCCESS pRecvData=%p, *pnRecvDataSize=%d", __FUNCTION__,
+					//__log("%s STATUS_SUCCESS %p, %d", __FUNCTION__,
 					//	pRecvData, *pnRecvDataSize);
 				}
 				__leave;

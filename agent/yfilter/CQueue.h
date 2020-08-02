@@ -7,7 +7,7 @@ typedef struct QUEUE_WORKITEM
 	SLIST_ENTRY		entry;
 	PVOID			pItem;
 	ULONG			nSize;
-	ULONG			nType;
+	ULONG			nMode;
 } QEUEUE_WORKITEM, *PQUEUE_WORKITEM;
 
 typedef	void	(*PCallbackPop)(PQUEUE_WORKITEM pItem, PVOID pCallbackPtr);
@@ -35,7 +35,7 @@ public:
 		m_pCallback		= pCallback;
 		m_pCallbackPtr	= pCallbackPtr;
 	}
-	bool		Push(IN ULONG nType, IN PVOID pItem, IN ULONG nSize)
+	bool		Push(IN ULONG nMode, IN PVOID pItem, IN ULONG nSize)
 	{
 		//__log(__FUNCTION__);
 		UNREFERENCED_PARAMETER(pItem);
@@ -45,10 +45,12 @@ public:
 		__try
 		{
 			p	= (PQUEUE_WORKITEM)CMemory::Allocate(NonPagedPoolNx, sizeof(QUEUE_WORKITEM), TAG_CQUEUE);
-			if( NULL == p )	__leave;
-
+			if( NULL == p )	{
+				__dlog("%s allocation failed.", __FUNCTION__);
+				__leave;
+			}
 			RtlZeroMemory(p, sizeof(QUEUE_WORKITEM));
-			p->nType	= nType;
+			p->nMode	= nMode;
 			p->pItem	= pItem;
 			p->nSize	= nSize;
 			if (ExInterlockedPushEntrySList(&m_head, &p->entry, &m_lock))

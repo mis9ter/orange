@@ -160,14 +160,18 @@ Return Value:
 			__log("FltRegisterFilter() failed. status=%08x", status);
 			__leave;
 		}
-		status	= CreateFilterPort(Config()->pFilter, &Config()->server.pCommand,
-			DRIVER_COMMAND_PORT, 
+		RtlStringCbCopyW(Config()->server.command.szName, sizeof(Config()->server.command.szName), 
+			DRIVER_COMMAND_PORT);
+		status	= CreateFilterPort(Config()->pFilter, &Config()->server.command.pPort,
+			Config()->server.command.szName,
 			CommandConnected, CommandDisconnected, CommandMessage);
 		if (NT_FAILED(status)) {
 			__log("CreateFilterPort() failed. name=%ws, status=%08x", DRIVER_COMMAND_PORT, status);
 			__leave;
 		}
-		status = CreateFilterPort(Config()->pFilter, &Config()->server.pEvent,
+		RtlStringCbCopyW(Config()->server.event.szName, sizeof(Config()->server.event.szName),
+			DRIVER_EVENT_PORT);
+		status = CreateFilterPort(Config()->pFilter, &Config()->server.event.pPort,
 			DRIVER_EVENT_PORT,
 			EventConnected, EventDisconnected, EventMessage);
 		if (NT_FAILED(status)) {
@@ -181,10 +185,16 @@ Return Value:
 			__log("FltStartFiltering() failed. status=%08x", status);
 			__leave;
 		}
-		__log("  file filtering ..");
+		if (StartThreadFilter()) {
+			__log("thread filtering ..");
+		}
+		if (StartModuleFilter())
+		{
+			__log("module filtering ..");
+		}
 		if (StartProcessFilter())
 		{
-			__log("  process filtering ..");
+			__log("process filtering ..");
 		}
 		status	= STATUS_SUCCESS;
 	}
@@ -234,7 +244,9 @@ Return Value:
 
 	if (Config())
 	{
+		StopModuleFilter();
 		StopProcessFilter();
+		StopThreadFilter();
 		if (Config()->pDeviceObject)
 		{
 			IoDeleteSymbolicLink(&Config()->dosDeviceName);
@@ -246,8 +258,8 @@ Return Value:
 			CAutoReleaseSpinLock(&Config()->client.event.lock);
 			CAutoReleaseSpinLock(&Config()->client.command.lock);
 
-			DestroyFilterPort(&Config()->server.pCommand, DRIVER_COMMAND_PORT);
-			DestroyFilterPort(&Config()->server.pEvent, DRIVER_EVENT_PORT);
+			DestroyFilterPort(&Config()->server.command.pPort, Config()->server.command.szName);
+			DestroyFilterPort(&Config()->server.event.pPort, Config()->server.event.szName);
 			//	FltCloseCommunicationPort를 하지 않고 FltUnregisterFilter를 하면 어떤일이 벌어지게?
 			//	hang이 걸리더라. 
 			//	까칠이. 그래 커널단엔 배려란 없으면서 멋지구나. 

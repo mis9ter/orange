@@ -169,6 +169,70 @@ HANDLE		GetParentProcessId(IN	HANDLE	pProcessId)
 	}
 	return hParentProcessId;
 }
+
+NTSTATUS	GetProcessCodeSignerByProcessId
+(
+	HANDLE				pProcessId,
+	PS_PROTECTED_SIGNER	*pSigner
+)
+{
+	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
+	if (NULL == pSigner)	return STATUS_UNSUCCESSFUL;
+
+	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
+	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
+	if (pProcessId <= (HANDLE)4)			return STATUS_INVALID_PARAMETER;
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL) {
+		__dlog("%s KeGetCurrentIrql()=%d", __FUNCTION__, KeGetCurrentIrql());
+		return STATUS_UNSUCCESSFUL;
+	}	
+
+	NTSTATUS			status = STATUS_UNSUCCESSFUL;
+	HANDLE				hProcess = NULL;
+	OBJECT_ATTRIBUTES	oa = { 0 };
+	CLIENT_ID			cid = { 0 };
+	ULONG				nNeedSize = 0;
+	PS_PROTECTION		protection;
+
+	protection.Level	= 0;
+	__try
+	{
+		*pSigner = PsProtectedSignerNone;
+		oa.Length = sizeof(OBJECT_ATTRIBUTES);
+		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+		cid.UniqueProcess = pProcessId;
+
+#ifndef PROCESS_QUERY_INFORMATION
+#define PROCESS_QUERY_INFORMATION (0x0400)
+#endif
+		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
+		if (NT_FAILED(status))	{
+			__log("%s ZwOpenProcess() failed. status=%08x", __FUNCTION__, status);
+			__leave;
+		}
+		status = pZwQueryInformationProcess(hProcess, ProcessProtectionInformation, &protection, 
+					sizeof(protection), &nNeedSize);
+		if (NT_FAILED(status))	{
+			__log("%s ZwQueryInformationProcess() failed. status=%08x, sizeof(protection)=%d, nNeedSize=%d", 
+				__FUNCTION__, status, sizeof(protection), nNeedSize);
+			__leave;
+		}
+		*pSigner	= (PS_PROTECTED_SIGNER)protection.Flags.Signer;
+	}
+	__finally
+	{
+		if (hProcess)
+		{
+			ZwClose(hProcess);
+			hProcess = NULL;
+		}
+		if (NT_SUCCESS(status))
+		{
+
+		}
+	}
+	return status;
+}
 NTSTATUS	GetProcessImagePathByProcessId
 (
 	HANDLE				pProcessId,

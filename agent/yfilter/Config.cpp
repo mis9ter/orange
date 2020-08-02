@@ -87,8 +87,25 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		pConfig->pZwTerminateProcess		= (FN_ZwTerminateProcess)GetProcAddress(L"ZwTerminateProcess");
 		pConfig->pObRegisterCallbacks		= (FN_ObRegisterCallbacks)GetProcAddress(L"ObRegisterCallbacks");
 		pConfig->pObUnRegisterCallbacks		= (FN_ObUnRegisterCallbacks)GetProcAddress(L"ObUnRegisterCallbacks");
+		pConfig->pNtQueryInformationThread	= (FN_NtQueryInformationThread)GetProcAddress(L"NtQueryInformationThread");
+		pConfig->pPsSetCreateThreadNotifyRoutineEx	= (FN_PsSetCreateThreadNotifyRoutineEx)GetProcAddress(L"PsSetCreateThreadNotifyRoutineEx");
+		pConfig->pZwQueryInformationThread	= (FN_ZwQueryInformationThread)GetProcAddress(L"ZwQueryInformationThread");
+		pConfig->pLoadLibraryA				= (FN_LoadLibraryA)GetProcAddress(L"LoadLibraryA");
+		pConfig->pLoadLibraryW				= (FN_LoadLibraryW)GetProcAddress(L"LoadLibraryW");
+
+		__log("%s pZwQueryInformationProcess        %p", __FUNCTION__, pConfig->pZwQueryInformationProcess);
+		__log("%s pZwTerminateProcess               %p", __FUNCTION__, pConfig->pZwTerminateProcess);
+		__log("%s pObRegisterCallbacks              %p", __FUNCTION__, pConfig->pObRegisterCallbacks);
+		__log("%s pObUnRegisterCallbacks            %p", __FUNCTION__, pConfig->pObUnRegisterCallbacks);
+		__log("%s pNtQueryInformationThread         %p", __FUNCTION__, pConfig->pNtQueryInformationThread);
+		__log("%s pPsSetCreateThreadNotifyRoutineEx %p", __FUNCTION__, pConfig->pPsSetCreateThreadNotifyRoutineEx);
+		__log("%s pZwQueryInformationThread         %p", __FUNCTION__, pConfig->pZwQueryInformationThread);
+		__log("%s pLoadLibraryA                     %p", __FUNCTION__, pConfig->pLoadLibraryA);
+		__log("%s pLoadLibraryW                     %p", __FUNCTION__, pConfig->pLoadLibraryW);
+
 		if (pConfig->pZwQueryInformationProcess	&& pConfig->pZwTerminateProcess		&&
-			pConfig->pObRegisterCallbacks		&& pConfig->pObUnRegisterCallbacks)
+			pConfig->pObRegisterCallbacks		&& pConfig->pObUnRegisterCallbacks	&& 
+			pConfig->pNtQueryInformationThread	)
 		{
 			pConfig->bInitialized = true;
 		}

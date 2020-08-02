@@ -6,6 +6,9 @@
 //	https://docs.microsoft.com/ko-kr/windows-hardware/drivers/kernel/spin-locks
 #define WIN9X_COMPAT_SPINLOCK	
 
+//#define NTDDI_VERSION	0x0A000000
+//#include <sdkddkver.h>
+
 #include <fltKernel.h>
 #include <dontuse.h>
 #include <devguid.h>
@@ -68,6 +71,7 @@
 #define PROCESS_SUSPEND_RESUME				(0x0800)  
 #define PROCESS_QUERY_LIMITED_INFORMATION	(0x1000)  
 #define PROCESS_SET_LIMITED_INFORMATION		(0x2000)  
+
 #if (NTDDI_VERSION >= NTDDI_VISTA)
 #define PROCESS_ALL_ACCESS        (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | \
                                    0xFFFF)
@@ -197,6 +201,11 @@ NTSTATUS	GetProcessImagePathByProcessId
 	HANDLE				pProcessId,
 	PUNICODE_STRING		*pStr
 );
+NTSTATUS	GetProcessCodeSignerByProcessId
+(
+	HANDLE				pProcessId,
+	PS_PROTECTED_SIGNER* pSigner
+);
 NTSTATUS	GetProcessInfoByProcessId
 (
 	IN	HANDLE			pProcessId,
@@ -213,6 +222,18 @@ void			StopProcessFilter();
 bool			IsRegisteredProcess(IN HANDLE);
 bool			RegisterProcess(IN HANDLE h);
 bool			DeregisterProcess(IN HANDLE h);
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//	모듈 모니터링/관리
+/////////////////////////////////////////////////////////////////////////////////////////
+bool			StartModuleFilter();
+void			StopModuleFilter();
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//	스레드 모니터링/관리
+/////////////////////////////////////////////////////////////////////////////////////////
+bool			StartThreadFilter();
+void			StopThreadFilter();
 
 /////////////////////////////////////////////////////////////////////////////////////////
 //	도라이버-앱 간 통신
