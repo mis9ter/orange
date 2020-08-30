@@ -83,6 +83,7 @@
     <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\um;$(IncludePath)</IncludePath>
     <EnableInf2cat>false</EnableInf2cat>
+    <TargetName>orange</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -130,8 +131,10 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="..\include\driver.registry.h" />
     <ClInclude Include="..\include\yagent.define.h" />
     <ClInclude Include="Config.h" />
+    <ClInclude Include="CProcessTable.h" />
     <ClInclude Include="CQueue.h" />
     <ClInclude Include="CThreadPool.h" />
+    <ClInclude Include="md5.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="yfilter.h" />
   </ItemGroup>
@@ -139,6 +142,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClCompile Include="Config.cpp" />
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Driver.cpp" />
+    <ClCompile Include="md5.cpp" />
     <ClCompile Include="Message.cpp" />
     <ClCompile Include="minifilter.cpp" />
     <ClCompile Include="Misc.cpp" />

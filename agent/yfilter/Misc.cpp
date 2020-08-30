@@ -36,6 +36,147 @@ typedef struct _PEB {
 	ULONG                         SessionId;
 } PEB, * PPEB;
 
+
+NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID)
+{
+	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
+
+	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
+	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
+
+	NTSTATUS			status = STATUS_UNSUCCESSFUL;
+	HANDLE				hProcess = NULL;
+	OBJECT_ATTRIBUTES	oa = { 0 };
+	CLIENT_ID			cid = { 0 };
+
+	__try
+	{
+		oa.Length = sizeof(OBJECT_ATTRIBUTES);
+		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+		cid.UniqueProcess = hProcessId;
+
+#ifndef PROCESS_QUERY_INFORMATION
+#define PROCESS_QUERY_INFORMATION (0x0400)
+#endif
+		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
+		if (!NT_SUCCESS(status))	__leave;
+
+		PROCESS_BASIC_INFORMATION	info;
+		status = pZwQueryInformationProcess(hProcess, ProcessBasicInformation, &info, sizeof(info), NULL);
+		if (NT_SUCCESS(status)) {
+			*PPID = (HANDLE)info.InheritedFromUniqueProcessId;
+		}
+	}
+	__finally
+	{
+		if (hProcess)
+		{
+			ZwClose(hProcess);
+			hProcess = NULL;
+		}
+	}
+	return status;
+}
+NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
+	IN	HANDLE				hPPID,
+	IN	PCUNICODE_STRING	pImagePath,
+	IN	LARGE_INTEGER* pCreateTime,
+	OUT	UUID* pGuid)
+{
+	UNREFERENCED_PARAMETER(bCreate);
+	NTSTATUS		status = STATUS_SUCCESS;
+	CWSTRBuffer		procGuid;
+	/*
+		원래 계획은 부모ID까지 넣는 것인데
+		부모의 ProcGuid를 구하려 보니 조부모의 존재가 불확실하다.
+	*/
+	if( NULL == hPPID )
+		GetParentProcessId(hPID, &hPPID);
+	RtlStringCbPrintfW(procGuid, procGuid.CbSize(), L"%wZ.%d.%d.%d.%d.%d.%wZ",
+		&Config()->machineGuid,
+		Config()->bootId, 	//	bootid
+		pCreateTime->HighPart, pCreateTime->LowPart,
+		(DWORD)hPPID,
+		(DWORD)hPID,
+		pImagePath);
+
+	if( 388 == (DWORD)hPID )
+		__log("%ws", (PWSTR)procGuid);
+	int	nSize = 0;
+	for (PWSTR p = procGuid; *p; p++) {
+		*p = towlower(*p);
+		nSize++;
+	}
+	md5_state_t state;          /* MD5 state info */
+	md5_byte_t  sum[16];        /* Sum data */
+
+	md5_init(&state);
+	md5_append(&state, (unsigned char*)(PWSTR)procGuid, nSize * sizeof(WCHAR));
+	md5_finish(&state, sum);
+
+	if (pGuid) {
+		pGuid->Data1 = sum[0] << 24 | sum[1] << 16 | sum[2] << 8 | sum[3];
+		pGuid->Data2 = sum[4] << 8 | sum[5];
+		pGuid->Data3 = sum[6] << 8 | sum[7];
+		pGuid->Data4[0] = sum[8];
+		pGuid->Data4[1] = sum[9];
+		pGuid->Data4[2] = sum[10];
+		pGuid->Data4[3] = sum[11];
+		pGuid->Data4[4] = sum[12];
+		pGuid->Data4[5] = sum[13];
+		pGuid->Data4[6] = sum[14];
+		pGuid->Data4[7] = sum[15];
+	}
+	return status;
+}
+NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
+{
+	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
+
+	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
+	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
+
+	NTSTATUS			status = STATUS_UNSUCCESSFUL;
+	HANDLE				hProcess = NULL;
+	OBJECT_ATTRIBUTES	oa = { 0 };
+	CLIENT_ID			cid = { 0 };
+
+	__try
+	{
+		oa.Length = sizeof(OBJECT_ATTRIBUTES);
+		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+		cid.UniqueProcess = hProcessId;
+
+#ifndef PROCESS_QUERY_INFORMATION
+#define PROCESS_QUERY_INFORMATION (0x0400)
+#endif
+		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
+		if (!NT_SUCCESS(status)) {
+			__log("%s ZwOpenProcess() failed.", __FUNCTION__);
+			__leave;
+		}
+		status = pZwQueryInformationProcess(hProcess, ProcessTimes, p, sizeof(KERNEL_USER_TIMES), NULL);
+		if (NT_SUCCESS(status)) {
+
+		}
+		else {
+			__log("%s ZwQueryInformationProcess() failed.", __FUNCTION__);
+		}
+	}
+	__finally
+	{
+		if (hProcess)
+		{
+			ZwClose(hProcess);
+			hProcess = NULL;
+		}
+	}
+	return status;
+}
+
+
 NTSTATUS	GetProcessInfoByProcessId
 (
 	IN	HANDLE			pProcessId,
@@ -151,12 +292,18 @@ HANDLE		GetParentProcessId(IN	HANDLE	pProcessId)
 #define PROCESS_QUERY_INFORMATION (0x0400)
 #endif
 		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
-		if (!NT_SUCCESS(status))	__leave;
-
+		if (NT_FAILED(status))	{
+			//__log("%s %d ZwOpenProcess() failed. status=%08x", 
+			//	__FUNCTION__, pProcessId, status);
+			__leave;
+		}
 		PROCESS_BASIC_INFORMATION	info = { 0, };
 		status = pZwQueryInformationProcess(hProcess, ProcessBasicInformation, &info, sizeof(info), &nNeedSize);
-		if (status != STATUS_INFO_LENGTH_MISMATCH)	__leave;
-
+		if (NT_FAILED(status))	{
+			__log("%s %d ZwQueryInformationProcess() failed. status=%08x", 
+				__FUNCTION__, pProcessId, status);
+			__leave;
+		}
 		hParentProcessId = (HANDLE)info.InheritedFromUniqueProcessId;
 	}
 	__finally
@@ -229,6 +376,73 @@ NTSTATUS	GetProcessCodeSignerByProcessId
 		if (NT_SUCCESS(status))
 		{
 
+		}
+	}
+	return status;
+}
+NTSTATUS	GetProcessInfo
+(
+	HANDLE				pProcessId,
+	PROCESSINFOCLASS	infoClass,
+	PUNICODE_STRING		*pStr
+)
+{
+	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
+	if( NULL == pStr)		return STATUS_INVALID_PARAMETER;
+
+	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
+	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
+	if (pProcessId <= (HANDLE)4)			return STATUS_INVALID_PARAMETER;
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL) {
+		__dlog("%s KeGetCurrentIrql()=%d", __FUNCTION__, KeGetCurrentIrql());
+		return STATUS_UNSUCCESSFUL;
+	}
+	if (NULL == pStr)	return STATUS_UNSUCCESSFUL;
+
+	NTSTATUS			status = STATUS_UNSUCCESSFUL;
+	HANDLE				hProcess = NULL;
+	OBJECT_ATTRIBUTES	oa = { 0 };
+	CLIENT_ID			cid = { 0 };
+	ULONG				nNeedSize = 0;
+
+	__try
+	{
+		*pStr = NULL;
+		oa.Length = sizeof(OBJECT_ATTRIBUTES);
+		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+		cid.UniqueProcess = pProcessId;
+
+#ifndef PROCESS_QUERY_INFORMATION
+#define PROCESS_QUERY_INFORMATION (0x0400)
+#endif
+		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
+		if (!NT_SUCCESS(status))	__leave;
+
+		status = pZwQueryInformationProcess(hProcess, infoClass, NULL, 0, &nNeedSize);
+		if (status != STATUS_INFO_LENGTH_MISMATCH)	__leave;
+		*pStr = (PUNICODE_STRING)CMemory::Allocate(NonPagedPoolNx, nNeedSize, 'GPIP');
+		if (NULL == *pStr)	__leave;
+		RtlZeroMemory(*pStr, nNeedSize);
+		status = pZwQueryInformationProcess(hProcess, infoClass, *pStr, nNeedSize, &nNeedSize);
+		if (!NT_SUCCESS(status))	__leave;
+	}
+	__finally
+	{
+		if (hProcess)
+		{
+			ZwClose(hProcess);
+			hProcess = NULL;
+		}
+		if (NT_SUCCESS(status))
+		{
+
+		}
+		else
+		{
+			if (*pStr) {
+				CMemory::Free(*pStr);
+				*pStr = NULL;
+			}
 		}
 	}
 	return status;
@@ -310,8 +524,12 @@ NTSTATUS	GetProcessImagePathByProcessId
 
 	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
 	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
-	if (pProcessId <= (HANDLE)4)			return STATUS_INVALID_PARAMETER;
 	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
+
+	if (pProcessId <= (HANDLE)4) {
+		RtlStringCbCopyW(pImagePathBuffer, nBufferSize, L"SYSTEM");
+		return STATUS_SUCCESS;//STATUS_INVALID_PARAMETER;
+	}
 
 	NTSTATUS			status = STATUS_UNSUCCESSFUL;
 	HANDLE				hProcess = NULL;

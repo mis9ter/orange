@@ -19,7 +19,7 @@ NTSTATUS	CommandConnected(
 
 	__function_log;
 	{
-		CAutoReleaseSpinLock(&Config()->client.command.lock);
+		CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.command.lock, true);
 		if (Config()->client.command.pPort)
 		{
 			//	[TODO] 이미 연결된 상태? 이전 연결을 끊어주는 것보다는.. 새로운 연결을 거부하고 싶다. 
@@ -38,7 +38,7 @@ NTSTATUS	CommandConnected(
 }
 bool	CommandIsConnected()
 {
-	CAutoReleaseSpinLock(&Config()->client.command.lock);
+	CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.command.lock, true);
 	return Config()->client.command.pPort ? true : false;
 }
 VOID	CommandDisconnected(_In_opt_ PVOID ConnectionCookie)
@@ -51,7 +51,7 @@ VOID	CommandDisconnected(_In_opt_ PVOID ConnectionCookie)
 	//  Close our handle
 	//
 	{
-		CAutoReleaseSpinLock(&Config()->client.command.lock);
+		CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.command.lock);
 		FltCloseClientPort(Config()->pFilter, &Config()->client.command.pPort);
 		Config()->client.command.pPort	= NULL;
 		Config()->client.event.pPort	= NULL;
@@ -127,7 +127,7 @@ NTSTATUS	EventConnected(
 
 	__function_log;
 	{
-		CAutoReleaseSpinLock(&Config()->client.event.lock);
+		CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.event.lock, true);
 		if (Config()->client.event.pPort)
 		{
 			//	[TODO] 이미 연결된 상태? 이전 연결을 끊어주는 것보다는.. 새로운 연결을 거부하고 싶다. 
@@ -146,7 +146,7 @@ NTSTATUS	EventConnected(
 }
 bool	EventIsConnected()
 {
-	CAutoReleaseSpinLock(&Config()->client.event.lock);
+	CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.event.lock, true);
 	return Config()->client.event.pPort ? true : false;
 }
 VOID	EventDisconnected(_In_opt_ PVOID ConnectionCookie)
@@ -159,7 +159,7 @@ VOID	EventDisconnected(_In_opt_ PVOID ConnectionCookie)
 	//  Close our handle
 	//
 	{
-		CAutoReleaseSpinLock(&Config()->client.event.lock);
+		CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.event.lock, true);
 		FltCloseClientPort(Config()->pFilter, &Config()->client.event.pPort);
 		Config()->client.event.pPort	= NULL;
 		Config()->client.event.hProcess	= NULL;
@@ -215,93 +215,5 @@ Return Value:
 
 	__function_log;
 
-	return status;
-}
-NTSTATUS	SendMessage(
-	IN	PCSTR				pCause,
-	IN	PFLT_CLIENT_PORT	p,
-	IN	PVOID pSendData, IN ULONG nSendDataSize
-)
-{
-	/*
-		응답 필요 없으니 그냥 보내라. 
-		하지만 내부적으로는 늘 응답을 받는 구조로 되어 있다. 	
-	*/
-	FILTER_REPLY		reply	= {0,};
-	ULONG				nSize	= sizeof(FILTER_REPLY);
-	NTSTATUS			status	= SendMessage(pCause, p, pSendData, nSendDataSize, &reply, &nSize);
-	if (NT_SUCCESS(status))
-	{
-		//__log("%s reply.bRet=%d", __FUNCTION__, reply.bRet);
-	}
-	return status;
-}
-NTSTATUS	SendMessage(
-	IN	PCSTR				pCause,
-	IN	PFLT_CLIENT_PORT	p,
-	IN	PVOID pSendData,	IN ULONG nSendDataSize,
-	OUT	PVOID pRecvData,	OUT ULONG* pnRecvDataSize
-)
-{
-	//__log(__FUNCTION__);
-	NTSTATUS	status	= STATUS_UNSUCCESSFUL;
-	if (KeGetCurrentIrql() > APC_LEVEL) {
-		__dlog("%s ERROR KeGetCurrentIrql()=%d", __FUNCTION__, KeGetCurrentIrql());
-		return status;
-	}
-	if (NULL == Config() || NULL == Config()->pFilter || NULL == p )
-	{
-		//	[TODO]	Config() 함수의 동기화는 누가 시켜주지?
-		__log("%s ERROR Config()=%p, Config()->pFilter=%p, p=%p", 
-			__FUNCTION__, Config(), Config()? Config()->pFilter : NULL, p);
-		return status;
-	}
-	//__log("%s %ws %p %d", __FUNCTION__, p->szName, pSendData, nSendDataSize);
-	CAutoReleaseSpinLock(&p->lock);
-	{
-		LARGE_INTEGER	timeout;
-		timeout.QuadPart	= 3 * 1000 * 1000;
-		__try
-		{
-			if (NULL == p->pPort) 
-			{
-				//__log("%s ERROR p->pPort=%p", __FUNCTION__, p->pPort);
-				__leave;
-			}
-			status = FltSendMessage(Config()->pFilter,
-				&p->pPort,
-				pSendData, nSendDataSize,
-				pRecvData, pnRecvDataSize, NULL);
-			STATUS_BUFFER_OVERFLOW;
-			STATUS_TIMEOUT;
-			if (STATUS_SUCCESS == status)
-			{
-				if (pRecvData && pnRecvDataSize)
-				{
-					//__log("%s STATUS_SUCCESS %p, %d", __FUNCTION__,
-					//	pRecvData, *pnRecvDataSize);
-				}
-				__leave;
-			}
-			else if (STATUS_TIMEOUT == status)
-			{
-				if (0 == timeout.QuadPart)
-				{
-					__leave;
-				}
-				else
-				{
-					
-				}
-			}
-			__log("%s ERROR FltSendMessage(%s)=%x, pRecvData=%p,pnRecvDataSize=%p(%d)", 
-				__FUNCTION__, pCause ? pCause : "", status, 
-				pRecvData, pnRecvDataSize, (pnRecvDataSize? *pnRecvDataSize : -1));
-		}
-		__finally
-		{
-
-		}
-	}
 	return status;
 }

@@ -164,12 +164,15 @@ typedef struct CONFIG
 		FLT_CLIENT_PORT				event;
 	} client;
 
+	DWORD							bootId;
+
 	UNICODE_STRING					registry;
 	UNICODE_STRING					name;
 	UNICODE_STRING					deviceName;
 	UNICODE_STRING					dosDeviceName;
 	UNICODE_STRING					imagePath;
 	UNICODE_STRING					systemRootPath;
+	UNICODE_STRING					machineGuid;
 
 	volatile PVOID					pObCallbackHandle;
 	bool							bProcessNotifyCallback;

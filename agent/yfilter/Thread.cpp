@@ -51,7 +51,6 @@ THREAD_QUERY_LIMITED_INFORMATION (0x0800)	Required to read certain information f
 */
 #endif
 
-
 NTSTATUS	GetThreadWin32StartAddress(IN HANDLE hThreadId, OUT PVOID * pAddress)
 {
 	NTSTATUS	status	= STATUS_UNSUCCESSFUL;
@@ -91,6 +90,49 @@ NTSTATUS	GetThreadWin32StartAddress(IN HANDLE hThreadId, OUT PVOID * pAddress)
 	__finally
 	{
 		if( hThread )	ObCloseHandle(hThread, KernelMode);
+	}
+	return status;
+}
+
+NTSTATUS	GetThreadTimes(IN HANDLE hThreadId, KERNEL_USER_TIMES * p)
+{
+	NTSTATUS	status = STATUS_UNSUCCESSFUL;
+	HANDLE		hThread = NULL;
+	PETHREAD	pThread = NULL;
+
+	if (NULL == Config()->pZwQueryInformationThread)	return STATUS_BAD_FUNCTION_TABLE;
+	if (NULL == p)										return STATUS_INVALID_PARAMETER;
+
+	__try {
+		status = PsLookupThreadByThreadId(hThreadId, &pThread);
+		if (NT_FAILED(status)) {
+			__log("%s PsLookupThreadByThreadId() failed. status=%08x", __FUNCTION__, status);
+			__leave;
+		}
+		status = ObOpenObjectByPointer(pThread, OBJ_KERNEL_HANDLE, NULL,
+			THREAD_QUERY_LIMITED_INFORMATION,
+			*PsThreadType, KernelMode, &hThread);
+		//	PsLookupThreadByThreadId 에 의해 참조된 object를 아래와 같이 해줘야 함.
+		ObDereferenceObject(pThread);
+		if (NT_SUCCESS(status)) {
+
+		}
+		else {
+			__log("%s ObOpenObjectByPointer() failed. status=%08x", __FUNCTION__, status);
+			__leave;
+		}
+		status = Config()->pZwQueryInformationThread(hThread, ThreadTimes,
+			p, sizeof(KERNEL_USER_TIMES), NULL);
+		if (NT_SUCCESS(status)) {
+			//__log("%s startaddress=%p", __FUNCTION__, *pAddress);
+		}
+		else {
+			__log("%s NtQueryInformationThread() failed. status=%08x", __FUNCTION__, status);
+		}
+	}
+	__finally
+	{
+		if (hThread)	ObCloseHandle(hThread, KernelMode);
 	}
 	return status;
 }
@@ -178,10 +220,14 @@ void		StopThreadFilter(void)
 
 #define TAG_THREAD			'thrd'
 
+KSPIN_LOCK	m_lock;
+
+NTSTATUS	AddEearlyProcess(HANDLE hPID);
+
 void CreateThreadNotifyRoutine(
-	HANDLE ProcessId,
-	HANDLE ThreadId,
-	BOOLEAN Create
+	HANDLE		ProcessId,
+	HANDLE		ThreadId,
+	BOOLEAN		Create
 )
 {
 	//	이 루틴의 경우 윈도7도 지원하지만 호출되는 부분이 
@@ -201,19 +247,71 @@ void CreateThreadNotifyRoutine(
 	GetThreadWin32StartAddress(ThreadId, &pStartAddress);
 	//__log("[%d] process %p thread %p", Create, PsGetCurrentThreadId(), pStartAddress);
 
-	CWSTRBuffer	dest;
+	HANDLE	hCurrentProcessId = PsGetCurrentProcessId();
+
+	CWSTRBuffer		dest;
 	if (NT_FAILED(GetProcessImagePathByProcessId(ProcessId, dest,
 		(ULONG)dest.CbSize(), NULL))) {
+		__log("%s GetProcessImagePathByProcessId(%d) failed.", __FUNCTION__, ProcessId);
 		return;
 	}
-	//__log("%6d %ws", ProcessId, (PCWSTR)dest);
+	CWSTRBuffer		src;
+	if (NT_FAILED(GetProcessImagePathByProcessId(hCurrentProcessId, src,
+		(ULONG)src.CbSize(), NULL))) {
+		__log("%s GetProcessImagePathByProcessId(%d) failed.", __FUNCTION__, hCurrentProcessId);
+		return;
+	}
 
-	bool				bQueued	= false;
+	PCWSTR				pSrcName	= NULL, 
+						pDestName	= NULL;
+	bool				bShow		= false;
+	pSrcName	= wcsrchr((PCWSTR)src, L'\\');
+	if( NULL == pSrcName )	pSrcName	= (PCWSTR)src;
+	pDestName	= wcsrchr((PCWSTR)dest, L'\\');
+	if( NULL == pDestName )	pDestName	= (PCWSTR)dest;
+
+	if (!_wcsicmp(pSrcName, L"\\baretail.exe")	||
+		!_wcsicmp(pDestName, L"\\baretail.exe")	||
+		!_wcsicmp(pSrcName, L"SYSTEM")			||
+		!_wcsicmp(pDestName, L"SYSTEM")	
+	) {
+		bShow	= true;
+	}
+	if ((HANDLE)4 == hCurrentProcessId) {
+		//__log("%s system thread", __FUNCTION__);
+		//bShow	= true;
+		return;
+	}
+
+	bShow	= false;
+	if( bShow )	
+	{
+		__log("%6d %ws => %6d %ws", hCurrentProcessId, pSrcName, ProcessId, pDestName);
+		__log("  %10s %d", Create? "create":"terminate", ThreadId);
+		__log("  ExGetPreviousMode()=%d", ExGetPreviousMode());
+		__log("  PsIsSystemThread(current) %d", PsIsSystemThread(KeGetCurrentThread()));
+
+		NTSTATUS	status;
+		PETHREAD	pThread = NULL;
+		status = PsLookupThreadByThreadId(ThreadId, &pThread);
+		if( NT_SUCCESS(status)) {
+			__log("  PsIsSystemThread(target) %d", PsIsSystemThread(pThread));
+		}
+	}
+	if ((HANDLE)4 == hCurrentProcessId) {
+		__log("%s system thread", __FUNCTION__);
+	}
+	if (KeGetCurrentIrql() != PASSIVE_LEVEL ||
+		(HANDLE)4 == ProcessId || PsIsSystemThread(KeGetCurrentThread()))
+		return;
+	//KPROCESSOR_MODE;
+	if ((HANDLE)4 == hCurrentProcessId) {
+		return;
+	}
+
 	PYFILTER_MESSAGE	pMsg	= NULL;
 	pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), 
 			TAG_THREAD);
-
-	HANDLE	hCurrentProcessId = PsGetCurrentProcessId();
 
 	if (pMsg) {
 		RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
@@ -225,36 +323,48 @@ void CreateThreadNotifyRoutine(
 		//__log("%ws", msg.data.szCommand);
 
 		pMsg->data.dwThreadId = (DWORD)ThreadId;
-		pMsg->data.pStartAddress = pStartAddress;
+		pMsg->data.pStartAddress = (ULONG_PTR)pStartAddress;
 		pMsg->data.dwCreateProcessId = (DWORD)hCurrentProcessId;
+
+		RtlStringCbCopyW(pMsg->data.szPath, sizeof(pMsg->data.szPath),
+			(PCWSTR)src);
 	}
 	else {
 		return;
 	}
-	if (Create && (HANDLE)4 != ProcessId && !PsIsSystemThread(KeGetCurrentThread())) {
+
+	if (ProcessTable()->IsExisting(ProcessId, pMsg, [](
+		IN bool					bCreationSaved,
+		IN PPROCESS_ENTRY		pEntry,
+		IN PVOID				pCallbackPtr
+		) {
+		PYFILTER_MESSAGE	pMsg = (PYFILTER_MESSAGE)pCallbackPtr;
+		if (bCreationSaved)
+			RtlCopyMemory(&pMsg->data.ProcGuid, &pEntry->uuid, sizeof(pEntry->uuid));
+	})) {
+
+	}
+	else {
+		AddEearlyProcess(ProcessId);
+		PUNICODE_STRING	pImageFileName = NULL;
+		if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
+		{
+			KERNEL_USER_TIMES	times;
+			GetProcessTimes(ProcessId, &times);
+			RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
+			GetProcGuid(false, ProcessId, NULL, pImageFileName, &times.CreateTime,
+				&pMsg->data.ProcGuid);
+			CMemory::Free(pImageFileName);
+		}
+	}
+
+	if (Create ) {
 		pMsg->data.subType = YFilter::Message::SubType::ThreadStart;
 		bool	bSameProcess = (hCurrentProcessId == ProcessId);
 		if (false == bSameProcess)
 		{
 			//__log("%s Process(%d) => Process(%d)", 
 			//	__FUNCTION__, hCurrentProcessId, ProcessId);
-			CWSTRBuffer		src;
-
-			__try
-			{
-				if (NT_FAILED(GetProcessImagePathByProcessId(hCurrentProcessId, src,
-					(ULONG)src.CbSize(), NULL))) {
-					__leave;
-				}
-				RtlStringCbCopyW(pMsg->data.szPath, sizeof(pMsg->data.szPath), 
-					(PCWSTR)src);
-				//__log("LoadLibraryA  %p", Config()->pLoadLibraryA);
-				//__log("LoadLibraryW  %p", Config()->pLoadLibraryW);
-				//__log("%6d %ws", hCurrentProcessId, (PCWSTR)src);
-			}
-			__finally {
-
-			}
 		}
 		//	여기서 바로 SendMessage 했더니 데드락 처럼 되버리더라.
 		//SendMessage(__FUNCTION__, &Config()->client.event, &msg, sizeof(msg));
@@ -264,7 +374,7 @@ void CreateThreadNotifyRoutine(
 		//	생성하려는 스레드가 자기가 아닌 다른 프로세스인가요?
 		//	그럼 code injection 이라 봅니다.
 	}
-	if (FALSE == Create) {
+	else {
 		//	문제가 있어..
 		//	스레드 종료시 호출되니까 이 스레드는 곧 사라질 녀석인데 
 		//	이걸 비동기로 앱으로 전해줘도 앱에서 해당 스레드 정보를 구하려 할 때
@@ -277,18 +387,53 @@ void CreateThreadNotifyRoutine(
 		//	dll injection 이라고 한다.
 
 		pMsg->data.subType = YFilter::Message::SubType::ThreadStop;
+		//	해당 스레드의 리소스 사용율을 구한다.
+		KERNEL_USER_TIMES	times;
+		GetThreadTimes(ThreadId, &times);
+		KeQuerySystemTime(&times.ExitTime);
+		pMsg->data.times.CreateTime	= times.CreateTime;
+		pMsg->data.times.ExitTime	= times.ExitTime;
+		pMsg->data.times.KernelTime	= times.KernelTime;
+		pMsg->data.times.UserTime	= times.UserTime;
 	}
-	if (false == bQueued && pMsg ) {
-		if (MessageThreadPool()->Push(YFilter::Message::Mode::Event,
-			pMsg, sizeof(YFILTER_MESSAGE)))
-		{
+
+	if (pMsg) {
+		if (MessageThreadPool()->Push(
+			__FUNCTION__,
+			YFilter::Message::Mode::Event,
+			YFilter::Message::Category::Thread,
+			pMsg, sizeof(YFILTER_MESSAGE),
+			bShow)) {
 			//	pMsg는 SendMessage 성공 후 해제될 것이다. 
-			MessageThreadPool()->Alert();
+			MessageThreadPool()->Alert(YFilter::Message::Category::Thread);
+			pMsg	= NULL;
 		}
-		else
-		{
-			CMemory::Free(pMsg);
+	}
+	/*
+	if (bTest) {
+		if( pMsg )	CMemory::Free(pMsg);
+	}
+	else {
+		if (false == bQueued && pMsg ) {
+			if (MessageThreadPool()->Push(
+				__FUNCTION__,
+				YFilter::Message::Mode::Event,
+				YFilter::Message::Category::Thread,
+				pMsg, sizeof(YFILTER_MESSAGE), 
+				bShow)) {
+				//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+				MessageThreadPool()->Alert(YFilter::Message::Category::Thread);
+			}
+			else
+			{
+				CMemory::Free(pMsg);
+			}
 		}
+	}
+	*/
+	if( pMsg )
+	{
+		CMemory::Free(pMsg);
 	}
 }
 bool		StartThreadFilter()
@@ -297,6 +442,7 @@ bool		StartThreadFilter()
 	NTSTATUS	status = STATUS_SUCCESS;
 	if (NULL == Config())	return false;
 
+	KeInitializeSpinLock(&m_lock);
 	__try
 	{
 		if (false == Config()->bThreadNotifyCallback) {

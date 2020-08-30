@@ -76,18 +76,29 @@ private:
 
 };
 
+#define __lock_log(name,status, type,cause)		(name)
+//#define __lock_log(name,status, type,cause)	__dlog("%24s %10s %6d %6d %16s %s", name, status, PsGetCurrentProcessId(), PsGetCurrentThreadId(), type, cause)
+
 class CAutoReleaseSpinLock
 {
 public:
-	CAutoReleaseSpinLock(IN KSPIN_LOCK * pLock)
+	CAutoReleaseSpinLock(IN PCSTR pCause, IN KSPIN_LOCK * pLock, IN bool bLog = false)
 	{
+		m_bLog	= bLog;
+		RtlStringCbCopyA(m_szName, sizeof(m_szName), pCause);
+		if( m_bLog )	__lock_log(pCause, "locking", "", "");
 		KeAcquireSpinLock(m_pLock = pLock, &m_oldIrql);
+		if( m_bLog )	__lock_log(pCause, "locked", "", "");
 	}
 	~CAutoReleaseSpinLock()
 	{
+		if( m_bLog )	__lock_log(m_szName, "unlocking", "", "");
 		KeReleaseSpinLock(m_pLock, m_oldIrql);
+		if( m_bLog )	__lock_log(m_szName, "unlocked", "", "");
 	}
 private:
+	bool			m_bLog;
+	char			m_szName[33];
 	KIRQL			m_oldIrql;
 	KSPIN_LOCK *	m_pLock;
 };

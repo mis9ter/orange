@@ -174,6 +174,7 @@ copy /v /y "$(IntDir)$(ProjectName).pdb" "..\binary\lib
   <ItemGroup>
     <ClInclude Include="..\include\CDialog.h" />
     <ClInclude Include="..\include\CException.h" />
+    <ClInclude Include="..\include\CTime.h" />
     <ClInclude Include="..\include\yagent.common.h" />
     <ClInclude Include="..\include\yagent.h" />
     <ClInclude Include="framework.h" />
@@ -184,6 +185,7 @@ copy /v /y "$(IntDir)$(ProjectName).pdb" "..\binary\lib
     <ClCompile Include="common.cpp" />
     <ClCompile Include="CompareString.cpp" />
     <ClCompile Include="CreateDirectory.cpp" />
+    <ClCompile Include="GetRegistryValues.cpp" />
     <ClCompile Include="GetFileExt.cpp" />
     <ClCompile Include="GetFileSize.cpp" />
     <ClCompile Include="GetLinkPath.cpp" />

@@ -36,6 +36,9 @@
     <ClInclude Include="..\include\yagent.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\CTime.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common.cpp">
@@ -69,6 +72,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="CreateDirectory.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="GetRegistryValues.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

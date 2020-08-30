@@ -60,6 +60,7 @@ GetSymbolicLink
 	//
 	// Open and query the symbolic link
 	//
+	__log("%s %wZ", __FUNCTION__, SymbolicLinkName);
 	InitializeObjectAttributes
 	(
 		&oa,
@@ -75,8 +76,7 @@ GetSymbolicLink
 		GENERIC_READ,
 		&oa
 	);
-
-	if (STATUS_SUCCESS == status)
+	if (NT_SUCCESS(status))
 	{
 		//
 		// Get the size of the symbolic link string
@@ -91,7 +91,6 @@ GetSymbolicLink
 			&tmpSymbolicLink,
 			&symbolicLinkLength
 		);
-
 		if (STATUS_BUFFER_TOO_SMALL == status && symbolicLinkLength > 0)
 		{
 			//
@@ -121,8 +120,15 @@ GetSymbolicLink
 				ExFreePool(tmpSymbolicLink.Buffer);
 			}
 		}
+		else {
+			__log("%s ZwQuerySymbolicLinkObject() failed. status=%08x", __FUNCTION__, status);
+		}
+	} 
+	else {
+		//	STATUS_OBJECT_TYPE_MISMATCH
+		__log("%s ZwOpenSymbolicLinkObject() failed. status=%08x", __FUNCTION__, status);
 	}
-	return returnStatus;
+	return status;
 }
 
 //***************************************************************************************
@@ -162,13 +168,15 @@ ExtractDriveString
 		i++;
 	}
 
+	__log("%s %wZ %d", __FUNCTION__, Source, numSlashes);
+
 	if ((4 == numSlashes) && (i > 1))
 	{
 		i--;
 		Source->Buffer[i] = L'\0';
 		Source->Length = (USHORT)i * 2;
-		status = STATUS_SUCCESS;
 	}
+	status = STATUS_SUCCESS;
 
 	return status;
 }
@@ -231,15 +239,16 @@ GetSystemRootPath
 		// \Device\Harddisk0\Partition1\WINDOWS lets try to get the symoblic name for 
 		// this drive so it looks more like c:\WINDOWS.
 		//
-		DbgPrint("Full System Root Path: %ws\n", systemRootSymbolicLink1.Buffer);
+		//__log("Full System Root Path: %ws", systemRootSymbolicLink1.Buffer);
 		fullPathLength = systemRootSymbolicLink1.Length;
-		ZwClose(linkHandle);
-
 		//
 		// Remove the path so we can query the drive letter
 		//
 		status = ExtractDriveString(&systemRootSymbolicLink1);
-
+		if (NT_FAILED(status)) {
+			__log("%s ExtractDriveString() failed. status=%08x", __FUNCTION__, status);
+			return status;
+		}
 		if (STATUS_SUCCESS == status)
 		{
 			//
@@ -247,7 +256,7 @@ GetSystemRootPath
 			// total length.
 			//
 			fullPathLength = fullPathLength - 2;
-
+			ZwClose(linkHandle);
 			//
 			// Query the drive letter
 			//
@@ -257,7 +266,6 @@ GetSystemRootPath
 				&systemRootSymbolicLink2,
 				&linkHandle
 			);
-
 			if (STATUS_SUCCESS == status)
 			{
 				status = IoGetDeviceObjectPointer
@@ -283,6 +291,7 @@ GetSystemRootPath
 
 					if (STATUS_SUCCESS == status && NULL != systemDosRootPath.Buffer)
 					{
+						__log("%s 4", __FUNCTION__);
 						SystemRootPath->Buffer = (PWCH)ExAllocatePool
 						(
 							NonPagedPool,
@@ -330,14 +339,21 @@ GetSystemRootPath
 
 						returnStatus = STATUS_SUCCESS;
 					}
-
+					else {
+						__log("%s 11", __FUNCTION__);
+					}
 					ObDereferenceObject(deviceObject);
+				}
+				else {
+					__log("%s IoGetDeviceObjectPointer() failed. status=%08x", __FUNCTION__, status);
 				}
 				ZwClose(linkHandle);
 				ExFreePool(systemRootSymbolicLink2.Buffer);
 			}
+			else {
+				__log("%s GetSymbolicLink() failed. status=%08x", __FUNCTION__, status);
+			}
 		}
-
 		ExFreePool(systemRootSymbolicLink1.Buffer);
 	}
 	return returnStatus;

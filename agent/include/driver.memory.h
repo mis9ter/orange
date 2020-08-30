@@ -98,7 +98,8 @@ public:
 		}
 		return bRet;
 	}
-	static	bool	AllocateUnicodeString(IN POOL_TYPE type, OUT PUNICODE_STRING pDest, IN PCWSTR pSrc)
+	static	bool	AllocateUnicodeString(IN POOL_TYPE type, 
+		OUT PUNICODE_STRING pDest, IN PCWSTR pSrc)
 	{
 		bool	bRet	= false;
 		if( NULL == pSrc || NULL == pDest)	return NULL;

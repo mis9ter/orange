@@ -57,6 +57,12 @@
     <ClInclude Include="CQueue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CProcessTable.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="md5.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Config.cpp">
@@ -96,6 +102,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Thread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="md5.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

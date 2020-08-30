@@ -24,6 +24,16 @@ public:
 	~CDB() {
 		Close();
 	}
+	void	Begin()
+	{
+		if( m_pDb )
+			sqlite3_exec(m_pDb, "BEGIN;", NULL, NULL, NULL);
+	}
+	void	Commit()
+	{
+		if( m_pDb )
+			sqlite3_exec(m_pDb, "COMMIT;", NULL, NULL, NULL);
+	}
 	sqlite3_stmt*	Stmt(IN PCWSTR query) {
 		if (NULL == m_pDb)	return NULL;
 		sqlite3_stmt* stmt = NULL;
@@ -96,6 +106,9 @@ public:
 			sqlite3_close(m_pDb);
 			m_pDb	= NULL;
 		}
+	}
+	sqlite3* Handle() {
+		return m_pDb;
 	}
 private:
 	sqlite3			*m_pDb;

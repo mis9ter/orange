@@ -51,7 +51,13 @@
     <ClInclude Include="..\include\orangedb.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CProcess.h">
+    <ClInclude Include="CProcessCallback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CThreadCallback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CModuleCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -73,6 +79,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CAgent.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Misc.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

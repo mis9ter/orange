@@ -10,7 +10,7 @@ Notes
 An update for Windows 8.1 increases the maximum number of drivers registered to receive load-image notifications from eight to 64. This update is installed as part of a cumulative update that is available through Windows Update starting on April 8, 2014. In addition, this cumulative update is available at https://support.microsoft.com/kb/2919355.
 Users of Windows 7 with Service Pack 1 (SP1) can install a hotfix to increase the maximum number of drivers registered to receive load-image notifications from eight to 64. This hotfix is available at https://support.microsoft.com/kb/2922790.
 */
-
+NTSTATUS	AddEearlyProcess(HANDLE hPID);
 void LoadImageNotifyRoutine(
 	PUNICODE_STRING		FullImageName,
 	HANDLE				ProcessId,
@@ -25,7 +25,6 @@ void LoadImageNotifyRoutine(
 
 	if( FullImageName ) {
 		PCWSTR	pName	= wcsrchr(path, L'\\');
-
 		if( pName ) {
 			//__log("%s %ws", __FUNCTION__, pName);
 		}
@@ -38,6 +37,67 @@ void LoadImageNotifyRoutine(
 		__log("  ImageSignatureType  %d", ImageInfo->ImageSignatureType);
 		__log("  ImageSignatureLevel %d", ImageInfo->ImageSignatureLevel);
 		*/
+
+		PYFILTER_MESSAGE	pMsg = NULL;
+		pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
+		if (pMsg) {
+			RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
+			RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), FullImageName);
+			if (ProcessTable()->IsExisting(ProcessId, pMsg, [](
+				IN bool					bCreationSaved,	//	생성이 감지되어 저장된 정보 여부
+				IN PPROCESS_ENTRY		pEntry,			//	대상 엔트리 
+				IN PVOID				pCallbackPtr
+				) {
+					UNREFERENCED_PARAMETER(bCreationSaved);
+					PYFILTER_MESSAGE	pMsg	= (PYFILTER_MESSAGE)pCallbackPtr;
+					RtlCopyMemory(&pMsg->data.ProcGuid, &pEntry->uuid, sizeof(pMsg->data.ProcGuid));
+					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), &pEntry->path);
+			})) {
+				//	네 존재합니다. 
+			}
+			else {
+				__log("%s ProcessId %d is not found.", __FUNCTION__, ProcessId);
+				__log("  FulLImageName:%wZ", FullImageName);
+				//	이 프로세스는 생성시점 드라이버가 실행 중이지 않아 
+				//	해당 프로세스 정보를 가지고 있지 않다. 
+				//	[TODO]
+				AddEearlyProcess(ProcessId);
+				PUNICODE_STRING	pImageFileName = NULL;
+				if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
+				{
+					KERNEL_USER_TIMES	times;
+					GetProcessTimes(ProcessId, &times);
+					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
+					GetProcGuid(false, ProcessId, NULL, pImageFileName, &times.CreateTime,
+						&pMsg->data.ProcGuid);
+					CMemory::Free(pImageFileName);
+				}
+			}
+			pMsg->header.mode				= YFilter::Message::Mode::Event;
+			pMsg->header.category			= YFilter::Message::Category::Module;
+			pMsg->header.size				= sizeof(YFILTER_MESSAGE);
+
+			pMsg->data.subType				= YFilter::Message::SubType::ModuleLoad;
+			pMsg->data.bCreationSaved		= true;
+			pMsg->data.dwProcessId			= (DWORD)ProcessId;
+
+			pMsg->data.pBaseAddress			= (ULONG_PTR)ImageInfo->ImageBase;
+			pMsg->data.pImageSize			= ImageInfo->ImageSize;
+			pMsg->data.ImageProperties.Property	= ImageInfo->Properties;
+
+			if (MessageThreadPool()->Push(__FUNCTION__,
+				YFilter::Message::Mode::Event,
+				YFilter::Message::Category::Module,
+				pMsg, sizeof(YFILTER_MESSAGE),
+				false))
+			{
+				//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+				MessageThreadPool()->Alert(YFilter::Message::Category::Module);
+			}
+			else {
+				CMemory::Free(pMsg);
+			}
+		}
 	}
 	else {
 		__log("%s FullImageName is null.", __FUNCTION__);

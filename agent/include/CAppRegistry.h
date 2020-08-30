@@ -1,7 +1,8 @@
 ﻿#pragma once
 #include "CAppLog.h"
+#include <atlstr.h>
+
 class CAppRegistry
-	: virtual public CAppLog
 {
 public:
 	static	bool	IsExistingKey(IN HKEY hRootKey, IN PCWSTR pKey, IN PCWSTR pSubKey = NULL)
@@ -64,7 +65,40 @@ public:
 		}
 		return false;
 	}
-	static	bool	GetValue(IN HKEY hRootKey, IN PCWSTR pSubKey, IN PCWSTR pName, IN DWORD dwType, LPVOID pValue, IN DWORD dwValueSize)
+
+	static	bool	GetValue(IN HKEY h, IN LPCTSTR szKey, 
+						IN LPCTSTR szName, OUT LPTSTR szVal, IN DWORD *pdwValSize)
+	{
+		if ((NULL == h) || (NULL == szKey) || (NULL == szVal))
+		{
+			return false;
+		}
+		HKEY	hKey;
+		long	lRet;
+		DWORD	dwError;
+
+		lRet = RegOpenKeyEx(h, szKey, NULL, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &hKey);
+		dwError = ::GetLastError();
+		if (lRet != ERROR_SUCCESS)
+		{
+			::SetLastError(dwError);
+			//Alert(_T("error: RegOpenKeyEx(%s) failed. code = %d"), szKey, dwError);
+			return false;
+		}
+		// Query Value
+		lRet = RegQueryValueEx(hKey, szName, NULL, NULL, (LPBYTE)szVal, pdwValSize);
+		dwError = ::GetLastError();
+		RegCloseKey(hKey);
+		if (lRet != ERROR_SUCCESS)
+		{
+			::SetLastError(dwError);
+			return false;
+		}
+		return true;
+	}
+
+	static	bool	GetValue(IN HKEY hRootKey, IN PCWSTR pSubKey, IN PCWSTR pName, 
+						IN DWORD dwType, LPVOID pValue, IN DWORD dwValueSize)
 	{
 		bool	bRet = false;
 		HKEY	hKey = NULL;

@@ -1,5 +1,9 @@
 #pragma once
 #include <strsafe.h>
+#include <algorithm>
+#include <memory>
+#include "CAppRegistry.h"
+#include "CTime.h"
 
 #define LBUFSIZE	4096
 #define MBUFSIZE	1024
@@ -9,7 +13,93 @@
 #define YAGENT_COMMON_BEGIN	namespace YAgent {
 #define YAGENT_COMMON_END	};
 
+typedef	BOOL(WINAPI* PInitializeCriticalSectionEx)
+(
+	LPCRITICAL_SECTION lpCriticalSection,
+	DWORD dwSpinCount,
+	DWORD Flags
+);
+class CLock
+{
+public:
+	CLock()
+	{
+		m_proc = (PInitializeCriticalSectionEx)::GetProcAddress(::GetModuleHandle(_T("kernel32")), "InitializeCriticalSectionEx");
+		if (m_proc)
+		{
+			m_proc(&m_section, 0, CRITICAL_SECTION_NO_DEBUG_INFO);
+		}
+		else
+		{
+			::InitializeCriticalSection(&m_section);
+		}
+	}
+	virtual ~CLock()
+	{
+		::DeleteCriticalSection(&m_section);
+	}
+	inline	void	Lock(IN LPCSTR pCause=NULL)
+	{
+		UNREFERENCED_PARAMETER(pCause);
+		::EnterCriticalSection(&m_section);
+	}
+	inline	void	Unlock(IN LPCSTR pCause=NULL)
+	{
+		UNREFERENCED_PARAMETER(pCause);
+		::LeaveCriticalSection(&m_section);
+	}
+	inline	bool	TryLock(IN LPCSTR pCause=NULL)
+	{
+		UNREFERENCED_PARAMETER(pCause);
+		return	::TryEnterCriticalSection(&m_section) ? true : false;
+	}
+	CRITICAL_SECTION* Get()
+	{
+		return &m_section;
+	}
+
+private:
+	TCHAR							m_szName[SBUFSIZE];
+	CRITICAL_SECTION				m_section;
+	PInitializeCriticalSectionEx	m_proc;
+};
+
+typedef std::shared_ptr <CLock>	CLockPtr;
+
+#ifndef __function_lock 
+class CFunctionLock
+{
+public:
+	CFunctionLock(IN CRITICAL_SECTION* pSection, IN LPCSTR pCause, IN bool bLog = false)
+	{
+		m_bLog = bLog;
+		m_pCause = pCause;
+
+		::EnterCriticalSection(pSection);
+		m_pSection = pSection;
+	}
+	CFunctionLock(IN CLockPtr lockptr, IN LPCSTR pCause, IN bool bLog = false)
+		: CFunctionLock(lockptr.get()->Get(), pCause, bLog)
+	{
+		m_lockptr = lockptr;
+	}
+	~CFunctionLock()
+	{
+		::LeaveCriticalSection(m_pSection);
+		m_lockptr = nullptr;
+	}
+
+private:
+	bool						m_bLog;
+	CRITICAL_SECTION			* m_pSection;
+	CLockPtr					m_lockptr;
+	LPCSTR						m_pCause;
+};
+#define	__function_lock(lock)	CFunctionLock(lock, __FUNCTION__)
+#endif
+
 namespace YAgent {
+	DWORD		GetBootId();
 	BOOL		CreateDirectory(LPCTSTR lpPath);
 	BOOL		MakeDirectory(LPCTSTR lpPath);
 	LPCTSTR		GetURLPath(IN LPCTSTR pFilePath, OUT LPTSTR lpPath, IN DWORD dwSize);

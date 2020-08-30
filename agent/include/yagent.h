@@ -30,3 +30,10 @@ private:
 };
 #define __function_lock(pCriticalSection)	CFunctionLock	__lock(pCriticalSection, __FUNCTION__)
 #endif
+
+
+
+LPCSTR	SystemTime2String(IN SYSTEMTIME* p, OUT LPSTR pStr, IN DWORD dwSize,
+			IN bool bTimer = false);
+LPCSTR	UUID2StringA(IN UUID* p, OUT LPSTR pStr, IN DWORD dwSize);
+LPCWSTR	UUID2StringW(IN UUID* p, OUT LPWSTR pStr, IN DWORD dwSize);

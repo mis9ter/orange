@@ -2,6 +2,11 @@
 
 static	CONFIG	g_config;
 
+#define	REG_MACHINEGUID_KEY		L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Cryptography"
+#define REG_MACHINEGUID_VALUE	L"MachineGuid"
+#define REG_BOOTID_KEY			L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters"
+#define REG_BOOTID_VALUE		L"BootId"
+
 CONFIG *	Config()
 {
 	return &g_config;
@@ -17,12 +22,69 @@ PVOID	GetProcAddress(IN PWSTR pName)
 	return p;
 }
 #define	__set_proc_address(ptr,name)	#ptr->p#name = (FN_#name)GetProcAddress(L#name)
+
+bool	QueryRegistryDW(PCWSTR pRegKey, PCWSTR pRegName, DWORD * pRegValue)
+{
+	bool		bRet = false;
+	PKEY_VALUE_PARTIAL_INFORMATION	pValue = NULL;
+	NTSTATUS	status;
+
+	UNICODE_STRING	regKey;
+	CWSTR			regKeyStr(pRegKey);
+
+	RtlInitUnicodeString(&regKey, regKeyStr);
+	__log("%s %wZ", __FUNCTION__, &regKey);
+	if (NT_SUCCESS(status = CDriverRegistry::QueryValue(&regKey, pRegName, &pValue)))
+	{
+		if (REG_DWORD == pValue->Type)
+		{
+			if (pValue->Data && sizeof(DWORD) == pValue->DataLength)
+			{
+				*pRegValue	= *pValue->Data;
+				bRet	= true;
+			}
+		}
+		CDriverRegistry::FreeValue(pValue);
+	}
+	else {
+		__log("%s CDriverRegistry::QueryValue() failed.", __FUNCTION__);
+	}
+	return bRet;
+}
+bool	QueryRegistryString(PCWSTR pRegKey, PCWSTR pRegName, PWSTR pRegValue, size_t nValueSize)
+{
+	bool		bRet = false;
+	PKEY_VALUE_PARTIAL_INFORMATION	pValue = NULL;
+	NTSTATUS	status;
+
+	UNICODE_STRING	regKey;
+	CWSTR			regKeyStr(pRegKey);
+
+	RtlInitUnicodeString(&regKey, regKeyStr);
+	__log("%s %wZ", __FUNCTION__, &regKey);
+	if (NT_SUCCESS(status = CDriverRegistry::QueryValue(&regKey, pRegName, &pValue)))
+	{
+		if (REG_SZ == pValue->Type)
+		{
+			if (pValue->Data && pValue->DataLength )
+			{
+				RtlStringCbCopyNW(pRegValue, nValueSize, (PCWSTR)pValue->Data, pValue->DataLength);
+				bRet	= true;
+			}			
+		}
+		CDriverRegistry::FreeValue(pValue);
+	}
+	else {
+		__log("%s CDriverRegistry::QueryValue() failed.", __FUNCTION__);
+	}
+	return bRet;
+}
 bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 {	
 	if(UseLog())	__log(__FUNCTION__);
 	CONFIG *	pConfig	= &g_config;
 	CWSTRBuffer	buf;
-	   	  
+   	  
 	__try
 	{
 		RtlZeroMemory(pConfig, sizeof(CONFIG));
@@ -32,7 +94,15 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		KeInitializeSpinLock(&pConfig->client.command.lock);
 		KeInitializeSpinLock(&pConfig->client.event.lock);
 		GetSystemRootPath(&pConfig->systemRootPath);
-		__log("%-30s %wZ", "systemRootPath", &pConfig->systemRootPath);
+		QueryRegistryString(REG_MACHINEGUID_KEY, REG_MACHINEGUID_VALUE, buf, buf.CbSize());
+		QueryRegistryDW(REG_BOOTID_KEY, REG_BOOTID_VALUE, &pConfig->bootId);
+
+		__log("%-30s %wZ",	"systemRootPath", &pConfig->systemRootPath);
+		__log("%-30s %ws",	"MachineGuid", (PCWSTR)buf);
+		__log("%-30s %d",	"BootId", pConfig->bootId);
+		UNICODE_STRING	machineGuid;
+		RtlInitUnicodeString(&machineGuid, buf);
+		CMemory::AllocateUnicodeString(NonPagedPoolNx, &pConfig->machineGuid, &machineGuid);
 		if (CMemory::AllocateUnicodeString(NonPagedPoolNx, &pConfig->registry, pRegistryPath))
 		{
 			CWSTR	reg(&pConfig->registry);
@@ -132,5 +202,6 @@ void	DestroyConfig()
 		CMemory::FreeUnicodeString(&pConfig->deviceName);
 		CMemory::FreeUnicodeString(&pConfig->imagePath);
 		CMemory::FreeUnicodeString(&pConfig->systemRootPath);
+		CMemory::FreeUnicodeString(&pConfig->machineGuid);
 	}
 }

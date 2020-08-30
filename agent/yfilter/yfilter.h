@@ -21,6 +21,7 @@
 #include "driver.common.h"
 #include "Config.h"
 #include "CThreadPool.h"
+#include "md5.h"
 
 #pragma comment(lib, "ntstrsafe.lib")
 #pragma comment(lib, "fltmgr.lib")
@@ -41,7 +42,6 @@
 #define	__MAX_PATH_SIZE		1024
 #define __LINE				"----------------------------------------------------------------"
 #define NT_FAILED(Status)	(!NT_SUCCESS(Status))
-
 #define TARGET_OBJECT_SIZE					1024
 #define PROTECT_FILE_NAME					L"PF"
 #define PROTECT_PROCESS_NAME				L"PP"
@@ -188,6 +188,13 @@ ULONG			OtList(IN POBJECT_TABLE pTable);
 *************************************************************************/
 NTSTATUS	GetSystemRootPath(PUNICODE_STRING p);
 
+NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID);
+NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
+	IN	HANDLE				hPPID,
+	IN	PCUNICODE_STRING	pImagePath,
+	IN	LARGE_INTEGER* pCreateTime,
+	OUT	UUID* pGuid);
+NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p);
 NTSTATUS	GetProcessImagePathByProcessId
 (
 	HANDLE							pProcessId,
@@ -199,6 +206,12 @@ HANDLE		GetParentProcessId(IN	HANDLE	pProcessId);
 NTSTATUS	GetProcessImagePathByProcessId
 (
 	HANDLE				pProcessId,
+	PUNICODE_STRING		*pStr
+);
+NTSTATUS	GetProcessInfo
+(
+	HANDLE				pProcessId,
+	PROCESSINFOCLASS	infoClass,
 	PUNICODE_STRING		*pStr
 );
 NTSTATUS	GetProcessCodeSignerByProcessId
@@ -239,14 +252,18 @@ void			StopThreadFilter();
 //	도라이버-앱 간 통신
 /////////////////////////////////////////////////////////////////////////////////////////
 NTSTATUS	SendMessage(
-	IN PCSTR pCause, 
-	IN PFLT_CLIENT_PORT p,
-	IN PVOID pSendData, IN ULONG nSendDataSize,
-	OUT PVOID pRecvData, OUT ULONG* pnRecvDataSize);
+	IN	PCSTR				pCause, 
+	IN	PFLT_CLIENT_PORT	p,
+	IN	PVOID				pSendData, 
+	IN	ULONG				nSendDataSize,
+	OUT PVOID				pRecvData, 
+	OUT ULONG				*pnRecvDataSize,
+	IN	bool	bLog);
 NTSTATUS	SendMessage(
 	IN	PCSTR				pCause,
 	IN	PFLT_CLIENT_PORT	p,
-	IN	PVOID pSendData, IN ULONG nSendDataSize
+	IN	PVOID pSendData, IN ULONG nSendDataSize,
+	IN	bool	bLog
 );
 CThreadPool*	MessageThreadPool();
 void			SetMessageThreadCallback(PVOID pCallbackPtr);
@@ -368,6 +385,8 @@ NTSTATUS	EventMessage
 
 
 EXTERN_C_END
+
+#include "CProcessTable.h"
 
 //
 //  Assign text sections for each routine.

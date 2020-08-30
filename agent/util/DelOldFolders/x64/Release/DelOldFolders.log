@@ -1,6 +1,11 @@
-﻿  DelOldFolders.cpp
+﻿C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Microsoft\VC\v160\Microsoft.CppBuild.targets(467,5): warning MSB8028: 중간 디렉터리(x64\Release\)에 다른 프로젝트(DelOldFolders.vcxproj)에서 공유하는 파일이 포함되어 있습니다.  이로 인해 잘못된 정리 및 다시 빌드 동작이 수행될 수 있습니다.
+  DelOldFiles.cpp
+D:\WORK\ORANGE\agent\util\DelOldFolders\DelOldFiles.cpp(198,9): warning C4477: 'printf' : 서식 문자열 '%d'에 'int' 형식의 인수가 필요하지만 variadic 인수 1의 형식이 'size_t'입니다.
+D:\WORK\ORANGE\agent\util\DelOldFolders\DelOldFiles.cpp(198,9): message : 서식 문자열에서 '%zd'을(를) 사용하는 것이 좋습니다.
+D:\WORK\ORANGE\agent\util\DelOldFolders\DelOldFiles.cpp(198,9): warning C4477: 'printf' : 서식 문자열 '%d'에 'int' 형식의 인수가 필요하지만 variadic 인수 2의 형식이 'size_t'입니다.
+D:\WORK\ORANGE\agent\util\DelOldFolders\DelOldFiles.cpp(198,9): message : 서식 문자열에서 '%zd'을(를) 사용하는 것이 좋습니다.
   코드를 생성하고 있습니다.
   Previous IPDB not found, fall back to full compilation.
-  All 10 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  All 54 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
   코드를 생성했습니다.
-  DelOldFolders.vcxproj -> D:\STORAGE\ONEDRIVE\WORK\ORANGE\src\agent\x64\Release\DelOldFolders.exe
+  DelOldFolders.vcxproj -> D:\WORK\ORANGE\agent\x64\Release\DelOldFiles.exe

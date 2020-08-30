@@ -9,13 +9,13 @@ typedef GUID UUID;
 #define AGENT_SERVICE_NAME		L"xagent"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
-#define AGENT_LOG_NAME			L"yagent.log"
+#define AGENT_LOG_NAME			L"orange.log"
 #define	AGENT_PATH_SIZE			1024
 #define AGENT_NAME_SIZE			64
-#define DRIVER_SERVICE_NAME		L"yfilter"
-#define DRIVER_FILE_NAME		L"yfilter.sys"
-#define DRIVER_COMMAND_PORT		L"\\yfilter_command"
-#define DRIVER_EVENT_PORT		L"\\yfilter_event"
+#define DRIVER_SERVICE_NAME		L"orange"
+#define DRIVER_FILE_NAME		L"orange.sys"
+#define DRIVER_COMMAND_PORT		L"\\orange_command"
+#define DRIVER_EVENT_PORT		L"\\orange_event"
 #define DRIVER_DISPLAY_NAME		L"by orangeworks"
 #define DRIVER_INSTANCE_NAME	L"orange filter"
 #define DRIVER_ALTITUDE			(385200)			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
@@ -77,12 +77,15 @@ namespace YFilter
 		enum Category {
 			Process,
 			Thread,
+			Module,
+			Count
 		};
 		enum SubType {
 			ProcessStart,
 			ProcessStop,
 			ThreadStart,
-			ThreadStop
+			ThreadStop,
+			ModuleLoad,
 		};
 	};
 	namespace Object
@@ -116,7 +119,6 @@ namespace YFilter
 			Thread
 		};
 	};
-
 
 	inline	PCWSTR GetModeName(IN YFilter::Object::Mode mode)
 	{
@@ -183,6 +185,17 @@ typedef struct YFILTER_HEADER {
 	아.. 그래서 xfilter 에서 주고 받는 구조체에 union이 많은 거구나.
 	서로 다른 애들끼리는 필드를 중첩 시키려고.
 */
+#ifndef _NTDDK_
+
+typedef struct _KERNEL_USER_TIMES {
+	LARGE_INTEGER CreateTime;
+	LARGE_INTEGER ExitTime;
+	LARGE_INTEGER KernelTime;
+	LARGE_INTEGER UserTime;
+} KERNEL_USER_TIMES;
+typedef KERNEL_USER_TIMES* PKERNEL_USER_TIMES;
+
+#endif
 
 typedef struct YFILTER_DATA {
 	YFilter::Message::SubType	subType;
@@ -198,16 +211,32 @@ typedef struct YFILTER_DATA {
 	};
 	union {
 		ULONG_PTR				pBaseAddress;				//	module
-		PVOID					pStartAddress;				//	thread
+		ULONG_PTR				pStartAddress;				//	thread
 	};
 
 	wchar_t						szPath[AGENT_PATH_SIZE];
 	wchar_t						szCommand[AGENT_PATH_SIZE];
-
+	KERNEL_USER_TIMES			times;
 #pragma pack(pop)
-	UUID						uuid;						//	process
-
+	UUID						ProcGuid;					//	process
+	UUID						PProcGuid;
 #pragma pack(push, 1)
+
+	ULONG_PTR					pImageSize;
+	union {
+		ULONG Property;
+		struct {
+			ULONG ImageAddressingMode : 8;  // Code addressing mode
+			ULONG SystemModeImage : 1;  // System mode image
+			ULONG ImageMappedToAllPids : 1;  // Image mapped into all processes
+			ULONG ExtendedInfoPresent : 1;  // IMAGE_INFO_EX available
+			ULONG MachineTypeMismatch : 1;  // Architecture type mismatch
+			ULONG ImageSignatureLevel : 4;  // Signature level
+			ULONG ImageSignatureType : 3;  // Signature type
+			ULONG ImagePartialMap : 1;  // Nonzero if entire image is not mapped
+			ULONG Reserved : 12;
+		} Properties;
+	} ImageProperties;
 } YFILTER_DATA, *PYFILTER_DATA;
 typedef struct YFILTER_MESSAGE {
 	YFILTER_HEADER	header;

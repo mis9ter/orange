@@ -61,7 +61,11 @@ NTSTATUS	CreateFilterPort(
 		OBJECT_ATTRIBUTES		oa;
 
 		status = FltBuildDefaultSecurityDescriptor(&sd, FLT_PORT_ALL_ACCESS);
+
 		if (NT_FAILED(status))	__leave;
+
+
+
 		InitializeObjectAttributes(&oa,
 			&portName,
 			OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE,
@@ -255,8 +259,8 @@ Return Value:
 		}
 		if (Config()->pFilter)
 		{
-			CAutoReleaseSpinLock(&Config()->client.event.lock);
-			CAutoReleaseSpinLock(&Config()->client.command.lock);
+			CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.event.lock);
+			CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.command.lock);
 
 			DestroyFilterPort(&Config()->server.command.pPort, Config()->server.command.szName);
 			DestroyFilterPort(&Config()->server.event.pPort, Config()->server.event.szName);

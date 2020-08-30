@@ -41,10 +41,13 @@ public:
 		{
 			InitializeObjectAttributes(&attributes, path, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE, NULL, NULL);
 			status = ZwOpenKey(&hKey, KEY_READ, &attributes);
-			if (!NT_SUCCESS(status))	__leave;
-
+			if (!NT_SUCCESS(status))	{
+				//__log("%s ZwOpenKey() failed. status=%08x", __FUNCTION__, status);
+				__leave;
+			}
 			status = ZwQueryValueKey(hKey, valueName, KeyValuePartialInformation, NULL, 0, &nLength);
 			if (status != STATUS_BUFFER_TOO_SMALL && status != STATUS_BUFFER_OVERFLOW) {
+				//__log("%s ZwQueryValueKey() failed. status=%08x", __FUNCTION__, status);
 				status = STATUS_INVALID_PARAMETER;
 				__leave;
 			}

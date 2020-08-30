@@ -29,7 +29,7 @@ public:
 		::StringCbVPrintfA(szBuf + nLength, sizeof(szBuf) - nLength, pFmt, argptr);
 		va_end(argptr);
 		nLength = lstrlenA(szBuf);
-		puts(szBuf);
+		//puts(szBuf);
 		StringCbCopyA(szBuf + nLength, sizeof(szBuf) - nLength, "\n");
 		return WriteLog(szBuf, nLength + 1) ? true : false;
 	}

@@ -284,7 +284,6 @@ public:
 		{
 			StringCbPrintf(tmpSymName, sizeof(tmpSymName), L"%c:", name);
 			QueryDosDevice(tmpSymName, tmpDevName, MAX_PATH);
-
 			m_pathMap[name] = tmpDevName;
 		}
 	}
