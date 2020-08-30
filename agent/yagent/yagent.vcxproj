@@ -170,7 +170,7 @@
     <PostBuildEvent>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
-copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.db"</Command>
+copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
