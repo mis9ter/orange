@@ -7,7 +7,7 @@
 
 #define IDLE_COMMIT		1
 #define IDLE_COUNT		100
-#define IDLE_TICKS		10000
+#define IDLE_TICKS		3000
 
 class CAppPath
 {
@@ -118,7 +118,10 @@ public:
 		m_hWait			= CreateEvent(NULL, TRUE, FALSE, NULL);
 		m_dwBootId		= YAgent::GetBootId();
 		m_bDbIsOpened	= IsOpened();
-
+		
+		m_counter.dwProcess	= 0;
+		m_counter.dwModule	= 0;
+		m_counter.dwThread	= 0;
 		/*
 		AddCallback(
 			YFilter::Message::Mode::Event, 
@@ -165,6 +168,13 @@ public:
 	{
 		return m_dwBootId;
 	}
+
+	struct {
+		std::atomic<DWORD>		dwProcess;
+		std::atomic<DWORD>		dwThread;
+		std::atomic<DWORD>		dwModule;
+
+	} m_counter;
 protected:
 
 	void	Wait(IN DWORD dwMilliSeconds)
@@ -213,14 +223,17 @@ protected:
 
 		dwCount++;
 		if( YFilter::Message::Category::Process == nCategory ) {
+			pClass->m_counter.dwProcess++;
 			PYFILTER_DATA	p = (PYFILTER_DATA)pData;
 			bRet	= CProcessCallback::Proc(nMessageId, dynamic_cast<CProcessCallback *>(pClass), p);
 		}
 		else if (YFilter::Message::Category::Thread == nCategory) {
+			pClass->m_counter.dwThread++;
 			PYFILTER_DATA	p = (PYFILTER_DATA)pData;
 			bRet	= CThreadCallback::Proc(nMessageId, dynamic_cast<CThreadCallback *>(pClass), p);
 		}
 		else if(YFilter::Message::Category::Module == nCategory) {
+			pClass->m_counter.dwModule++;
 			PYFILTER_DATA	p = (PYFILTER_DATA)pData;
 			bRet	= CModuleCallback::Proc(nMessageId, dynamic_cast<CModuleCallback*>(pClass), p);
 		}

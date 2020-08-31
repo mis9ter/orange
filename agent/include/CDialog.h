@@ -21,7 +21,12 @@ public:
 	{
 
 	}
-
+	void		SetTimer(UINT_PTR nIDEvent, TIMERPROC pCallback) {
+		if( pCallback )	::SetTimer(m_hWnd, nIDEvent, 1000, pCallback);
+		else
+			KillTimer(m_hWnd, nIDEvent);
+		
+	}
 	void		SetMessageCallbackPtr(IN PVOID pCallbackPtr)
 	{
 		m_pCallbackPtr	= pCallbackPtr;
@@ -129,6 +134,11 @@ private:
 				break;
 			}
 			break;
+		case WM_TIMER:
+			//	WPARAM	nIDEvent	
+			//	LPARAM	pCallback
+			break;
+
 		case WM_CLOSE:
 			::DestroyWindow(hWnd);
 			return TRUE;

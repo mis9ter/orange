@@ -25,6 +25,52 @@ void    AgentRunLoop(HANDLE hShutdown, void* pCallbackPtr)
 {
 
 }
+
+void    ShowCounter(CAgent* pAgent, HWND hWnd) {
+    static  DWORD       dwProcess   = (DWORD)-1;
+    static  DWORD       dwThread    = (DWORD)-1;
+    static  DWORD       dwModule    = (DWORD)-1;
+
+    if (dwProcess != pAgent->m_counter.dwProcess)
+        SetDlgItemInt(hWnd, IDC_EDIT_PROCESS, pAgent->m_counter.dwProcess, false);
+    if (dwProcess != pAgent->m_counter.dwThread)
+        SetDlgItemInt(hWnd, IDC_EDIT_THREAD, pAgent->m_counter.dwThread, false);
+    if (dwProcess != pAgent->m_counter.dwModule)
+        SetDlgItemInt(hWnd, IDC_EDIT_MODULE, pAgent->m_counter.dwModule, false);
+
+    dwProcess   = pAgent->m_counter.dwProcess;
+    dwThread    = pAgent->m_counter.dwThread;
+    dwModule    = pAgent->m_counter.dwModule;
+}
+void    Timer(
+    HWND        hWnd,
+    UINT        uMsg,
+    UINT_PTR    pCallbackPtr,
+    DWORD       dwTicks
+) {
+    CAgent      *pAgent = (CAgent *)pCallbackPtr;
+
+    ShowCounter(pAgent, hWnd);
+
+    static  FILETIME    ftPrevTimes[2]  = {{(DWORD)-1,(DWORD)-1},{(DWORD)-1,(DWORD)-1}};
+    FILETIME            ftTime[2]      = {{0, 0}, {0, 0}};
+
+    GetProcessTimes(GetCurrentProcess(), NULL, NULL, &ftTime[0], &ftTime[1]);
+    if (ftPrevTimes[0].dwLowDateTime != ftTime[0].dwLowDateTime ||
+        ftPrevTimes[1].dwLowDateTime != ftTime[1].dwLowDateTime)
+    {
+        WCHAR   szTime[2][40]   = {L"", L""};
+        WCHAR   szTimes[100]    = L"";
+        CTime::FileTimeToSystemTimeString(&ftTime[0], szTime[0], sizeof(szTime[0]), true);
+        CTime::FileTimeToSystemTimeString(&ftTime[1], szTime[1], sizeof(szTime[1]), true);
+        StringCbPrintf(szTimes, sizeof(szTimes), L"K:%s U:%s", szTime[0], szTime[1]);
+        SetDlgItemText(hWnd, IDC_STATIC_TIMES, szTimes);
+
+        ftPrevTimes[0]  = ftTime[0];
+        ftPrevTimes[1]  = ftTime[1];
+    }
+}
+
 #ifdef _CONSOLE
 int     main()
 #else 
@@ -38,6 +84,19 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
    dialog.SetMessageCallbackPtr(&agent);
    if (dialog.Create(IDD_CONTROL_DIALOG, AGENT_SERVICE_NAME))
    {
+       dialog.AddMessageCallback(WM_INITDIALOG, [](
+           IN	HWND	hWnd,
+           IN	UINT	nMsgId,
+           IN	WPARAM	wParam,
+           IN	LPARAM	lParam,
+           IN	PVOID	ptr
+           ) {
+           CAgent* pAgent = (CAgent*)ptr;
+           ShowCounter(pAgent, hWnd);
+
+           WCHAR    szTime[40];
+           SetDlgItemText(hWnd, IDC_STATIC_STARTTIME, CTime::GetLocalTimeString(szTime, sizeof(szTime)));
+       });
        dialog.AddMessageCallback(IDC_BUTTON_INSTALL, [](
            IN	HWND	hWnd,
            IN	UINT	nMsgId,
@@ -79,6 +138,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
            pAgent->Shutdown();
            PostQuitMessage(0);
        });
+       dialog.SetTimer((ULONG_PTR)&agent, Timer);
        dialog.MessagePump([](IN HANDLE hShutdown, IN HWND hWnd, IN PVOID ptr) {
            while (WAIT_TIMEOUT == WaitForSingleObject(hShutdown, 1000))
            {

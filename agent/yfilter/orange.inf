@@ -9,7 +9,7 @@ Class       = "ActivityMonitor"                         ;This is determined by t
 ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}    ;This value is determined by the Load Order Group value
 Provider    = %ManufacturerName%
 DriverVer   = 
-CatalogFile = yfilter.cat
+CatalogFile = orange.cat
 
 [DestinationDirs]
 DefaultDestDir          = 12
@@ -68,10 +68,10 @@ HKR,"Instances\"%Instance1.Name%,"Flags",0x00010001,%Instance1.Flags%
 ;
 
 [MiniFilter.DriverFiles]
-%DriverName%.sys
+orange.sys
 
 [SourceDisksFiles]
-yfilter.sys = 1,,
+orange.sys = 1,,
 
 [SourceDisksNames]
 1 = %DiskId1%,,,
@@ -83,14 +83,14 @@ yfilter.sys = 1,,
 [Strings]
 ; TODO - Add your manufacturer
 ManufacturerName        = "Orange"
-ServiceDescription      = "yfilter Mini-Filter Driver"
-ServiceName             = "yfilter"
-DriverName              = "yfilter"
-DiskId1                 = "yfilter Device Installation Disk"
+ServiceDescription      = "orange Mini-Filter Driver"
+ServiceName             = "orange"
+DriverName              = "orange"
+DiskId1                 = "orange Device Installation Disk"
 
 ;Instances specific information.
-DefaultInstance         = "yfilter Instance"
-Instance1.Name          = "yfilter Instance"
+DefaultInstance         = "orange Instance"
+Instance1.Name          = "orange Instance"
 ; TODO - Change the altitude value, see https://msdn.microsoft.com/en-us/windows/hardware/drivers/ifs/load-order-groups-and-altitudes-for-minifilter-drivers
 Instance1.Altitude       = "385200"
 Instance1.Flags         = 0x0              ; Allow all attachments

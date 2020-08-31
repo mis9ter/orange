@@ -118,7 +118,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Inf Include="yfilter.inf" />
+    <Inf Include="orange.inf" />
   </ItemGroup>
   <ItemGroup>
     <FilesToPackage Include="$(TargetPath)" />

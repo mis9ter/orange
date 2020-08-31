@@ -46,10 +46,14 @@ public:
 		if (lstrlen(pStr) >= 20)
 			p->wMilliseconds = (WORD)_ttoi(pStr + 20);
 	}
-	static	LPCWSTR	SystemTimeToString(IN SYSTEMTIME* p, OUT LPWSTR pStr, IN DWORD dwSize)
+	static	LPCWSTR	SystemTimeToString(IN SYSTEMTIME* p, OUT LPWSTR pStr, IN DWORD dwSize, IN bool bTimer = false)
 	{
-		::StringCbPrintf(pStr, dwSize, _T("%04d-%02d-%02d %02d:%02d:%02d.%03d"),
-			p->wYear, p->wMonth, p->wDay, p->wHour, p->wMinute, p->wSecond, p->wMilliseconds);
+		if( bTimer )
+			::StringCbPrintf(pStr, dwSize, _T("%02d:%02d:%02d.%03d"),
+				p->wHour, p->wMinute, p->wSecond, p->wMilliseconds);
+		else
+			::StringCbPrintf(pStr, dwSize, _T("%04d-%02d-%02d %02d:%02d:%02d.%03d"),
+				p->wYear, p->wMonth, p->wDay, p->wHour, p->wMinute, p->wSecond, p->wMilliseconds);
 		return pStr;
 	}
 	static	LPCSTR	SystemTimeToString(IN SYSTEMTIME* p, OUT LPSTR pStr, IN DWORD dwSize)
@@ -73,6 +77,12 @@ public:
 		::FileTimeToLocalFileTime(p, &ft);
 		::FileTimeToSystemTime(&ft, &st);
 		return SystemTimeToString(&st, pStr, dwSize);
+	}
+	static	LPCWSTR	FileTimeToSystemTimeString(IN FILETIME* p, OUT LPWSTR pStr, IN DWORD dwSize, IN bool bTimer)
+	{
+		SYSTEMTIME	st;
+		::FileTimeToSystemTime(p, &st);
+		return SystemTimeToString(&st, pStr, dwSize, bTimer);
 	}
 	static	int64_t	SystemTimeToUnixTimestamp(IN SYSTEMTIME* p)
 	{
