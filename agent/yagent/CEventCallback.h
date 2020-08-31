@@ -122,6 +122,7 @@ public:
 		m_counter.dwProcess	= 0;
 		m_counter.dwModule	= 0;
 		m_counter.dwThread	= 0;
+
 		/*
 		AddCallback(
 			YFilter::Message::Mode::Event, 

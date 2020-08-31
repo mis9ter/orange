@@ -8,6 +8,7 @@
 #include "yagent.common.h"
 #include "CAppLog.h"
 #include "CDialog.h"
+#include "CMemory.h"
 
 #pragma comment(lib, "yfilterctrl.lib")
 

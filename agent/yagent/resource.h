@@ -14,6 +14,9 @@
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       129
 #define IDD_CONTROL_DIALOG              130
+#define IDR_ACCELERATOR1                134
+#define IDR_KERNEL_DRIVER				136
+#define IDR_EVENT_ODB					137
 #define IDC_SHUTDOWN                    1000
 #define IDC_BUTTON_INSTALL              1001
 #define IDC_BUTTON_UNINSTALL            1002
@@ -23,7 +26,6 @@
 #define IDC_EDIT_THREAD                 1006
 #define IDC_EDIT_MODULE                 1007
 #define IDC_STATIC_STARTTIME            1008
-#define IDC_STATIC_STARTTIME2           1009
 #define IDC_STATIC_TIMES                1009
 #define IDC_STATIC                      -1
 
@@ -32,8 +34,8 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        131
-#define _APS_NEXT_COMMAND_VALUE         32771
+#define _APS_NEXT_RESOURCE_VALUE        136
+#define _APS_NEXT_COMMAND_VALUE         32772
 #define _APS_NEXT_CONTROL_VALUE         1009
 #define _APS_NEXT_SYMED_VALUE           110
 #endif

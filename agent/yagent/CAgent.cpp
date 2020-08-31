@@ -1,4 +1,4 @@
-﻿#include "CAgent.h"
+﻿#include "Framework.h"
 
 CAgent::CAgent()
 	:
@@ -37,8 +37,12 @@ bool	CAgent::Start(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 	StringCbCat(p, sizeof(szPath) - wcslen(szPath), DRIVER_FILE_NAME);
 	do
 	{
-		m_config.pRunLoopPtr = pCallbackPtr;
-		m_config.pRunLoopFunc = pCallback;
+		m_config.pRunLoopPtr	= pCallbackPtr;
+		m_config.pRunLoopFunc	= pCallback;
+		CMemoryPtr	driver	= GetResourceData(NULL, IDR_KERNEL_DRIVER);
+		if ( driver) {
+
+		}
 
 		if (CFilterCtrl::IsInstalled())
 		{

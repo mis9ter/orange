@@ -1,0 +1,26 @@
+﻿;*** GSELFPT
+;
+.OPTION EXPLICIT     ; Generate errors
+.Set CabinetFileCountThreshold=0
+.Set FolderFileCountThreshold=0
+.Set FolderSizeThreshold=0
+.Set MaxCabinetSize=0
+.Set MaxDiskFileCount=0
+.Set MaxDiskSize=0
+.Set CompressionType=MSZIP
+.Set Cabinet=on
+.Set Compress=on
+;Specify file name for new cab file
+; Specify the subdirectory for the files.  
+; Your cab file should not have files at the root level,
+; and each driver package must be in a separate subfolder.
+
+.Set CabinetNameTemplate=work_orange.cab
+.Set DiskDirectoryTemplate=$build
+
+;Specify files to be included in cab file
+
+.Set DestinationDir=x64
+$build\release\x64\orange.inf
+$build\release\x64\orange.sys
+$build\release\x64\orange.sys.pdb
