@@ -158,6 +158,8 @@ public:
 			CProcessCallback::Create();
 			CModuleCallback::Create();
 			CThreadCallback::Create();
+
+			//	이전에 실행되어 동작중인 프로세스에 대한 정보들 수집
 			return true;
 		}
 		else {
