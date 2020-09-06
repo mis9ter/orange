@@ -169,8 +169,10 @@
     </Link>
     <PostBuildEvent>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
+..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
-copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"</Command>
+copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -203,6 +205,7 @@ copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"</Comm
     <Image Include="..\binary\image\app.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\binary\driver\x64\orange.sys" />
     <None Include="db\event.odb" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

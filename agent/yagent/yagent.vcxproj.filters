@@ -90,5 +90,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="db\event.odb" />
+    <None Include="..\binary\driver\x64\orange.sys" />
   </ItemGroup>
 </Project>

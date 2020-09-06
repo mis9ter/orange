@@ -15,8 +15,8 @@
 #define IDI_ICON1                       129
 #define IDD_CONTROL_DIALOG              130
 #define IDR_ACCELERATOR1                134
-#define IDR_KERNEL_DRIVER				136
-#define IDR_EVENT_ODB					137
+#define IDR_KERNEL_DRIVER               136
+#define IDR_EVENT_ODB                   137
 #define IDC_SHUTDOWN                    1000
 #define IDC_BUTTON_INSTALL              1001
 #define IDC_BUTTON_UNINSTALL            1002

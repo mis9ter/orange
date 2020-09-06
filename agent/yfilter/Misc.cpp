@@ -457,12 +457,25 @@ NTSTATUS	GetProcessImagePathByProcessId
 
 	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
 	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
-	if (pProcessId <= (HANDLE)4)			return STATUS_INVALID_PARAMETER;
+	if (pProcessId <= (HANDLE)4)	{
+		if( (HANDLE)0 == pProcessId ) {
+			if( CMemory::AllocateUnicodeString(NonPagedPoolNx, pStr, L"IDLE") )
+				return STATUS_SUCCESS;
+			__log("%s 1", __FUNCTION__);
+		}
+		if( (HANDLE)4 == pProcessId ) {
+			if (CMemory::AllocateUnicodeString(NonPagedPoolNx, pStr, L"SYSTEM"))
+				return STATUS_SUCCESS;		
+			__log("%s 2", __FUNCTION__);
+		}
+		__log("%s 3", __FUNCTION__);
+		return STATUS_INVALID_PARAMETER;
+	}
 	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	{
 		__dlog("%s KeGetCurrentIrql()=%d", __FUNCTION__, KeGetCurrentIrql());
 		return STATUS_UNSUCCESSFUL;
 	}
-	if( NULL == pStr )	return STATUS_UNSUCCESSFUL;
+	if( NULL == pStr )	return STATUS_INVALID_PARAMETER;
 
 	NTSTATUS			status = STATUS_UNSUCCESSFUL;
 	HANDLE				hProcess = NULL;
@@ -481,15 +494,23 @@ NTSTATUS	GetProcessImagePathByProcessId
 #define PROCESS_QUERY_INFORMATION (0x0400)
 #endif
 		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
-		if (!NT_SUCCESS(status))	__leave;
-
+		if (!NT_SUCCESS(status))	{
+			__log("%s ZwOpenProcess() failed. PID=%d", __FUNCTION__, pProcessId);
+			__leave;
+		}
 		status = pZwQueryInformationProcess(hProcess, ProcessImageFileName, NULL, 0, &nNeedSize);
-		if (status != STATUS_INFO_LENGTH_MISMATCH)	__leave;
+		if (status != STATUS_INFO_LENGTH_MISMATCH)	{
+			__log("%s pZwQueryInformationProcess() failed. PID=%d", __FUNCTION__, pProcessId);
+			__leave;
+		}
 		*pStr = (PUNICODE_STRING)CMemory::Allocate(NonPagedPoolNx, nNeedSize, 'GPIP');
 		if ( NULL == *pStr )	__leave;
 		RtlZeroMemory(*pStr, nNeedSize);
 		status = pZwQueryInformationProcess(hProcess, ProcessImageFileName, *pStr, nNeedSize, &nNeedSize);
-		if (!NT_SUCCESS(status))	__leave;
+		if (!NT_SUCCESS(status))	{
+			__log("%s pZwQueryInformationProcess() failed. PID=%d", __FUNCTION__, pProcessId); 
+			__leave;
+		}
 	}
 	__finally
 	{

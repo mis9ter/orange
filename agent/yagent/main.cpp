@@ -50,25 +50,24 @@ void    Timer(
 ) {
     CAgent      *pAgent = (CAgent *)pCallbackPtr;
 
-    ShowCounter(pAgent, hWnd);
+    static  FILETIME    ftPrevTime[4];
+    FILETIME            ftTime[4];
 
-    static  FILETIME    ftPrevTimes[2]  = {{(DWORD)-1,(DWORD)-1},{(DWORD)-1,(DWORD)-1}};
-    FILETIME            ftTime[2]      = {{0, 0}, {0, 0}};
-
-    GetProcessTimes(GetCurrentProcess(), NULL, NULL, &ftTime[0], &ftTime[1]);
-    if (ftPrevTimes[0].dwLowDateTime != ftTime[0].dwLowDateTime ||
-        ftPrevTimes[1].dwLowDateTime != ftTime[1].dwLowDateTime)
+    GetProcessTimes(GetCurrentProcess(), &ftTime[0], &ftTime[1], &ftTime[2], &ftTime[3]);  
+     if (
+        ftPrevTime[2].dwLowDateTime != ftTime[2].dwLowDateTime ||
+        ftPrevTime[3].dwLowDateTime != ftTime[2].dwLowDateTime)
     {
         WCHAR   szTime[2][40]   = {L"", L""};
         WCHAR   szTimes[100]    = L"";
-        CTime::FileTimeToSystemTimeString(&ftTime[0], szTime[0], sizeof(szTime[0]), true);
-        CTime::FileTimeToSystemTimeString(&ftTime[1], szTime[1], sizeof(szTime[1]), true);
+        CTime::FileTimeToSystemTimeString(&ftTime[2], szTime[0], sizeof(szTime[0]), true);
+        CTime::FileTimeToSystemTimeString(&ftTime[3], szTime[1], sizeof(szTime[1]), true);
         StringCbPrintf(szTimes, sizeof(szTimes), L"K:%s U:%s", szTime[0], szTime[1]);
         SetDlgItemText(hWnd, IDC_STATIC_TIMES, szTimes);
 
-        ftPrevTimes[0]  = ftTime[0];
-        ftPrevTimes[1]  = ftTime[1];
+        CopyMemory(ftPrevTime, ftTime, sizeof(ftPrevTime));
     }
+     ShowCounter(pAgent, hWnd);
 }
 
 #ifdef _CONSOLE
@@ -81,63 +80,71 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
    char         szCmd[100]  = "";
 
    CDialog      dialog;
+
+   //Timer(NULL, 0, NULL, 0);
    dialog.SetMessageCallbackPtr(&agent);
+   dialog.AddMessageCallback(WM_INITDIALOG, [](
+       IN	HWND	hWnd,
+       IN	UINT	nMsgId,
+       IN	WPARAM	wParam,
+       IN	LPARAM	lParam,
+       IN	PVOID	ptr
+       ) {
+       CAgent* pAgent = (CAgent*)ptr;
+
+       pAgent->Initialize();
+       ShowCounter(pAgent, hWnd);
+
+       WCHAR    szTime[40];
+       SetDlgItemText(hWnd, IDC_STATIC_STARTTIME, CTime::GetLocalTimeString(szTime, sizeof(szTime)));
+   });
+   dialog.AddMessageCallback(IDC_BUTTON_INSTALL, [](
+       IN	HWND	hWnd,
+       IN	UINT	nMsgId,
+       IN	WPARAM	wParam,
+       IN	LPARAM	lParam,
+       IN	PVOID	ptr
+       ) {
+       CAgent* pAgent = (CAgent*)ptr;
+       pAgent->Install();
+   });
+   dialog.AddMessageCallback(IDC_BUTTON_UNINSTALL, [](
+       IN	HWND	hWnd,
+       IN	UINT	nMsgId,
+       IN	WPARAM	wParam,
+       IN	LPARAM	lParam,
+       IN	PVOID	ptr
+       ) {
+       CAgent* pAgent = (CAgent*)ptr;
+       pAgent->Uninstall();
+   });
+   dialog.AddMessageCallback(IDC_BUTTON_START, [](
+       IN	HWND	hWnd,
+       IN	UINT	nMsgId,
+       IN	WPARAM	wParam,
+       IN	LPARAM	lParam,
+       IN	PVOID	ptr
+       ) {
+       CAgent* pAgent = (CAgent*)ptr;
+
+       if( pAgent->IsInitialized() )
+            pAgent->Start(pAgent, AgentRunLoop);
+   });
+   dialog.AddMessageCallback(IDC_BUTTON_SHUTDOWN, [](
+       IN	HWND	hWnd,
+       IN	UINT	nMsgId,
+       IN	WPARAM	wParam,
+       IN	LPARAM	lParam,
+       IN	PVOID	ptr
+       ) {
+       CAgent* pAgent = (CAgent*)ptr;
+       pAgent->Shutdown();
+       pAgent->Destroy();
+       PostQuitMessage(0);
+   });
+
    if (dialog.Create(IDD_CONTROL_DIALOG, AGENT_SERVICE_NAME))
    {
-       dialog.AddMessageCallback(WM_INITDIALOG, [](
-           IN	HWND	hWnd,
-           IN	UINT	nMsgId,
-           IN	WPARAM	wParam,
-           IN	LPARAM	lParam,
-           IN	PVOID	ptr
-           ) {
-           CAgent* pAgent = (CAgent*)ptr;
-           ShowCounter(pAgent, hWnd);
-
-           WCHAR    szTime[40];
-           SetDlgItemText(hWnd, IDC_STATIC_STARTTIME, CTime::GetLocalTimeString(szTime, sizeof(szTime)));
-       });
-       dialog.AddMessageCallback(IDC_BUTTON_INSTALL, [](
-           IN	HWND	hWnd,
-           IN	UINT	nMsgId,
-           IN	WPARAM	wParam,
-           IN	LPARAM	lParam,
-           IN	PVOID	ptr
-           ) {
-           CAgent* pAgent = (CAgent*)ptr;
-           pAgent->Install();
-       });
-       dialog.AddMessageCallback(IDC_BUTTON_UNINSTALL, [](
-           IN	HWND	hWnd,
-           IN	UINT	nMsgId,
-           IN	WPARAM	wParam,
-           IN	LPARAM	lParam,
-           IN	PVOID	ptr
-           ) {
-           CAgent* pAgent = (CAgent*)ptr;
-           pAgent->Uninstall();
-       });
-       dialog.AddMessageCallback(IDC_BUTTON_START, [](
-           IN	HWND	hWnd,
-           IN	UINT	nMsgId,
-           IN	WPARAM	wParam,
-           IN	LPARAM	lParam,
-           IN	PVOID	ptr
-           ) {
-           CAgent * pAgent  = (CAgent *)ptr;
-           pAgent->Start(pAgent, AgentRunLoop);
-       });
-       dialog.AddMessageCallback(IDC_BUTTON_SHUTDOWN, [](
-           IN	HWND	hWnd,
-           IN	UINT	nMsgId,
-           IN	WPARAM	wParam,
-           IN	LPARAM	lParam,
-           IN	PVOID	ptr
-           ) {
-           CAgent* pAgent = (CAgent*)ptr;
-           pAgent->Shutdown();
-           PostQuitMessage(0);
-       });
        dialog.SetTimer((ULONG_PTR)&agent, Timer);
        dialog.MessagePump([](IN HANDLE hShutdown, IN HWND hWnd, IN PVOID ptr) {
            while (WAIT_TIMEOUT == WaitForSingleObject(hShutdown, 1000))

@@ -25,7 +25,7 @@ bool			IsRegisteredProcess(IN HANDLE h)
 }
 bool			RegisterProcess(IN HANDLE h)
 {
-	return g_process.Add(h, NULL, NULL, NULL, NULL);
+	return g_process.Add(false, h, NULL, NULL, NULL, NULL);
 }
 bool			DeregisterProcess(IN HANDLE h)
 {
@@ -446,7 +446,14 @@ PCWSTR	Uuid2String(IN UUID* p, OUT PWSTR pStr, IN ULONG nStrSize)
 		p->Data4[4], p->Data4[5], p->Data4[6], p->Data4[7]);
 	return pStr;
 }
-NTSTATUS	AddEearlyProcess(HANDLE hPID)
+NTSTATUS	AddEarlyModule(HANDLE hPID)
+{
+	NTSTATUS	status	= STATUS_UNSUCCESSFUL;
+
+	__log("%s %d", __FUNCTION__, hPID);
+	return status;
+}
+NTSTATUS	AddEarlyProcess(HANDLE hPID)
 {
 	HANDLE			hPPID = GetParentProcessId(hPID);
 	PUNICODE_STRING	pImageFileName = NULL;
@@ -456,8 +463,11 @@ NTSTATUS	AddEearlyProcess(HANDLE hPID)
 	PUNICODE_STRING	pCmdLine = NULL;
 	PYFILTER_MESSAGE	pMsg = NULL;
 
+	bool			bRun	= false;
+	if( false == bRun )	return status;
+
 	if( NULL == hPPID )	return status;
-	AddEearlyProcess(hPPID);
+	AddEarlyProcess(hPPID);
 	UNREFERENCED_PARAMETER(ProcGuid);
 	__try {
 		if (NT_FAILED(status = GetProcessImagePathByProcessId(hPID, &pImageFileName)))	{
@@ -513,16 +523,16 @@ NTSTATUS	AddEearlyProcess(HANDLE hPID)
 				__leave;
 			}
 			pMsg->data.times.CreateTime = times.CreateTime;
-			ProcessTable()->Add(hPID, hPPID,
+			ProcessTable()->Add(true, hPID, hPPID,
 				&pMsg->data.ProcGuid, pImageFileName, pCmdLine);
 			pMsg->header.mode = YFilter::Message::Mode::Event;
 			pMsg->header.category = YFilter::Message::Category::Process;
 			pMsg->header.size = sizeof(YFILTER_MESSAGE);
 
-			pMsg->data.subType = YFilter::Message::SubType::ProcessStart;
-			pMsg->data.bCreationSaved = true;
-			pMsg->data.dwProcessId = (DWORD)hPID;
-			pMsg->data.dwParentProcessId = (DWORD)hPPID;
+			pMsg->data.subType = YFilter::Message::SubType::ProcessStart2;
+			pMsg->data.bCreationSaved	= true;
+			pMsg->data.PID				= (DWORD)hPID;
+			pMsg->data.PPID				= (DWORD)hPPID;
 			RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 			RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), pCmdLine);
 			if (MessageThreadPool()->Push(__FUNCTION__,
@@ -538,12 +548,120 @@ NTSTATUS	AddEearlyProcess(HANDLE hPID)
 				CMemory::Free(pMsg);
 				pMsg	= NULL;
 			}
+			//	이전 프로세스에 대한 모듈 정보도 올린다.
+			//AddEarlyModule(hPID);
 		}
 	}
 	__finally {
 		if( pImageFileName )	CMemory::Free(pImageFileName);
 		if( pCmdLine )			CMemory::Free(pCmdLine);
 		if( pMsg )				CMemory::Free(pMsg);
+	}
+	return status;
+}
+NTSTATUS	SendPreCreatedProcess(HANDLE hPID)
+{
+	HANDLE			hPPID = GetParentProcessId(hPID);
+	PUNICODE_STRING	pImageFileName = NULL;
+	NTSTATUS		status = STATUS_UNSUCCESSFUL;
+	KERNEL_USER_TIMES	times;
+	UUID			ProcGuid;
+	PUNICODE_STRING	pCmdLine = NULL;
+	PYFILTER_MESSAGE	pMsg = NULL;
+
+	bool			bRun = false;
+	if (false == bRun)	return status;
+
+	if (NULL == hPPID)	return status;
+	AddEarlyProcess(hPPID);
+	UNREFERENCED_PARAMETER(ProcGuid);
+	__try {
+		if (NT_FAILED(status = GetProcessImagePathByProcessId(hPID, &pImageFileName))) {
+			__log("%s %d GetProcessImagePathByProcessId() failed.", __FUNCTION__, hPID);
+			__leave;
+		}
+		if (NT_FAILED(GetProcessTimes(hPID, &times))) {
+			__log("%s %d GetProcessTimes() failed.", __FUNCTION__, hPID);
+			__leave;
+		}
+		if (NT_FAILED(GetProcessInfo(hPID, ProcessCommandLineInformation, &pCmdLine))) {
+			__log("%s %d GetProcessInfo() failed.", __FUNCTION__, hPID);
+			__leave;
+		}
+		pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
+		if (pMsg)
+		{
+			RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
+			RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
+			if (NT_SUCCESS(GetProcGuid(true, hPID, hPPID,
+				pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid)))
+			{
+				PUNICODE_STRING	pParentImageFileName = NULL;
+				if (NT_SUCCESS(GetProcessImagePathByProcessId(hPPID, &pParentImageFileName)))
+				{
+					KERNEL_USER_TIMES	ptimes;
+					if (NT_SUCCESS(GetProcessTimes(hPPID, &ptimes))) {
+						if (NT_SUCCESS(GetProcGuid(true, hPPID, GetParentProcessId(hPPID),
+							pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid))) {
+						}
+						else {
+							__log("%s PProcGuid - failed.", __FUNCTION__);
+							__log("  PPID:%d", hPPID);
+							__log("  GetProcGuid() failed.");
+						}
+					}
+					else {
+						__log("%s PProcGuid - failed.", __FUNCTION__);
+						__log("  PPID:%d", hPPID);
+						__log("  GetProcessTimes() failed.");
+					}
+					CMemory::Free(pParentImageFileName);
+				}
+				else {
+					//	부모 프로세스가 종료된 상태라면 당연히 여기로.
+					//__log("%s PProcGuid - failed.", __FUNCTION__);
+					//__log("  PPID:%d", hPPID);
+					//__log("  GetProcessImagePathByProcessId() failed.");
+				}
+			}
+			else {
+				//	ProcGuid 생성 실패 -> 저장할 필요 없습니다.
+				__leave;
+			}
+			pMsg->data.times.CreateTime = times.CreateTime;
+			ProcessTable()->Add(true, hPID, hPPID,
+				&pMsg->data.ProcGuid, pImageFileName, pCmdLine);
+			pMsg->header.mode = YFilter::Message::Mode::Event;
+			pMsg->header.category = YFilter::Message::Category::Process;
+			pMsg->header.size = sizeof(YFILTER_MESSAGE);
+
+			pMsg->data.subType = YFilter::Message::SubType::ProcessStart2;
+			pMsg->data.bCreationSaved = true;
+			pMsg->data.PID = (DWORD)hPID;
+			pMsg->data.PPID = (DWORD)hPPID;
+			RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
+			RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), pCmdLine);
+			if (MessageThreadPool()->Push(__FUNCTION__,
+				YFilter::Message::Mode::Event,
+				YFilter::Message::Category::Process,
+				pMsg, sizeof(YFILTER_MESSAGE), false))
+			{
+				//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+				MessageThreadPool()->Alert(YFilter::Message::Category::Process);
+				pMsg = NULL;
+			}
+			else {
+				CMemory::Free(pMsg);
+				pMsg = NULL;
+			}
+			//	이전 프로세스에 대한 모듈 정보도 올린다.
+			//AddEarlyModule(hPID);
+		}
+	}
+	__finally {
+		if (pImageFileName)	CMemory::Free(pImageFileName);
+		if (pCmdLine)			CMemory::Free(pCmdLine);
+		if (pMsg)				CMemory::Free(pMsg);
 	}
 	return status;
 }
@@ -623,20 +741,17 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 						}
 						CMemory::Free(pImageFileName);
 					}
-					//ExUuidCreate(&pMsg->data.uuid);
-					//__log("PROCESS_START PID=%d PPID=%d SIZE=%d",
-					//	ProcessId, CreateInfo->ParentProcessId, sizeof(MESSAGE_PROCESS));
 					pMsg->data.times.CreateTime	= times.CreateTime;
-					ProcessTable()->Add(ProcessId, CreateInfo->ParentProcessId,
+					ProcessTable()->Add(true, ProcessId, CreateInfo->ParentProcessId,
 						&pMsg->data.ProcGuid, CreateInfo->ImageFileName, CreateInfo->CommandLine);
 					pMsg->header.mode = YFilter::Message::Mode::Event;
 					pMsg->header.category = YFilter::Message::Category::Process;
 					pMsg->header.size = sizeof(YFILTER_MESSAGE);
 
 					pMsg->data.subType = YFilter::Message::SubType::ProcessStart;
-					pMsg->data.bCreationSaved = true;
-					pMsg->data.dwProcessId = (DWORD)ProcessId;
-					pMsg->data.dwParentProcessId = (DWORD)CreateInfo->ParentProcessId;
+					pMsg->data.bCreationSaved	= true;
+					pMsg->data.PID				= (DWORD)ProcessId;
+					pMsg->data.PPID				= (DWORD)CreateInfo->ParentProcessId;
 					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), CreateInfo->ImageFileName);
 					RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), CreateInfo->CommandLine);
 					if (MessageThreadPool()->Push(__FUNCTION__,
@@ -652,37 +767,6 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 						CMemory::Free(pMsg);
 					}
 				}
-				/*
-				YFILTER_MESSAGE	msg;
-				RtlZeroMemory(&msg, sizeof(msg));
-
-				ExUuidCreate(&msg.data.uuid);
-				//__log("PROCESS_START PID=%d PPID=%d SIZE=%d",
-				//	ProcessId, CreateInfo->ParentProcessId, sizeof(MESSAGE_PROCESS));
-				ProcessTable()->Add(ProcessId, CreateInfo->ParentProcessId, 
-					&msg.data.uuid, CreateInfo->ImageFileName, CreateInfo->CommandLine);
-				msg.header.mode				= YFilter::Message::Mode::Event;
-				msg.header.category			= YFilter::Message::Category::Process;
-				msg.header.size				= sizeof(msg);
-
-				msg.data.subType			= YFilter::Message::SubType::ProcessStart;
-				msg.data.bCreationSaved		= true;
-				msg.data.dwProcessId		= (DWORD)ProcessId;
-				msg.data.dwParentProcessId	= (DWORD)CreateInfo->ParentProcessId;
-				RtlStringCbCopyUnicodeString(msg.data.szPath, sizeof(msg.data.szPath), CreateInfo->ImageFileName);
-				RtlStringCbCopyUnicodeString(msg.data.szCommand, sizeof(msg.data.szCommand), CreateInfo->CommandLine);
-				//__log("%ws", msg.data.szCommand);
-				SendMessage(__FUNCTION__, &Config()->client.event, &msg, sizeof(msg), false);
-				if (MessageThreadPool()->Push(__FUNCTION__,
-					YFilter::Message::Mode::Event,
-					YFilter::Message::Category::Process,
-					&msg, sizeof(YFILTER_MESSAGE), 
-					false))
-				{
-					//	pMsg는 SendMessage 성공 후 해제될 것이다. 
-					MessageThreadPool()->Alert(YFilter::Message::Category::Process);
-				}
-				*/
 			}
 			else
 			{
@@ -704,8 +788,8 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				pMsg->header.size			= sizeof(YFILTER_MESSAGE);
 				pMsg->data.subType			= YFilter::Message::SubType::ProcessStop;
 				pMsg->data.bCreationSaved	= false;
-				pMsg->data.dwProcessId		= (DWORD)ProcessId;
-				pMsg->data.dwParentProcessId= (DWORD)GetParentProcessId(ProcessId);
+				pMsg->data.PID				= (DWORD)ProcessId;
+				pMsg->data.PPID				= (DWORD)GetParentProcessId(ProcessId);
 				pMsg->data.szCommand[0]		= NULL;
 				pMsg->data.szPath[0]		= NULL;
 				
@@ -743,6 +827,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 					//	이 프로세스는 생성시점 드라이버가 실행 중이지 않아 
 					//	해당 프로세스 정보를 가지고 있지 않다. 
 					//	[TODO]
+					__log("%s %6d NOT FOUND", __FUNCTION__, ProcessId);
 					PUNICODE_STRING	pImageFileName		= NULL;
 					if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 					{
@@ -789,6 +874,60 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		__log("%s filter.Reference() failed.", __FUNCTION__);
 	}
 }
+typedef struct _SYSTEM_PROCESS_INFORMATION {
+	ULONG NextEntryOffset;
+	ULONG NumberOfThreads;
+	BYTE Reserved1[48];
+	PVOID Reserved2[3];
+	HANDLE UniqueProcessId;
+	PVOID Reserved3;
+	ULONG HandleCount;
+	BYTE Reserved4[4];
+	PVOID Reserved5[11];
+	SIZE_T PeakPagefileUsage;
+	SIZE_T PrivatePageCount;
+	LARGE_INTEGER Reserved6[6];
+} SYSTEM_PROCESS_INFORMATION;
+
+#define __nextptr(base, offset) ((PVOID)((ULONG_PTR) (base) + (ULONG_PTR) (offset))) 
+typedef void	(*PPreCreatedProcessCallback)(HANDLE PID, PUNICODE_STRING pImagePath);
+
+void		GetPreCreatedProcess(PPreCreatedProcessCallback pCallback)
+{
+	if( NULL == Config() || NULL == Config()->pZwQuerySystemInformation )	return;
+
+	ULONG		nNeededSize	= 0;
+	//PVOID		pBuf		= NULL;
+	NTSTATUS	status		= Config()->pZwQuerySystemInformation(SystemProcessInformation, NULL, 0, &nNeededSize);
+	
+	if (STATUS_INFO_LENGTH_MISMATCH == status) {
+		//	할당 받아 봅시다.
+		//	단, 프로세스 정보는 수시로 변한다는거. 이 다음에 호출하면 더 큰 크기를 원할 수도 있다.
+		ULONG	nSize	= nNeededSize * 2;
+		PVOID	pBuf	= CMemory::Allocate(PagedPool, nSize, 'GPCP');
+		if (pBuf) {
+			if (NT_SUCCESS(status = Config()->pZwQuerySystemInformation(SystemProcessInformation, pBuf, nSize, &nNeededSize))) {
+				SYSTEM_PROCESS_INFORMATION	*p;
+				for (p = (SYSTEM_PROCESS_INFORMATION*)pBuf; p->NextEntryOffset ; 
+					p = (SYSTEM_PROCESS_INFORMATION *)__nextptr(p, p->NextEntryOffset)) {
+					PUNICODE_STRING	pImageFileName = NULL;
+					if (NT_SUCCESS(GetProcessImagePathByProcessId(p->UniqueProcessId, &pImageFileName)))
+					{
+						if( pCallback )	pCallback(p->UniqueProcessId, pImageFileName);
+						CMemory::Free(pImageFileName);
+					}
+					else {
+						if( pCallback )	pCallback(p->UniqueProcessId, NULL);
+					}
+				}
+			}			
+			else {
+				__log("%s ZwQuerySystemInformation() failed. status=%08x", __FUNCTION__, status);
+			}
+			CMemory::Free(pBuf);
+		}
+	}
+}
 bool		StartProcessFilter()
 {
 	__log("%s", __FUNCTION__);
@@ -797,6 +936,28 @@ bool		StartProcessFilter()
 	if( NULL == Config() )	return false;
 
 	CreateProcessTable();
+	//	이제 새로 생성되는 프로세스에 대해선 콜백을 받아 수집할 것이다.
+	//	이미 생성되어 있던 프로세스에 대한 정보는 콜백을 받기전 미리 수집한다.
+	GetPreCreatedProcess([](HANDLE PID, PUNICODE_STRING pImageFileName) {
+		if (pImageFileName) {
+			HANDLE	PPID	= GetParentProcessId(PID);
+			KERNEL_USER_TIMES	times;
+			UUID				ProcGuid;
+			PUNICODE_STRING		pCmdLine	= NULL;
+			GetProcessTimes(PID, &times);
+			GetProcGuid(true, PID, PPID,
+				pImageFileName, &times.CreateTime, &ProcGuid);
+			GetProcessInfo(PID, ProcessCommandLineInformation, &pCmdLine);
+			__log("%6d %wZ", PID, pImageFileName);
+			ProcessTable()->Add(false, PID, PPID, &ProcGuid, pImageFileName, pCmdLine);
+
+			if( pCmdLine )	CMemory::Free(pCmdLine);
+				
+		}
+		else 
+			__log("%6d null", PID);
+
+	});
 	if( USE_OBJECT_CALLBACK )
 	{
 		OB_OPERATION_REGISTRATION	obOpRegs[2] = { 0, };

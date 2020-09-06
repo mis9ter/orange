@@ -12,6 +12,29 @@ typedef NTSTATUS(NTAPI* FN_NtQueryInformationThread)
 	ULONG           ThreadInformationLength,
 	PULONG          ReturnLength
 	);
+
+typedef enum _SYSTEM_INFORMATION_CLASS {
+	SystemBasicInformation = 0,
+	SystemPerformanceInformation = 2,
+	SystemTimeOfDayInformation = 3,
+	SystemProcessInformation = 5,
+	SystemProcessorPerformanceInformation = 8,
+	SystemInterruptInformation = 23,
+	SystemExceptionInformation = 33,
+	SystemRegistryQuotaInformation = 37,
+	SystemLookasideInformation = 45,
+	SystemCodeIntegrityInformation = 103,
+	SystemPolicyInformation = 134,
+} SYSTEM_INFORMATION_CLASS;
+
+typedef	NTSTATUS(NTAPI * FN_ZwQuerySystemInformation)
+(
+	IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+	OUT PVOID                   SystemInformation,
+	IN ULONG                    SystemInformationLength,
+	OUT PULONG                  ReturnLength
+);
+
 /*
 typedef enum _PSCREATETHREADNOTIFYTYPE {
 	PsCreateThreadNotifyNonSystem,
@@ -186,6 +209,7 @@ typedef struct CONFIG
 	FN_NtQueryInformationThread		pNtQueryInformationThread;
 	FN_PsSetCreateThreadNotifyRoutineEx		pPsSetCreateThreadNotifyRoutineEx;
 	FN_ZwQueryInformationThread		pZwQueryInformationThread;
+	FN_ZwQuerySystemInformation		pZwQuerySystemInformation;
 	FN_LoadLibraryA					pLoadLibraryA;
 	FN_LoadLibraryW					pLoadLibraryW;
 

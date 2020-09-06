@@ -6,8 +6,8 @@
 #include "yagent.string.h"
 
 #define IDLE_COMMIT		1
-#define IDLE_COUNT		100
-#define IDLE_TICKS		3000
+#define IDLE_COUNT		300
+#define IDLE_TICKS		60000
 
 class CAppPath
 {
@@ -104,16 +104,15 @@ typedef std::map<DWORD, EventCallbackItemPtr>	EventCallbackTable;
 
 class CEventCallback
 	:
-	virtual	public	CAppLog,
 	public	CDB,
+	virtual	public	CAppLog,
 	public	CProcessCallback,
 	public	CThreadCallback,
 	public	CModuleCallback
 {
 
 public:
-	CEventCallback() :
-		CDB(EVENT_DB_NAME)
+	CEventCallback() 
 	{
 		m_hWait			= CreateEvent(NULL, TRUE, FALSE, NULL);
 		m_dwBootId		= YAgent::GetBootId();
@@ -122,7 +121,6 @@ public:
 		m_counter.dwProcess	= 0;
 		m_counter.dwModule	= 0;
 		m_counter.dwThread	= 0;
-
 		/*
 		AddCallback(
 			YFilter::Message::Mode::Event, 
@@ -137,24 +135,44 @@ public:
 			dynamic_cast<CThreadCallback *>(this)
 		);
 		*/
-		#if 1 == IDLE_COMMIT
-		if( IsOpened() )	Begin();
-		#endif
-		CProcessCallback::Create();
-		CModuleCallback::Create();
-		CThreadCallback::Create();
 	}
 	~CEventCallback() {
-		#if 1 == IDLE_COMMIT
-		if( IsOpened() )	Commit();
-		#endif
-		CProcessCallback::Destroy();
-		CModuleCallback::Destroy();
-		CThreadCallback::Destroy();
 		CloseHandle(m_hWait);
 	}
 	CDB* Db() {
 		return dynamic_cast<CDB *>(this);
+	}
+	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
+				PWSTR pValue, DWORD dwSize) {
+		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
+	}
+	bool	GetProcess(PCWSTR pProcGuid, PWSTR pValue, IN DWORD dwSize) {
+		return CProcessCallback::GetProcess(pProcGuid, pValue, dwSize);
+	}
+	bool		Initialize()
+	{	
+		if( IsOpened() ) {
+#if 1 == IDLE_COMMIT
+			if (IsOpened())	Begin();
+#endif
+			CProcessCallback::Create();
+			CModuleCallback::Create();
+			CThreadCallback::Create();
+			return true;
+		}
+		else {
+			Log("%s IsOpened() = %d", __FUNCTION__, IsOpened());
+		}
+		return false;
+	}
+	void		Destroy() {
+		CProcessCallback::Destroy();
+		CModuleCallback::Destroy();
+		CThreadCallback::Destroy();
+
+#if 1 == IDLE_COMMIT
+		if (IsOpened())	Commit();
+#endif
 	}
 	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) {
 		StringCbPrintf(pValue, dwSize,

@@ -10,7 +10,8 @@ Notes
 An update for Windows 8.1 increases the maximum number of drivers registered to receive load-image notifications from eight to 64. This update is installed as part of a cumulative update that is available through Windows Update starting on April 8, 2014. In addition, this cumulative update is available at https://support.microsoft.com/kb/2919355.
 Users of Windows 7 with Service Pack 1 (SP1) can install a hotfix to increase the maximum number of drivers registered to receive load-image notifications from eight to 64. This hotfix is available at https://support.microsoft.com/kb/2922790.
 */
-NTSTATUS	AddEearlyProcess(HANDLE hPID);
+NTSTATUS	AddEarlyProcess(HANDLE hPID);
+
 void LoadImageNotifyRoutine(
 	PUNICODE_STRING		FullImageName,
 	HANDLE				ProcessId,
@@ -22,6 +23,15 @@ void LoadImageNotifyRoutine(
 	UNREFERENCED_PARAMETER(ImageInfo);
 
 	CWSTR		path(FullImageName);
+
+	if (ImageInfo->SystemModeImage) {
+		//	커널 드라이버가 올라올 때는 ProcessId = 0 이다.
+		return;
+	}
+
+	PEPROCESS	pProcess	= NULL;
+
+	if( NT_FAILED(PsLookupProcessByProcessId(ProcessId, &pProcess)))	return;
 
 	if( FullImageName ) {
 		PCWSTR	pName	= wcsrchr(path, L'\\');
@@ -61,7 +71,7 @@ void LoadImageNotifyRoutine(
 				//	이 프로세스는 생성시점 드라이버가 실행 중이지 않아 
 				//	해당 프로세스 정보를 가지고 있지 않다. 
 				//	[TODO]
-				AddEearlyProcess(ProcessId);
+				AddEarlyProcess(ProcessId);
 				PUNICODE_STRING	pImageFileName = NULL;
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 				{
@@ -79,7 +89,7 @@ void LoadImageNotifyRoutine(
 
 			pMsg->data.subType				= YFilter::Message::SubType::ModuleLoad;
 			pMsg->data.bCreationSaved		= true;
-			pMsg->data.dwProcessId			= (DWORD)ProcessId;
+			pMsg->data.PID					= (DWORD)ProcessId;
 
 			pMsg->data.pBaseAddress			= (ULONG_PTR)ImageInfo->ImageBase;
 			pMsg->data.pImageSize			= ImageInfo->ImageSize;
@@ -102,6 +112,7 @@ void LoadImageNotifyRoutine(
 	else {
 		__log("%s FullImageName is null.", __FUNCTION__);
 	}
+	if( pProcess )	ObDereferenceObject(pProcess);
 }
 bool		StartModuleFilter()
 {

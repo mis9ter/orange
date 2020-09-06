@@ -60,6 +60,10 @@ NTSTATUS	GetThreadWin32StartAddress(IN HANDLE hThreadId, OUT PVOID * pAddress)
 	if (NULL == Config()->pZwQueryInformationThread)	return STATUS_BAD_FUNCTION_TABLE;
 	if( NULL == pAddress )								return STATUS_INVALID_PARAMETER;
 
+	if( KeGetCurrentIrql() > APC_LEVEL )	{
+		__dlog("%s IRQL=%d", __FUNCTION__, KeGetCurrentIrql());
+		return status;
+	}
 	__try {
 		status	= PsLookupThreadByThreadId(hThreadId, &pThread);
 		if( NT_FAILED(status) ) {
@@ -222,7 +226,7 @@ void		StopThreadFilter(void)
 
 KSPIN_LOCK	m_lock;
 
-NTSTATUS	AddEearlyProcess(HANDLE hPID);
+NTSTATUS	AddEarlyProcess(HANDLE hPID);
 
 void CreateThreadNotifyRoutine(
 	HANDLE		ProcessId,
@@ -237,17 +241,35 @@ void CreateThreadNotifyRoutine(
 	//__log("%s %d %d %d", __FUNCTION__, ProcessId, ThreadId, Create);
 	//GetSystemTimes()
 
+	HANDLE	CPID		= PsGetCurrentProcessId();
+	HANDLE	PID			= ProcessId;
+	HANDLE	PPID		= GetParentProcessId(PID);
+	HANDLE	TID			= ThreadId;
+	HANDLE	CTID		= PsGetCurrentThreadId();
+	KIRQL	irql		= KeGetCurrentIrql();
+	bool	bIsSystem	= PsIsSystemThread(KeGetCurrentThread());
+
 	if (NULL == Config()) {
 		__log("%s Config() is NULL.", __FUNCTION__);
 		return;
 	}
-
+	if ((HANDLE)4		== PID	||
+		PASSIVE_LEVEL	!= irql	||
+		bIsSystem					
+		) {
+		__dlog("%s Create=%1d IsSystem=%1d PID=%6d CPID=%6d PPID=%6d TID=%6d CTID=%6d",
+			__FUNCTION__,
+			Create, bIsSystem, PID, CPID, PPID, TID, CTID);
+		return;
+	}
+	//if (KeGetCurrentIrql() != PASSIVE_LEVEL ||
+	//	(HANDLE)4 == ProcessId || PsIsSystemThread(KeGetCurrentThread()))
+	//	return;
+	
 	//__log(__LINE);
 	PVOID	pStartAddress = NULL;
 	GetThreadWin32StartAddress(ThreadId, &pStartAddress);
 	//__log("[%d] process %p thread %p", Create, PsGetCurrentThreadId(), pStartAddress);
-
-	HANDLE	hCurrentProcessId = PsGetCurrentProcessId();
 
 	CWSTRBuffer		dest;
 	if (NT_FAILED(GetProcessImagePathByProcessId(ProcessId, dest,
@@ -256,9 +278,9 @@ void CreateThreadNotifyRoutine(
 		return;
 	}
 	CWSTRBuffer		src;
-	if (NT_FAILED(GetProcessImagePathByProcessId(hCurrentProcessId, src,
+	if (NT_FAILED(GetProcessImagePathByProcessId(CPID, src,
 		(ULONG)src.CbSize(), NULL))) {
-		__log("%s GetProcessImagePathByProcessId(%d) failed.", __FUNCTION__, hCurrentProcessId);
+		__log("%s GetProcessImagePathByProcessId(%d) failed.", __FUNCTION__, CPID);
 		return;
 	}
 
@@ -277,16 +299,10 @@ void CreateThreadNotifyRoutine(
 	) {
 		bShow	= true;
 	}
-	if ((HANDLE)4 == hCurrentProcessId) {
-		//__log("%s system thread", __FUNCTION__);
-		//bShow	= true;
-		return;
-	}
-
 	bShow	= false;
 	if( bShow )	
 	{
-		__log("%6d %ws => %6d %ws", hCurrentProcessId, pSrcName, ProcessId, pDestName);
+		__log("%6d %ws => %6d %ws", CPID, pSrcName, ProcessId, pDestName);
 		__log("  %10s %d", Create? "create":"terminate", ThreadId);
 		__log("  ExGetPreviousMode()=%d", ExGetPreviousMode());
 		__log("  PsIsSystemThread(current) %d", PsIsSystemThread(KeGetCurrentThread()));
@@ -298,17 +314,6 @@ void CreateThreadNotifyRoutine(
 			__log("  PsIsSystemThread(target) %d", PsIsSystemThread(pThread));
 		}
 	}
-	if ((HANDLE)4 == hCurrentProcessId) {
-		__log("%s system thread", __FUNCTION__);
-	}
-	if (KeGetCurrentIrql() != PASSIVE_LEVEL ||
-		(HANDLE)4 == ProcessId || PsIsSystemThread(KeGetCurrentThread()))
-		return;
-	//KPROCESSOR_MODE;
-	if ((HANDLE)4 == hCurrentProcessId) {
-		return;
-	}
-
 	PYFILTER_MESSAGE	pMsg	= NULL;
 	pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), 
 			TAG_THREAD);
@@ -316,16 +321,24 @@ void CreateThreadNotifyRoutine(
 	if (pMsg) {
 		RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
 
+		KERNEL_USER_TIMES	times;
+		GetThreadTimes(ThreadId, &times);
+		KeQuerySystemTime(&times.ExitTime);
+		pMsg->data.times.CreateTime = times.CreateTime;
+		pMsg->data.times.ExitTime = times.ExitTime;
+		pMsg->data.times.KernelTime = times.KernelTime;
+		pMsg->data.times.UserTime = times.UserTime;
+
 		pMsg->header.mode = YFilter::Message::Mode::Event;
 		pMsg->header.category = YFilter::Message::Category::Thread;
-		pMsg->header.size = sizeof(YFILTER_MESSAGE);
-		pMsg->data.dwProcessId = (DWORD)ProcessId;
-		//__log("%ws", msg.data.szCommand);
 
-		pMsg->data.dwThreadId = (DWORD)ThreadId;
-		pMsg->data.pStartAddress = (ULONG_PTR)pStartAddress;
-		pMsg->data.dwCreateProcessId = (DWORD)hCurrentProcessId;
-
+		pMsg->header.size			= sizeof(YFILTER_MESSAGE);
+		pMsg->data.PID				= (DWORD)ProcessId;
+		pMsg->data.PPID				= (DWORD)GetParentProcessId(ProcessId);
+		pMsg->data.CPID				= (DWORD)CPID;
+		pMsg->data.TID				= (DWORD)ThreadId;
+		pMsg->data.CTID				= (DWORD)PsGetCurrentThreadId();
+		pMsg->data.pStartAddress	= (ULONG_PTR)pStartAddress;
 		RtlStringCbCopyW(pMsg->data.szPath, sizeof(pMsg->data.szPath),
 			(PCWSTR)src);
 	}
@@ -345,7 +358,7 @@ void CreateThreadNotifyRoutine(
 
 	}
 	else {
-		AddEearlyProcess(ProcessId);
+		AddEarlyProcess(ProcessId);
 		PUNICODE_STRING	pImageFileName = NULL;
 		if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 		{
@@ -360,7 +373,7 @@ void CreateThreadNotifyRoutine(
 
 	if (Create ) {
 		pMsg->data.subType = YFilter::Message::SubType::ThreadStart;
-		bool	bSameProcess = (hCurrentProcessId == ProcessId);
+		bool	bSameProcess = (CPID == ProcessId);
 		if (false == bSameProcess)
 		{
 			//__log("%s Process(%d) => Process(%d)", 
@@ -388,13 +401,6 @@ void CreateThreadNotifyRoutine(
 
 		pMsg->data.subType = YFilter::Message::SubType::ThreadStop;
 		//	해당 스레드의 리소스 사용율을 구한다.
-		KERNEL_USER_TIMES	times;
-		GetThreadTimes(ThreadId, &times);
-		KeQuerySystemTime(&times.ExitTime);
-		pMsg->data.times.CreateTime	= times.CreateTime;
-		pMsg->data.times.ExitTime	= times.ExitTime;
-		pMsg->data.times.KernelTime	= times.KernelTime;
-		pMsg->data.times.UserTime	= times.UserTime;
 	}
 
 	if (pMsg) {

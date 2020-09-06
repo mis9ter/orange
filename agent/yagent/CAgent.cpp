@@ -26,31 +26,65 @@ void	CAgent::Uninstall()
 {
 	CFilterCtrl::Uninstall();
 }
+
+bool	CAgent::Initialize()
+{
+	GetModuleFileName(NULL, m_config.szPath, sizeof(m_config.szPath));
+	wchar_t* p = wcsrchr(m_config.szPath, L'\\');
+	if (p)		*p = NULL;
+
+	__try {
+		StringCbPrintf(m_config.szDriverPath, sizeof(m_config.szDriverPath),
+			L"%s\\%s", m_config.szPath, DRIVER_FILE_NAME);
+		StringCbPrintf(m_config.szEventDBPath, sizeof(m_config.szEventDBPath),
+			L"%s\\%s", m_config.szPath, DB_EVENT_DB);
+		if( false == SetResourceToFile(IDR_KERNEL_DRIVER, m_config.szDriverPath) )
+			__leave;
+		if (!PathFileExists(m_config.szEventDBPath)) {
+			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventDBPath) ) {
+				Log("%s SetReqourceToFile(%ws) failed.", __FUNCTION__, m_config.szEventDBPath);
+				__leave;
+			}
+		}
+		if (false == CDB::Open(m_config.szEventDBPath)) {
+			Log("%s can not open db %ws", __FUNCTION__, m_config.szEventDBPath);
+			__leave;
+		}
+		if( false == CEventCallback::Initialize() ) {
+			Log("%s CEventCallback::Initialize() failed.", __FUNCTION__);
+			__leave;
+		}
+		m_config.bInitialize = true;
+	}
+	__finally {
+
+	}
+	return m_config.bInitialize;
+}
+void	CAgent::Destroy()
+{
+	if (CDB::IsOpened()) {
+		CDB::Close();
+	}
+	if (m_config.bInitialize) {
+		CEventCallback::Destroy();
+	}
+}
+
 bool	CAgent::Start(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 {
 	Log(__FUNCTION__);
-	wchar_t		szPath[AGENT_PATH_SIZE];
-	GetModuleFileName(NULL, szPath, sizeof(szPath));
-	wchar_t* p = wcsrchr(szPath, L'\\');
-	if (p)		*(p + 1) = NULL;
-
-	StringCbCat(p, sizeof(szPath) - wcslen(szPath), DRIVER_FILE_NAME);
 	do
 	{
 		m_config.pRunLoopPtr	= pCallbackPtr;
 		m_config.pRunLoopFunc	= pCallback;
-		CMemoryPtr	driver	= GetResourceData(NULL, IDR_KERNEL_DRIVER);
-		if ( driver) {
-
-		}
-
 		if (CFilterCtrl::IsInstalled())
 		{
 
 		}
 		else
 		{
-			if (CFilterCtrl::Install(DRIVER_SERVICE_NAME, szPath, false))
+			if (CFilterCtrl::Install(DRIVER_SERVICE_NAME, m_config.szDriverPath, false))
 			{
 
 			}

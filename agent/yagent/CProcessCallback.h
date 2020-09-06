@@ -34,6 +34,9 @@ public:
 		const char	*pUpdate		= "update process "	\
 			"set CreateTime=?, ExitTime=?, KernelTime=?, UserTime=? "\
 			"where ProcGuid=?";
+		const char	*pSelect		= "select ProcPath,PID "\
+			"from	process "\
+			"where	ProcGuid=?";
 
 		if (Db()->IsOpened()) {
 			
@@ -42,6 +45,8 @@ public:
 			if( NULL == (m_stmt.pInsert	= Db()->Stmt(pInsert)) )
 				Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if( NULL == (m_stmt.pUpdate	= Db()->Stmt(pUpdate)) )
+				Log("%s", sqlite3_errmsg(Db()->Handle()));
+			if (NULL == (m_stmt.pSelect = Db()->Stmt(pSelect)))
 				Log("%s", sqlite3_errmsg(Db()->Handle()));
 		}
 		else {
@@ -54,8 +59,28 @@ public:
 			if( m_stmt.pIsExisting)	Db()->Free(m_stmt.pIsExisting);
 			if( m_stmt.pInsert)		Db()->Free(m_stmt.pInsert);
 			if( m_stmt.pUpdate)		Db()->Free(m_stmt.pUpdate);
+			if (m_stmt.pSelect)		Db()->Free(m_stmt.pSelect);
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
+	}
+	bool	GetProcess(PCWSTR pProcGuid, PWSTR pValue, DWORD dwSize)
+	{
+		bool	bRet = false;
+		sqlite3_stmt* pStmt = m_stmt.pSelect;
+		if (pStmt) {
+			int		nIndex = 0;
+			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			if (SQLITE_ROW == sqlite3_step(pStmt)) {
+				PCWSTR	_ProcPath = NULL;
+				DWORD	_PID = 0;
+				_ProcPath = (PCWSTR)sqlite3_column_text16(pStmt, 0);
+				_PID = sqlite3_column_int(pStmt, 1);
+				StringCbCopy(pValue, dwSize, _ProcPath ? _ProcPath : L"");
+				bRet = true;
+			}
+			sqlite3_reset(pStmt);
+		}
+		return bRet;
 	}
 protected:
 	static	bool			Proc(
@@ -73,7 +98,8 @@ protected:
 		CProcessCallback	*pClass = (CProcessCallback *)pCallbackPtr;
 
 		pClass->UUID2String(&p->ProcGuid, szProcGuid, sizeof(szProcGuid));
-		if (YFilter::Message::SubType::ProcessStart == p->subType) {
+		if (YFilter::Message::SubType::ProcessStart		== p->subType	||
+			YFilter::Message::SubType::ProcessStart2	== p->subType	) {
 			pClass->UUID2String(&p->PProcGuid, szPProcGuid, sizeof(szPProcGuid));
 			if( false == CAppPath::GetFilePath(p->szPath, szPath, sizeof(szPath)) )
 				StringCbCopy(szPath, sizeof(szPath), p->szPath);
@@ -90,7 +116,7 @@ protected:
 			CTime::LargeInteger2SystemTime(&p->times.KernelTime, &stKernel, false);
 			CTime::LargeInteger2SystemTime(&p->times.UserTime, &stUser, false);
 
-			pClass->Log("%-20s %6d %ws", "PROCESS_START", p->dwProcessId, szPath);
+			//pClass->Log("%-20s %6d %ws", "PROCESS_START", p->dwProcessId, szPath);
 			//pClass->Log("  path          %ws", p->szPath);
 			//pClass->Log("  MessageId     %I64d", nMessageId);
 			//pClass->Log("  ProcGuid      %ws", szProcGuid);
@@ -104,7 +130,7 @@ protected:
 			//pClass->Log("%s", TEXTLINE);
 		}
 		else if (YFilter::Message::SubType::ProcessStop == p->subType) {
-			if (p->dwProcessId)
+			if (p->PID)
 			{
 				//	드라이버에서 생성을 감지했던 프로세스
 			}
@@ -128,7 +154,7 @@ protected:
 				pClass->Update(szProcGuid, p);
 			//else 
 			//	pClass->Insert(szProcGuid, szPath, szPProcGuid, p);
-			pClass->Log("%-20s %6d %ws", "PROCESS_STOP", p->dwProcessId, szPath);
+			//pClass->Log("%-20s %6d %ws", "PROCESS_STOP", p->dwProcessId, szPath);
 			//pClass->Log("  path          %ws", p->szPath);
 			//pClass->Log("  ProdGuid      %ws", UUID2StringW(&p->ProcGuid, szProcGuid, sizeof(szProcGuid)));
 			//pClass->Log("  create        %s", SystemTime2String(&stCreate, szTime, sizeof(szTime)));
@@ -159,6 +185,7 @@ private:
 		sqlite3_stmt	*pInsert;
 		sqlite3_stmt	*pUpdate;
 		sqlite3_stmt	*pIsExisting;
+		sqlite3_stmt	*pSelect;
 	}	m_stmt;
 
 	bool	IsExisting(
@@ -195,8 +222,8 @@ private:
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcName ? pProcName + 1 : L"", -1, SQLITE_TRANSIENT);
 			sqlite3_bind_text16(pStmt,	++nIndex, pData->szCommand, -1, SQLITE_STATIC);
 
-			sqlite3_bind_int(pStmt,		++nIndex, pData->dwProcessId);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->dwParentProcessId);
+			sqlite3_bind_int(pStmt,		++nIndex, pData->PID);
+			sqlite3_bind_int(pStmt,		++nIndex, pData->PPID);
 			sqlite3_bind_int(pStmt,		++nIndex, 0);
 			if (pPProcGuid && *pPProcGuid)
 				sqlite3_bind_text16(pStmt, ++nIndex, pPProcGuid, -1, SQLITE_STATIC);

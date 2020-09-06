@@ -11,18 +11,27 @@ int		sqlite3_open_db(const char* zName, sqlite3** pDb);
 class CDB
 {
 public:
-	CDB(PCWSTR pFilePath = NULL)	:
+	CDB()	:
 		m_pDb(NULL)
 	{
-		if( pFilePath )	Open(pFilePath);
+		
 	}
-	CDB(PCSTR pFilePath = NULL) :
-		m_pDb(NULL)
-	{
-		if (pFilePath)	Open(pFilePath);
-	}
+	//CDB(PCSTR pFilePath = NULL) :
+	//	m_pDb(NULL)
+	//{
+	//	if (pFilePath)	Open(pFilePath);
+	//}
 	~CDB() {
 		Close();
+	}
+	bool	Initialize(PCWSTR pFilePath)
+	{
+		if( pFilePath )	return Open(pFilePath);
+		return false;
+	}
+	void	Destroy()
+	{
+		if( IsOpened() )	Close();
 	}
 	void	Begin()
 	{

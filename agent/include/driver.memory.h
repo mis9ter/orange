@@ -98,11 +98,58 @@ public:
 		}
 		return bRet;
 	}
+	static	bool	AllocateUnicodeString(IN POOL_TYPE type,
+		OUT PUNICODE_STRING * pDest, IN PCWSTR pSrc)
+	{
+		bool	bRet = false;
+		if (NULL == pSrc || NULL == pDest) {
+			__log("%s pSrc:%p or pDest:%p is null.", pSrc, pDest);
+			return NULL;
+		}
+		__try
+		{
+			size_t	cbSize	= 0;
+			char	*pBuf	= NULL;
+
+			if (!NT_SUCCESS(RtlStringCbLengthW(pSrc, CMEMORY_MAX_STRING_SIZE, &cbSize)))
+			{
+				__log("RtlStringCbLengthW() failed.");
+				__leave;
+			}
+			pBuf	= (char *)ExAllocatePoolWithTag(type, 
+						sizeof(UNICODE_STRING) + cbSize, 'AUS3');
+			if (NULL == pBuf ) {
+				__log("%-20s memory(%d) allocation failed. size=%d",
+					__FUNCTION__, type, (int)(sizeof(UNICODE_STRING) + cbSize));
+				__leave;
+			}
+			*pDest	= (PUNICODE_STRING)pBuf;
+			(*pDest)->Buffer		= (PWCH)( pBuf + sizeof(UNICODE_STRING) );
+			(*pDest)->MaximumLength	= (USHORT)(cbSize);
+			(*pDest)->Length		= 0;
+			NTSTATUS	status;
+			if (!NT_SUCCESS(status = RtlUnicodeStringCopyString(*pDest, pSrc)))
+			{
+				//STATUS_INVALID_PARAMETER
+				__log("RtlUnicodeStringCopyString() failed. status=%08x", status);
+				ExFreePool(pBuf);
+				__leave;
+			}
+			bRet = true;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+
+		}
+		return bRet;
+	}
 	static	bool	AllocateUnicodeString(IN POOL_TYPE type, 
 		OUT PUNICODE_STRING pDest, IN PCWSTR pSrc)
 	{
 		bool	bRet	= false;
-		if( NULL == pSrc || NULL == pDest)	return NULL;
+		if( NULL == pSrc || NULL == pDest)	{
+			__log("%s pSrc:%p or pDest:%p is null.", pSrc, pDest);
+			return NULL;
+		}
 		__try 
 		{
 			size_t	cbSize	= 0;

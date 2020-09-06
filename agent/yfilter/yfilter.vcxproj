@@ -95,6 +95,7 @@
     <PostBuildEvent>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\driver\$(PlatformTarget)"
 cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </PostBuildEvent>
     <Link>

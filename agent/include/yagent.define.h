@@ -22,6 +22,8 @@ typedef GUID UUID;
 #define DRIVER_STRING_ALTITUDE	L"385200"			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
 #define DRIVER_MAX_MESSAGE_SIZE			4096
 
+#define DB_EVENT_DB				L"event.db"
+
 #define GUID_STRING_SIZE		36
 #define NANOSECONDS(nanos) (((signed __int64)(nanos)) / 100L)
 #define MICROSECONDS(micros) (((signed __int64)(micros)) * NANOSECONDS(1000L))
@@ -81,8 +83,9 @@ namespace YFilter
 			Count
 		};
 		enum SubType {
-			ProcessStart,
-			ProcessStop,
+			ProcessStart,	//	지금 프로세스가 실행되었다.
+			ProcessStop,	//	지금 프로세스가 종료되었다.
+			ProcessStart2,	//	이전에 실행된 프로세스를 이제 알게 되었다.
 			ThreadStart,
 			ThreadStop,
 			ModuleLoad,
@@ -203,16 +206,17 @@ typedef struct YFILTER_DATA {
 	union {
 		bool					bCreationSaved;				//	process
 	};
-	DWORD						dwProcessId;				//	all
-	DWORD						dwThreadId;					//	all
-	union {
-		DWORD					dwParentProcessId;			//	process
-		DWORD					dwCreateProcessId;			//	thread
-	};
+	DWORD						PID;						//	current process id/all
+	DWORD						PPID;						//	parent process id/process
+	DWORD						TID;						//	target thread id/all
+	DWORD						CTID;						//	current thread id
+	DWORD						CPID;						//	creator process id/thread
+	DWORD						RPID;						//	related process id
 	union {
 		ULONG_PTR				pBaseAddress;				//	module
 		ULONG_PTR				pStartAddress;				//	thread
 	};
+	bool						IsSystem;
 
 	wchar_t						szPath[AGENT_PATH_SIZE];
 	wchar_t						szCommand[AGENT_PATH_SIZE];

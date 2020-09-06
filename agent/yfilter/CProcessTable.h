@@ -11,6 +11,7 @@ typedef struct PROCESS_ENTRY
 	UNICODE_STRING		command;
 	PVOID				key;
 	bool				bFree;		//	해제 대상
+	bool				bCallback;	//	콜백에 의해 수집
 } PROCESS_ENTRY, * PPROCESS_ENTRY;
 
 typedef void (*PProcessTableCallback)(
@@ -67,7 +68,9 @@ public:
 		}
 	}
 	*/
-	bool		Add(IN HANDLE PID, IN HANDLE PPID,
+	bool		Add(
+		IN bool		bCallback,		// 1 콜백에 의해 수집 0 직접 수집
+		IN HANDLE PID, IN HANDLE PPID,
 		IN UUID* pUuid, IN PCUNICODE_STRING pPath, IN PCUNICODE_STRING pCommand)
 	{
 		if (false == IsPossible())	return false;
@@ -89,6 +92,7 @@ public:
 		entry.parent = PPID;
 		entry.key = (PVOID)4;
 		entry.bFree = false;
+		entry.bCallback	= bCallback;
 		if (pUuid)		RtlCopyMemory(&entry.uuid, pUuid, sizeof(entry.uuid));
 		CWSTRBuffer		procPath;
 

@@ -10,6 +10,7 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "yagent", "yagent\yagent.vcxproj", "{E52CC628-ED18-4D27-BF10-B16B44A47FA0}"
 	ProjectSection(ProjectDependencies) = postProject
 		{A5EB33CE-AD6E-4926-932F-AB8F53686158} = {A5EB33CE-AD6E-4926-932F-AB8F53686158}
+		{0049B8CF-9324-4C06-B192-CAF5FCBD52E7} = {0049B8CF-9324-4C06-B192-CAF5FCBD52E7}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "yfilterctrl", "yfilterctrl\yfilterctrl.vcxproj", "{A5EB33CE-AD6E-4926-932F-AB8F53686158}"
@@ -24,9 +25,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "yagent.common", "common\com
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "lib", "lib", "{7F277DB3-0B8C-4500-B48C-CEB7D6299354}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "orangedb", "util\orangedb\orangedb.vcxproj", "{2E80FB27-D507-4585-A93A-A77DC1A50DAD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "orangedb.exe", "util\orangedb\orangedb.vcxproj", "{2E80FB27-D507-4585-A93A-A77DC1A50DAD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "orangedb", "lib\orangedb\orangedb.vcxproj", "{181599B0-1CC1-4E11-8D8E-6DD4D262EFB9}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "orangedb.lib", "lib\orangedb\orangedb.vcxproj", "{181599B0-1CC1-4E11-8D8E-6DD4D262EFB9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
