@@ -63,6 +63,12 @@
     <ClInclude Include="CModuleCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CPreProcess.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CNtDll.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">

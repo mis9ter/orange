@@ -185,6 +185,8 @@ copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
     <ClInclude Include="CDialog.h" />
     <ClInclude Include="CEventCallback.h" />
     <ClInclude Include="CModuleCallback.h" />
+    <ClInclude Include="CNtDll.h" />
+    <ClInclude Include="CPreProcess.h" />
     <ClInclude Include="CProcessCallback.h" />
     <ClInclude Include="CThread.h" />
     <ClInclude Include="CThreadCallback.h" />

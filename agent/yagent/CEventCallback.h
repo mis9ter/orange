@@ -65,6 +65,7 @@ private:
 #include "CProcessCallback.h"
 #include "CThreadCallback.h"
 #include "CModuleCallback.h"
+#include "CPreProcess.h"
 
 #define		EVENT_DB_NAME	L"event.db"
 
@@ -108,7 +109,8 @@ class CEventCallback
 	virtual	public	CAppLog,
 	public	CProcessCallback,
 	public	CThreadCallback,
-	public	CModuleCallback
+	public	CModuleCallback,
+	public	CPreProcess
 {
 
 public:
@@ -160,6 +162,9 @@ public:
 			CThreadCallback::Create();
 
 			//	이전에 실행되어 동작중인 프로세스에 대한 정보들 수집
+
+			CPreProcess::Check2();
+
 			return true;
 		}
 		else {
