@@ -428,7 +428,7 @@ inline	bool	IsGenianInstaller(IN PCWSTR pProcPath)
 	}
 	return false;
 }
-PCWSTR	Uuid2String(IN UUID* p, OUT PWSTR pStr, IN ULONG nStrSize)
+PCWSTR		Uuid2String(IN UUID* p, OUT PWSTR pStr, IN ULONG nStrSize)
 {
 	/*
 	typedef struct _GUID {

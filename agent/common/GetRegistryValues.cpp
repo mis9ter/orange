@@ -21,5 +21,14 @@ DWORD	GetBootId()
 	}
 	return dwId;
 }
-
+PCWSTR	GetMachineGuid(IN PWSTR pValue, IN DWORD dwSize)
+{
+	if(CAppRegistry::GetValue(HKEY_LOCAL_MACHINE, REG_MACHINEGUID_KEY, REG_MACHINEGUID_VALUE,
+			REG_SZ, pValue, dwSize) )
+		return pValue;
+	if (pValue && dwSize >= sizeof(WCHAR)) {
+		*pValue	= NULL;
+	}
+	return pValue;
+}
 YAGENT_COMMON_END

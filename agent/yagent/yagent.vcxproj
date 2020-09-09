@@ -191,12 +191,18 @@ copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
     <ClInclude Include="CThread.h" />
     <ClInclude Include="CThreadCallback.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="MD5\Global.h" />
+    <ClInclude Include="MD5\MD5.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CAgent.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MD5\MD5C.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Misc.cpp" />
   </ItemGroup>
   <ItemGroup>

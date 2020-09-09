@@ -6,10 +6,15 @@
 */
 #include <TlHelp32.h>
 #include <psapi.h>
+#include <functional>
 #include "CNtDll.h"
 
 #define __nextptr(base, offset) ((PVOID)((ULONG_PTR) (base) + (ULONG_PTR) (offset))) 
 
+typedef std::function<bool(const char* pData, DWORD dwSize)>	OutputCallback;
+
+#pragma warning(disable:4311)
+#pragma warning(disable:4302)
 class CPreProcess
 	:
 	virtual	public	CAppLog,
@@ -24,30 +29,61 @@ public:
 
 	}
 
-	void			Check2() {
+	void			Check2(
+		std::function<void(
+			UUID * pProcGuid, DWORD PID, DWORD PPID, PCWSTR pPath
+		)> pCallback = NULL
+	
+	) {
 		ULONG		nNeededSize = 0;
 		//PVOID		pBuf		= NULL;
-		NTSTATUS	status		= NtQuerySystemInformation(
+		NTSTATUS	status		= ZwQuerySystemInformation(
 									SystemProcessInformation, NULL, 0, &nNeededSize);
 		if (STATUS_INFO_LENGTH_MISMATCH == status) {
 			//	할당 받아 봅시다.
 			//	단, 프로세스 정보는 수시로 변한다는거. 이 다음에 호출하면 더 큰 크기를 원할 수도 있다.
-			ULONG	nSize	= nNeededSize * 2;
-			PVOID	pBuf	= malloc(nSize);
+			ULONG	nSize		= nNeededSize * 2;
+			PVOID	pBuf		= malloc(nSize);
+			WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
 			if (pBuf) {
-				if (NT_SUCCESS(status = NtQuerySystemInformation(SystemProcessInformation, pBuf, nSize, &nNeededSize))) {
+				HANDLE			hDebug = SetDebugPrivilege();
+
+				if (NT_SUCCESS(status = ZwQuerySystemInformation(SystemProcessInformation, pBuf, nSize, &nNeededSize))) {
 					SYSTEM_PROCESS_INFORMATION* p;
 					for (p = (SYSTEM_PROCESS_INFORMATION*)pBuf; p->NextEntryOffset;
 						p = (SYSTEM_PROCESS_INFORMATION*)__nextptr(p, p->NextEntryOffset)) {
-						HANDLE	PPID	= p->UniqueProcessId;
-						HANDLE	PID		= 0;
-
-						Log("%s %6d %6d", __FUNCTION__, (DWORD)PID, (DWORD)PPID);
+						HANDLE	PID		= p->UniqueProcessId;
+						HANDLE	PPID	= 0;
+						
+						GetParentProcessId(PID, &PPID);
+						PUNICODE_STRING	pImageFileName = NULL;
+						NTSTATUS		status;
+						if ((HANDLE)0 == PID) {
+							StringCbCopy(szPath, sizeof(szPath), L"[System Process]");
+						}
+						else if ((HANDLE)4 == PID) {
+							StringCbCopy(szPath, sizeof(szPath), L"System");
+						}	
+						else {
+							if (NT_SUCCESS(status = GetProcessInfo(PID, ProcessImageFileName, &pImageFileName))) {
+								StringCbPrintf(szPath, sizeof(szPath), L"%wZ", pImageFileName);
+								free(pImageFileName);
+							}
+							else {
+								Log("  GetProcessInfo() failed. status=%08x", status);
+								StringCbCopy(szPath, sizeof(szPath), L"");
+							}
+						}		
+						UUID	ProcGuid;
+						GetProcGuid(PID, PPID, szPath, &ProcGuid);
+						if( pCallback )
+							pCallback(&ProcGuid, (DWORD)PID, (DWORD)PPID, szPath);
 					}
 				}
 				else {
 					Log("%s NtQuerySystemInformation() failed. status=%08x", __FUNCTION__, status);
 				}
+				if (hDebug)	UnsetDebugPrivilege(hDebug);
 				free(pBuf);
 			}
 		}

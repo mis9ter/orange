@@ -100,6 +100,7 @@ private:
 
 namespace YAgent {
 	DWORD		GetBootId();
+	PCWSTR		GetMachineGuid(IN PWSTR pValue, IN DWORD dwSize);
 	BOOL		CreateDirectory(LPCTSTR lpPath);
 	BOOL		MakeDirectory(LPCTSTR lpPath);
 	LPCTSTR		GetURLPath(IN LPCTSTR pFilePath, OUT LPTSTR lpPath, IN DWORD dwSize);

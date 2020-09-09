@@ -163,7 +163,18 @@ public:
 
 			//	이전에 실행되어 동작중인 프로세스에 대한 정보들 수집
 
-			CPreProcess::Check2();
+			CPreProcess::Check2([&](
+				UUID	*pProcGuid, 
+				DWORD	PID, 
+				DWORD	PPID, 
+				PCWSTR	pPath
+			) {
+				Log("%s %6d %6d", __FUNCTION__, PID, PPID);
+				Log("  %ws", pPath);
+				WCHAR	szProcGuid[40] = L"";
+				UUID2String(pProcGuid, szProcGuid, sizeof(szProcGuid));
+				Log("   %ws", szProcGuid);
+			});
 
 			return true;
 		}

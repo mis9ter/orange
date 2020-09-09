@@ -16,6 +16,12 @@
     <Filter Include="binary">
       <UniqueIdentifier>{0762206f-5522-434a-8b32-9a916026733a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Library">
+      <UniqueIdentifier>{a4812caa-8d27-4c20-837e-e4b8e8bef5ab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Library\MD5">
+      <UniqueIdentifier>{cb84917a-6ff2-4441-8ae3-2242e319f00d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -69,6 +75,12 @@
     <ClInclude Include="CNtDll.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MD5\Global.h">
+      <Filter>Library\MD5</Filter>
+    </ClInclude>
+    <ClInclude Include="MD5\MD5.h">
+      <Filter>Library\MD5</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">
@@ -92,6 +104,9 @@
     </ClCompile>
     <ClCompile Include="Misc.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MD5\MD5C.cpp">
+      <Filter>Library\MD5</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
