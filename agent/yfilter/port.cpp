@@ -57,6 +57,9 @@ VOID	CommandDisconnected(_In_opt_ PVOID ConnectionCookie)
 		Config()->client.event.pPort	= NULL;
 	}
 }
+NTSTATUS	StartDriver();
+NTSTATUS	StopDriver();
+
 NTSTATUS	CommandMessage
 (
 	_In_ PVOID ConnectionCookie,
@@ -107,6 +110,28 @@ Return Value:
 
 	__function_log;
 
+	bool	bRet = false;
+
+	if (InputBuffer && sizeof(YFILTER_COMMAND) == InputBufferSize) {
+		PYFILTER_COMMAND	pCommand = (PYFILTER_COMMAND)InputBuffer;
+		switch (pCommand->dwCommand) {
+			case YFILTER_COMMAND_START:
+				__log("%s YFILTER_COMMAND_START", __FUNCTION__);
+				if( NT_SUCCESS(StartDriver()) )	bRet	= true;
+				break;
+			case YFILTER_COMMAND_STOP:
+				if (NT_SUCCESS(StopDriver()))	bRet = true;
+				__log("%s YFILTER_COMMAND_STOP", __FUNCTION__);
+				break;
+		}
+	}
+
+	if (OutputBuffer && sizeof(YFILTER_REPLY) == OutputBufferSize) {
+		__log("%s OutputBuffer=%p, OutputBufferSize=%d", __FUNCTION__, OutputBuffer, OutputBufferSize);
+		((YFILTER_REPLY*)OutputBuffer)->bRet = bRet;
+		if (ReturnOutputBufferLength)
+			*ReturnOutputBufferLength = sizeof(YFILTER_REPLY);
+	}
 	return status;
 }
 NTSTATUS	EventConnected(

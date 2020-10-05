@@ -10,6 +10,7 @@
 #include "CNtDll.h"
 
 #define __nextptr(base, offset) ((PVOID)((ULONG_PTR) (base) + (ULONG_PTR) (offset))) 
+#define ProcessCommandLineInformation	60
 
 typedef std::function<bool(const char* pData, DWORD dwSize)>	OutputCallback;
 
@@ -31,7 +32,7 @@ public:
 
 	void			Check2(
 		std::function<void(
-			UUID * pProcGuid, DWORD PID, DWORD PPID, PCWSTR pPath
+			UUID * pProcGuid, DWORD PID, DWORD PPID, PCWSTR pPath, PCWSTR pCmdLine
 		)> pCallback = NULL
 	
 	) {
@@ -45,6 +46,7 @@ public:
 			ULONG	nSize		= nNeededSize * 2;
 			PVOID	pBuf		= malloc(nSize);
 			WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
+			WCHAR	szCmdLine[AGENT_PATH_SIZE] = L"";
 			if (pBuf) {
 				HANDLE			hDebug = SetDebugPrivilege();
 
@@ -57,6 +59,7 @@ public:
 						
 						GetParentProcessId(PID, &PPID);
 						PUNICODE_STRING	pImageFileName = NULL;
+						PUNICODE_STRING	pCmdLine	= NULL;
 						NTSTATUS		status;
 						if ((HANDLE)0 == PID) {
 							StringCbCopy(szPath, sizeof(szPath), L"[System Process]");
@@ -65,6 +68,12 @@ public:
 							StringCbCopy(szPath, sizeof(szPath), L"System");
 						}	
 						else {
+							if (NT_SUCCESS(status = GetProcessParams(PID, &PPID, 
+									szPath, sizeof(szPath), szCmdLine, sizeof(szCmdLine)))) 
+							{
+
+							}
+							/*
 							if (NT_SUCCESS(status = GetProcessInfo(PID, ProcessImageFileName, &pImageFileName))) {
 								StringCbPrintf(szPath, sizeof(szPath), L"%wZ", pImageFileName);
 								free(pImageFileName);
@@ -73,11 +82,20 @@ public:
 								Log("  GetProcessInfo() failed. status=%08x", status);
 								StringCbCopy(szPath, sizeof(szPath), L"");
 							}
+							if (NT_SUCCESS(status = GetProcessInfo(PID, (PROCESSINFOCLASS)ProcessCommandLineInformation, &pImageFileName))) {
+								StringCbPrintf(szCmdLine, sizeof(szCmdLine), L"%wZ", pCmdLine);
+								free(pCmdLine);
+							}
+							else {
+								Log("  GetProcessInfo() failed. status=%08x", status);
+								StringCbCopy(szCmdLine, sizeof(szCmdLine), L"");
+							}
+							*/
 						}		
 						UUID	ProcGuid;
 						GetProcGuid(PID, PPID, szPath, &ProcGuid);
 						if( pCallback )
-							pCallback(&ProcGuid, (DWORD)PID, (DWORD)PPID, szPath);
+							pCallback(&ProcGuid, (DWORD)PID, (DWORD)PPID, szPath, szCmdLine);
 					}
 				}
 				else {

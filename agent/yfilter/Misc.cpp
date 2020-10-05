@@ -36,7 +36,59 @@ typedef struct _PEB {
 	ULONG                         SessionId;
 } PEB, * PPEB;
 
+/*
+NTSTATUS	GetProcessParams(IN HANDLE hProcessId,
+	OUT	HANDLE	* PPID,
+	OUT	PWSTR	* pPath,	IN DWORD dwPathSize,
+	OUT PWSTR	* pCmdLine, IN DWORD dwCmdLineSize
+)
+{
+	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
 
+	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
+	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
+
+	NTSTATUS			status = STATUS_UNSUCCESSFUL;
+	HANDLE				hProcess = NULL;
+	OBJECT_ATTRIBUTES	oa = { 0 };
+	CLIENT_ID			cid = { 0 };
+
+	__try
+	{
+		oa.Length = sizeof(OBJECT_ATTRIBUTES);
+		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+		cid.UniqueProcess = hProcessId;
+
+#ifndef PROCESS_QUERY_INFORMATION
+#define PROCESS_QUERY_INFORMATION (0x0400)
+#endif
+		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
+		if (!NT_SUCCESS(status))	__leave;
+
+		PROCESS_BASIC_INFORMATION	info;
+		status = pZwQueryInformationProcess(hProcess, ProcessBasicInformation, &info, sizeof(info), NULL);
+		if (NT_SUCCESS(status)) {
+			*PPID = (HANDLE)info.InheritedFromUniqueProcessId;
+			if (info.PebBaseAddress) {
+				//	[TODO]	PEB를 읽는 도중에 사라지면 어쩌지?
+				//	ZwOpenProcess를 하면 ZwClose 전까지유지해주려나?
+				StringCbPrintf(pPath, dwPathSize, L"%Zw", info.PebBaseAddress->ProcessParameters->ImagePathName);
+				StringCbPrintf(pCmdLine, dwCmdLineSize, L"%Zw", info.PebBaseAddress->ProcessParameters->CommandLine);
+			}
+		}
+	}
+	__finally
+	{
+		if (hProcess)
+		{
+			ZwClose(hProcess);
+			hProcess = NULL;
+		}
+	}
+	return status;
+}
+*/
 NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID)
 {
 	if (NULL == Config())	return STATUS_UNSUCCESSFUL;

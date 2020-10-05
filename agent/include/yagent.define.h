@@ -200,6 +200,9 @@ typedef KERNEL_USER_TIMES* PKERNEL_USER_TIMES;
 
 #endif
 
+#define YFILTER_COMMAND_START	0x00000001
+#define YFILTER_COMMAND_STOP	0x00000000
+
 typedef struct YFILTER_DATA {
 	YFilter::Message::SubType	subType;
 
@@ -246,6 +249,11 @@ typedef struct YFILTER_MESSAGE {
 	YFILTER_HEADER	header;
 	YFILTER_DATA	data;
 } YFILTER_MESSAGE, *PYFILTER_MESSAGE;
+
+typedef struct YFILTER_COMMAND
+{
+	DWORD					dwCommand;
+} YFILTER_COMMAND, * PYFILTER_COMMAND;
 
 typedef struct YFILTER_REPLY
 {

@@ -9,6 +9,8 @@
 
 int		sqlite3_open_db(const char* zName, sqlite3** pDb);
 class CDB
+	:
+	virtual public	CAppLog
 {
 public:
 	CDB()	:
@@ -22,23 +24,39 @@ public:
 	//	if (pFilePath)	Open(pFilePath);
 	//}
 	~CDB() {
-		Close();
+		if( IsOpened() )
+			Close(__FUNCTION__);
 	}
-	bool	Initialize(PCWSTR pFilePath)
+	bool	Initialize(PCWSTR pFilePath, PCSTR pCause)
 	{
-		if( pFilePath )	return Open(pFilePath);
+		Log("%s pFilePath=%ws @%s", __FUNCTION__, pFilePath, pCause ? pCause : "");
+		if( pFilePath )	return Open(pFilePath, pCause);
 		return false;
 	}
-	void	Destroy()
+	void	Destroy(PCSTR pCause)
 	{
-		if( IsOpened() )	Close();
+		if( IsOpened() )	Close(__FUNCTION__);
+		Log("%s @%s", __FUNCTION__, pCause ? pCause : "");
 	}
-	void	Begin()
+	bool		Open(PCWSTR pFilePath, PCSTR pCause) 
+	{
+		return Open(__ansi(pFilePath), pCause);
+	}
+	bool		Open(PCSTR pFilePath, PCSTR pCause)
+	{
+		Log("%s %s @%s", __FUNCTION__, pFilePath, pCause);
+		if (SQLITE_OK == sqlite3_open_db(__ansi(pFilePath), &m_pDb)) {
+
+			return true;
+		}
+		return false;
+	}
+	void	Begin(PCSTR pCause)
 	{
 		if( m_pDb )
 			sqlite3_exec(m_pDb, "BEGIN;", NULL, NULL, NULL);
 	}
-	void	Commit()
+	void	Commit(PCSTR pCause)
 	{
 		if( m_pDb )
 			sqlite3_exec(m_pDb, "COMMIT;", NULL, NULL, NULL);
@@ -98,22 +116,12 @@ public:
 	bool		IsOpened() {
 		return m_pDb? true : false;
 	}
-	bool		Open(PCWSTR pFilePath) {
-		return Open(__ansi(pFilePath));
-	}
-	bool		Open(PCSTR pFilePath)
-	{
-		if (SQLITE_OK == sqlite3_open_db(__ansi(pFilePath), &m_pDb)) {
-
-			return true;
-		}
-		return false;
-	}
-	void		Close()
+	void		Close(PCSTR pCause)
 	{
 		if (m_pDb) {
 			sqlite3_close(m_pDb);
 			m_pDb	= NULL;
+			Log("%s @%s", __FUNCTION__, pCause);
 		}
 	}
 	sqlite3* Handle() {

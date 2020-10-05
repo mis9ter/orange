@@ -253,6 +253,7 @@ private:
 
 class CAgent
 	:
+	public	CDB,
 	public	CFilterCtrl,
 	public	CEventCallback,
 	public	CFilePath
@@ -260,6 +261,10 @@ class CAgent
 public:
 	CAgent();
 	virtual	~CAgent();
+
+	CDB* Db() {
+		return dynamic_cast<CDB*>(this);
+	}
 
 	bool			IsInitialized() {
 		return m_config.bInitialize;

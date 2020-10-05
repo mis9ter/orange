@@ -17,13 +17,11 @@ typedef struct YFILTERCTRL_MESSAGE
 	OVERLAPPED				ov;
 } YFILTERCTRL_MESSAGE, *PYFILTERCTRL_MESSAGE;
 #define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(YFILTER_HEADER) + sizeof(YFILTER_DATA))
-
 typedef struct YFILTERCTRL_REPLY
 {
 	FILTER_REPLY_HEADER		_header;
 	YFILTER_REPLY			data;
 } YFILTERCTRL_REPLY, * PYFILTERCTRL_REPLY;
-
 #pragma pack(pop)
 
 class CFilterCtrlImpl;
@@ -184,9 +182,6 @@ public:
 	{
 		bool	bRet	= false;
 		HRESULT	hResult	= S_FALSE;
-
-		Log("%s PPORT_INFO=%p, pPortName=%ws, dwThreadCount=%d", 
-			__FUNCTION__, p, pPortName, dwThreadCount);
 		__try
 		{
 			if( NULL == p )	__leave;
@@ -200,7 +195,6 @@ public:
 					__FUNCTION__, GetLastError());
 				__leave;
 			}
-			Log("%s connected to %ws, %p", __FUNCTION__, p->szName, p->hPort);
 			p->pClass			= this;
 			StringCbCopy(p->szName, sizeof(p->szName), pPortName);
 			p->hInit			= CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -220,6 +214,10 @@ public:
 			for (DWORD i = 0; i < p->dwThreadCount; i++)
 			{
 				p->hThreads[i]	= (HANDLE)_beginthreadex(NULL, 0, proc, p, 0, NULL);
+				if (NULL == p->hThreads[i]) {
+					Log("%s thread[%d] failed. code=%d", __FUNCTION__, i, GetLastError());
+					break;
+				}
 			}
 			SetEvent(p->hInit);
 			bRet	= true;
@@ -232,23 +230,22 @@ public:
 	}
 	void	DestroyPortInfo(PPORT_INFO p)
 	{
-		Log("%s PPORT_INFO=%p", __FUNCTION__, p);
 		if( NULL == p )	return;
-		PostQueuedCompletionStatus(p->hCompletion, 0, NULL, NULL);
 		if (p->hThreads && p->dwThreadCount)
 		{
 			for (DWORD i = 0; i < p->dwThreadCount; i++)
 			{
-				Log("%s waiting thread(%ws, %d) ..", __FUNCTION__, p->szName, i);
+				if (FALSE == PostQueuedCompletionStatus(p->hCompletion, 0, NULL, NULL)) {
+					Log("%s thread[%d] PostQueuedCompletionStatus() failed. code=%d", __FUNCTION__, i, GetLastError());
+				}
 				WaitForSingleObject(p->hThreads[i], 1000 * 3);
+				WAIT_OBJECT_0;
 				CloseHandle(p->hThreads[i]);
-				Log("%s terminated thread(%ws, %d) ..", __FUNCTION__, p->szName, i);
 			}
 			free(p->hThreads);
 		}
 		if (p->hPort && INVALID_HANDLE_VALUE != p->hPort)
 		{
-			Log("%s disconnected from %ws", __FUNCTION__, p->szName);
 			CloseHandle(p->hPort);
 		}
 		SetEvent(p->hShutdown);
@@ -260,6 +257,24 @@ public:
 		if (p->hShutdown)	CloseHandle(p->hShutdown);
 		if( p->hInit )		CloseHandle(p->hInit);
 		ZeroMemory(p, sizeof(PORT_INFO));
+	}
+	bool	SendCommand(DWORD dwCommand)
+	{
+		Log("%s %08x", __FUNCTION__, dwCommand);
+		YFILTER_COMMAND	command;
+		YFILTER_REPLY		reply;
+		DWORD			dwBytes;
+
+		command.dwCommand = dwCommand;
+		if (S_OK == FilterSendMessage(m_driver.command.hPort, &command, sizeof(command), 
+					&reply, sizeof(reply), &dwBytes)) {
+			Log("%s reply.bRet=%d, dwBytes=%d", __FUNCTION__, reply.bRet, dwBytes);
+			return true;
+		}
+		else {
+			Log("%s FilterSendMessage() failed.", __FUNCTION__);
+		}
+		return true;
 	}
 	bool	Connect()
 	{
@@ -282,7 +297,8 @@ public:
 			{
 				__leave;
 			}
-			m_driver.bConnected	= true;
+			//	
+			m_driver.bConnected = SendCommand(YFILTER_COMMAND_START);
 		}
 		__finally
 		{
@@ -300,8 +316,11 @@ public:
 	}
 	void	Disconnect()
 	{
+		bool	bConnected = m_driver.bConnected;
+		Log("%s m_driver.bConnected=%d", __FUNCTION__, bConnected);
 		if( m_driver.bConnected )
 		{
+			SendCommand(YFILTER_COMMAND_STOP);
 			DestroyPortInfo(&m_driver.command);
 			DestroyPortInfo(&m_driver.event);
 			m_driver.bConnected	= false;
@@ -330,9 +349,9 @@ private:
 		if (NULL == ptr)	return (unsigned)-1;
 		PPORT_INFO		p = (PPORT_INFO)ptr;
 
+		p->pClass->Log("%s begin", __FUNCTION__);
 		WaitForSingleObject(p->hInit, 30 * 1000);
 		bool			bLoop = true;
-		p->pClass->Log("%s begin", __FUNCTION__);
 		while (bLoop)
 		{
 			bool			bRet;
@@ -340,11 +359,17 @@ private:
 			LPOVERLAPPED	pOverlapped	= NULL;
 			ULONG_PTR		pCompletionKey;
 
-			bRet = GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
-			p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pOverlapped=%p", 
-				__FUNCTION__, bRet, dwBytes, pCompletionKey, pOverlapped);
-			if (false == bRet || NULL == pCompletionKey)	break;
-
+			__try 
+			{
+				bRet = GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
+				p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pOverlapped=%p",
+					__FUNCTION__, bRet, dwBytes, pCompletionKey, pOverlapped);
+				if (false == bRet || NULL == pCompletionKey)	break;
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER) {
+				p->pClass->Log("%s exception", __FUNCTION__);
+				break;
+			}
 		}
 		p->pClass->Log("%s end", __FUNCTION__);
 		return 0;
@@ -388,7 +413,6 @@ private:
 			dwError	= GetLastError();
 			if( (false == bRet && ERROR_INSUFFICIENT_BUFFER != dwError) || 
 				NULL == pCompletionKey )	{
-				p->pClass->Log("%s break condition", __FUNCTION__);
 				p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pMessage=%p, error code=%d",
 					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
 				break;

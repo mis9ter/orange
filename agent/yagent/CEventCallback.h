@@ -102,10 +102,10 @@ typedef struct EventCallbackItem {
 #include <map>
 typedef std::shared_ptr<EventCallbackItem>		EventCallbackItemPtr;
 typedef std::map<DWORD, EventCallbackItemPtr>	EventCallbackTable;
+typedef std::map<DWORD, UUID>					ProcMap;
 
 class CEventCallback
 	:
-	public	CDB,
 	virtual	public	CAppLog,
 	public	CProcessCallback,
 	public	CThreadCallback,
@@ -116,9 +116,10 @@ class CEventCallback
 public:
 	CEventCallback() 
 	{
+		Log(__FUNCTION__);
+
 		m_hWait			= CreateEvent(NULL, TRUE, FALSE, NULL);
 		m_dwBootId		= YAgent::GetBootId();
-		m_bDbIsOpened	= IsOpened();
 		
 		m_counter.dwProcess	= 0;
 		m_counter.dwModule	= 0;
@@ -140,10 +141,9 @@ public:
 	}
 	~CEventCallback() {
 		CloseHandle(m_hWait);
+		Log(__FUNCTION__);
 	}
-	CDB* Db() {
-		return dynamic_cast<CDB *>(this);
-	}
+	virtual	CDB* Db() = NULL;
 	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 				PWSTR pValue, DWORD dwSize) {
 		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
@@ -153,43 +153,68 @@ public:
 	}
 	bool		Initialize()
 	{	
-		if( IsOpened() ) {
+		Log("%s begin", __FUNCTION__);
+		if( Db()->IsOpened() ) {
 #if 1 == IDLE_COMMIT
-			if (IsOpened())	Begin();
+			Db()->Begin(__FUNCTION__);
 #endif
 			CProcessCallback::Create();
 			CModuleCallback::Create();
 			CThreadCallback::Create();
 
 			//	이전에 실행되어 동작중인 프로세스에 대한 정보들 수집
+			//	이 정보는 APP단에서 얻으려니 이모 저모 잘 안된다.
+			//	커널단에서 받아야 겠다.
+			//	커널 드라이버를 시작하면 이 정보부터 올라온다.
 
+			ProcMap			table;
+			/*
 			CPreProcess::Check2([&](
 				UUID	*pProcGuid, 
 				DWORD	PID, 
 				DWORD	PPID, 
-				PCWSTR	pPath
+				PCWSTR	pPath,
+				PCWSTR	pCmdLine
 			) {
-				Log("%s %6d %6d", __FUNCTION__, PID, PPID);
-				Log("  %ws", pPath);
+				Log("%6d %ws", PID, pPath);
+				table[PID]	= *pProcGuid;
 				WCHAR	szProcGuid[40] = L"";
 				UUID2String(pProcGuid, szProcGuid, sizeof(szProcGuid));
-				Log("   %ws", szProcGuid);
+				Log("ProcGuid  : %ws", szProcGuid);
+				Log("CmdLine   : %ws", pCmdLine);
+				Log("PPID      : %6d", PPID);
+				if( PPID ) {
+					auto t = table.find(PPID);
+					if( table.end() == t ) {
+						Log("PProcGuid : NOT FOUND");
+					}
+					else {
+						UUID2String(&t->second, szProcGuid, sizeof(szProcGuid));
+						Log("PProcGuid : %ws", szProcGuid);
+					}
+				}
+				else {
+					Log("PProcGuid : NULL");
+				}
+				Log("-------------------------------------------");
 			});
-
+			*/
 			return true;
 		}
 		else {
-			Log("%s IsOpened() = %d", __FUNCTION__, IsOpened());
+			Log("%s IsOpened() = %d", __FUNCTION__, Db()->IsOpened());
 		}
+		Log("%s end", __FUNCTION__);
 		return false;
 	}
 	void		Destroy() {
+		Log("%s", __FUNCTION__);
 		CProcessCallback::Destroy();
 		CModuleCallback::Destroy();
 		CThreadCallback::Destroy();
 
 #if 1 == IDLE_COMMIT
-		if (IsOpened())	Commit();
+		if (Db()->IsOpened())	Db()->Commit(__FUNCTION__);
 #endif
 	}
 	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) {
@@ -288,7 +313,6 @@ protected:
 		return m_table;
 	}
 private:
-	bool					m_bDbIsOpened;
 	DWORD					m_dwBootId;
 	EventCallbackTable		m_table;
 	CLock					m_lock;
@@ -298,11 +322,10 @@ private:
 	void					CommitAndBegin(DWORD dwTicks)
 	{
 		static	std::atomic<DWORD>	dwCount;
-
 		__function_lock(m_lock.Get());
 		Log("COMMIT-BEGIN");
-		Db()->Commit();
-		Db()->Begin();
+		Db()->Commit(__FUNCTION__);
+		Db()->Begin(__FUNCTION__);
 
 		//if( 0 == dwCount++ % 10 )
 		//	SetProcessWorkingSetSize(GetCurrentProcess(), 128 * 1024, 1024 * 1024);

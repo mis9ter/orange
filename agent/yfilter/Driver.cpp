@@ -101,6 +101,66 @@ void		DestroyFilterPort(PFLT_PORT	*ppPort, PCWSTR pName)
 		*ppPort = NULL;
 	}
 }
+
+NTSTATUS	StartDriver()
+{
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	__try
+	{
+		if (NULL == Config())	__leave;
+		if (0 == Config()->nRun) {
+			ExInterlockedExchangeUlong(&Config()->nRun, 1, &Config()->lock);
+			if (StartProcessFilter())
+			{
+				__log("process filtering ..");
+			}
+			if (StartThreadFilter()) {
+				__log("thread filtering ..");
+			}
+			if (StartModuleFilter())
+			{
+				__log("module filtering ..");
+			}
+		}
+		status = STATUS_SUCCESS;
+	}
+	__finally
+	{
+		if (NT_SUCCESS(status))
+		{
+			__dlog("SUCESS");
+		}
+		__dlog("%-20s status=%d", __FUNCTION__, status);
+	}
+	return status;
+}
+NTSTATUS	StopDriver()
+{
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	__try
+	{
+		if (Config())
+		{
+			if (1 == Config()->nRun) {
+				ExInterlockedExchangeUlong(&Config()->nRun, 0, &Config()->lock);
+				StopModuleFilter();
+				StopThreadFilter();
+				StopProcessFilter();
+			}
+		}
+		status = STATUS_SUCCESS;
+	}
+	__finally
+	{
+		if (NT_SUCCESS(status))
+		{
+			__dlog("SUCESS");
+		}
+		__dlog("%-20s status=%d", __FUNCTION__, status);
+	}
+	return status;
+}
+
 NTSTATUS
 DriverEntry (
     _In_ PDRIVER_OBJECT pDriverObject,
@@ -141,6 +201,7 @@ Return Value:
 			status = STATUS_FAILED_DRIVER_ENTRY;
 			__leave;
 		}
+		CreateProcessTable();
 		//pDriverObject->DriverUnload = LegacyDriverUnload;
 		status	= IoCreateDevice(pDriverObject, 0, &Config()->deviceName,
 			FILE_DEVICE_UNKNOWN, 0, TRUE, &Config()->pDeviceObject);
@@ -188,17 +249,6 @@ Return Value:
 		{
 			__log("FltStartFiltering() failed. status=%08x", status);
 			__leave;
-		}
-		if (StartThreadFilter()) {
-			__log("thread filtering ..");
-		}
-		if (StartModuleFilter())
-		{
-			__log("module filtering ..");
-		}
-		if (StartProcessFilter())
-		{
-			__log("process filtering ..");
 		}
 		status	= STATUS_SUCCESS;
 	}
@@ -248,9 +298,7 @@ Return Value:
 
 	if (Config())
 	{
-		StopModuleFilter();
-		StopProcessFilter();
-		StopThreadFilter();
+		StopDriver();
 		if (Config()->pDeviceObject)
 		{
 			IoDeleteSymbolicLink(&Config()->dosDeviceName);
@@ -272,8 +320,9 @@ Return Value:
 			FltUnregisterFilter(Config()->pFilter);
 			Config()->pFilter = NULL;
 		}
-		DestroyConfig();
 		MessageThreadPool()->Destroy();
+		DestroyProcessTable();
+		DestroyConfig();
 		if ((FLT_FILTER_UNLOAD_FLAGS)-1 != Flags)
 		{
 			//	Load 실패로 Unload가 수행되는 경우엔 로그 출력하지 않음. 

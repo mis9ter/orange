@@ -22,14 +22,14 @@ public:
 		GetLocalTime(&st);
 		va_list		argptr;
 		char		szBuf[4096] = "";
-		StringCbPrintfA(szBuf, sizeof(szBuf), "%02d/%02d %02d:%02d:%02d ",
-			st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+		StringCbPrintfA(szBuf, sizeof(szBuf), "%02d/%02d %02d:%02d:%02d.%03d ",
+			st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 		va_start(argptr, pFmt);
 		int		nLength = lstrlenA(szBuf);
 		::StringCbVPrintfA(szBuf + nLength, sizeof(szBuf) - nLength, pFmt, argptr);
 		va_end(argptr);
 		nLength = lstrlenA(szBuf);
-		//puts(szBuf);
+		puts(szBuf);
 		StringCbCopyA(szBuf + nLength, sizeof(szBuf) - nLength, "\n");
 		return WriteLog(szBuf, nLength + 1) ? true : false;
 	}

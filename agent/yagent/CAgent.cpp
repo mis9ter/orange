@@ -46,7 +46,7 @@ bool	CAgent::Initialize()
 				__leave;
 			}
 		}
-		if (false == CDB::Open(m_config.szEventDBPath)) {
+		if (false == CDB::Open(m_config.szEventDBPath, __FUNCTION__)) {
 			Log("%s can not open db %ws", __FUNCTION__, m_config.szEventDBPath);
 			__leave;
 		}
@@ -63,14 +63,14 @@ bool	CAgent::Initialize()
 }
 void	CAgent::Destroy()
 {
-	if (CDB::IsOpened()) {
-		CDB::Close();
-	}
 	if (m_config.bInitialize) {
 		CEventCallback::Destroy();
+		m_config.bInitialize = false;
+	}
+	if (CDB::IsOpened()) {
+		CDB::Close(__FUNCTION__);
 	}
 }
-
 bool	CAgent::Start(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 {
 	Log(__FUNCTION__);
@@ -80,7 +80,9 @@ bool	CAgent::Start(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 		m_config.pRunLoopFunc	= pCallback;
 		if (CFilterCtrl::IsInstalled())
 		{
-
+			if (CFilterCtrl::IsConnected() ) {
+				return true;
+			}
 		}
 		else
 		{
@@ -123,11 +125,11 @@ void	CAgent::Shutdown()
 	{
 		Log(__FUNCTION__);
 		SetEvent(m_config.hShutdown);
-
 		if (CFilterCtrl::IsRunning())
 		{
 			CFilterCtrl::Shutdown();
 		}
+		ResetEvent(m_config.hShutdown);
 	}
 }
 void	CAgent::RunLoop()

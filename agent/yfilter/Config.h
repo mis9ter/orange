@@ -170,7 +170,8 @@ typedef struct FLT_SERVER_PORT {
 } FLT_SERVER_PORT, *PFLT_SERVER_PORT;
 typedef struct CONFIG
 {
-	bool							bRun;
+	ULONG							nRun;
+	KSPIN_LOCK						lock;
 	size_t							dbSize;
 	bool							bInitialized;
 	PFLT_FILTER						pFilter;

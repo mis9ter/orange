@@ -91,6 +91,7 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		pConfig->version.dwOSVersionInfoSize	= sizeof(pConfig->version);
 		RtlGetVersion((RTL_OSVERSIONINFOW *)&pConfig->version);
 
+		KeInitializeSpinLock(&pConfig->lock);
 		KeInitializeSpinLock(&pConfig->client.command.lock);
 		KeInitializeSpinLock(&pConfig->client.event.lock);
 		GetSystemRootPath(&pConfig->systemRootPath);

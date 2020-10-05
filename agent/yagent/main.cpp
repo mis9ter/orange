@@ -70,6 +70,12 @@ void    Timer(
      ShowCounter(pAgent, hWnd);
 }
 
+
+void    RefreshButton(CAgent* pAgent, HWND hWnd) {
+    EnableWindow(GetDlgItem(hWnd, IDC_BUTTON_START), pAgent->IsRunning() ? FALSE : TRUE);
+    EnableWindow(GetDlgItem(hWnd, IDC_BUTTON_SHUTDOWN), pAgent->IsRunning() ? TRUE : FALSE);
+};
+
 #ifdef _CONSOLE
 int     main()
 #else 
@@ -82,6 +88,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
    CDialog      dialog;
 
    //Timer(NULL, 0, NULL, 0);
+
    dialog.SetMessageCallbackPtr(&agent);
    dialog.AddMessageCallback(WM_INITDIALOG, [](
        IN	HWND	hWnd,
@@ -91,10 +98,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
        IN	PVOID	ptr
        ) {
        CAgent* pAgent = (CAgent*)ptr;
-
-       pAgent->Initialize();
        ShowCounter(pAgent, hWnd);
-
+       RefreshButton(pAgent, hWnd);
        WCHAR    szTime[40];
        SetDlgItemText(hWnd, IDC_STATIC_STARTTIME, CTime::GetLocalTimeString(szTime, sizeof(szTime)));
    });
@@ -127,8 +132,14 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
        ) {
        CAgent* pAgent = (CAgent*)ptr;
 
-       if( pAgent->IsInitialized() )
-            pAgent->Start(pAgent, AgentRunLoop);
+       if (pAgent->IsInitialized()) {
+
+       }
+       else {
+           pAgent->Initialize();
+           pAgent->Start(pAgent, AgentRunLoop);
+           RefreshButton(pAgent, hWnd);
+       }
    });
    dialog.AddMessageCallback(IDC_BUTTON_SHUTDOWN, [](
        IN	HWND	hWnd,
@@ -140,7 +151,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
        CAgent* pAgent = (CAgent*)ptr;
        pAgent->Shutdown();
        pAgent->Destroy();
-       PostQuitMessage(0);
+       RefreshButton(pAgent, hWnd);
+      // PostQuitMessage(0);
    });
 
    if (dialog.Create(IDD_CONTROL_DIALOG, AGENT_SERVICE_NAME))
