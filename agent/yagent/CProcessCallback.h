@@ -6,18 +6,22 @@
 
 class CProcessCallback
 	:
+	protected		IEventCallback,
 	public virtual	CAppLog
 {
 public:
 	CProcessCallback() {
-
+		m_name = EVENT_CALLBACK_NAME;
 	}
 	~CProcessCallback() {
 
 	}
 	virtual	CDB *	Db()	= NULL;
 	virtual	PCWSTR	UUID2String(IN UUID * p, PWSTR pValue, DWORD dwSize)	= NULL;
-	void					Create()
+	PCSTR			Name() {
+		return m_name.c_str();
+	}
+	void			Create()
 	{
 		const char	*pIsExisting	= "select count(ProcGuid) from process where ProcGuid=?";
 		const char	*pInsert		= "insert into process"	\
@@ -181,6 +185,7 @@ protected:
 	}
 
 private:
+	std::string			m_name;
 	struct {
 		sqlite3_stmt	*pInsert;
 		sqlite3_stmt	*pUpdate;

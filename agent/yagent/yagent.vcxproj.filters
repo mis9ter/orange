@@ -81,6 +81,9 @@
     <ClInclude Include="MD5\MD5.h">
       <Filter>Library\MD5</Filter>
     </ClInclude>
+    <ClInclude Include="CBootCallback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">

@@ -265,7 +265,6 @@ public:
 	CDB* Db() {
 		return dynamic_cast<CDB*>(this);
 	}
-
 	bool			IsInitialized() {
 		return m_config.bInitialize;
 	}

@@ -62,10 +62,21 @@ public:
 private:
 
 };
+
+#define EVENT_CALLBACK_NAME			__FILE__
+#define EVENT_CALLBACK_NAME_SIZE	128
+
+interface   IEventCallback
+{
+	virtual	void	Create()	= NULL;
+	virtual	void	Destroy()	= NULL;
+	virtual	PCSTR	Name()		= NULL;
+};
 #include "CProcessCallback.h"
 #include "CThreadCallback.h"
 #include "CModuleCallback.h"
 #include "CPreProcess.h"
+#include "CBootCallback.h"
 
 #define		EVENT_DB_NAME	L"event.db"
 
@@ -104,13 +115,16 @@ typedef std::shared_ptr<EventCallbackItem>		EventCallbackItemPtr;
 typedef std::map<DWORD, EventCallbackItemPtr>	EventCallbackTable;
 typedef std::map<DWORD, UUID>					ProcMap;
 
+typedef std::map<std::string, IEventCallback*>	EventCallbackMap;
+
 class CEventCallback
 	:
 	virtual	public	CAppLog,
 	public	CProcessCallback,
 	public	CThreadCallback,
 	public	CModuleCallback,
-	public	CPreProcess
+	public	CPreProcess,
+	public	CBootCallback
 {
 
 public:
@@ -124,6 +138,13 @@ public:
 		m_counter.dwProcess	= 0;
 		m_counter.dwModule	= 0;
 		m_counter.dwThread	= 0;
+
+		RegisterEventCallback(dynamic_cast<IEventCallback *>(dynamic_cast<CProcessCallback*>(this)));
+		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CModuleCallback*>(this)));
+		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CThreadCallback*>(this)));
+		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CBootCallback*>(this)));
+		
+		
 		/*
 		AddCallback(
 			YFilter::Message::Mode::Event, 
@@ -143,7 +164,11 @@ public:
 		CloseHandle(m_hWait);
 		Log(__FUNCTION__);
 	}
-	virtual	CDB* Db() = NULL;
+	void	RegisterEventCallback(IN IEventCallback* pCallback) {
+		Log("%s %s", __FUNCTION__, pCallback->Name());
+		m_events[pCallback->Name()] = pCallback;
+	}
+	virtual	CDB*	Db() = NULL;
 	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 				PWSTR pValue, DWORD dwSize) {
 		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
@@ -151,17 +176,17 @@ public:
 	bool	GetProcess(PCWSTR pProcGuid, PWSTR pValue, IN DWORD dwSize) {
 		return CProcessCallback::GetProcess(pProcGuid, pValue, dwSize);
 	}
-	bool		Initialize()
+	bool		CreateCallback()
 	{	
 		Log("%s begin", __FUNCTION__);
 		if( Db()->IsOpened() ) {
 #if 1 == IDLE_COMMIT
 			Db()->Begin(__FUNCTION__);
 #endif
-			CProcessCallback::Create();
-			CModuleCallback::Create();
-			CThreadCallback::Create();
 
+			for (auto t : m_events) {
+				t.second->Create();
+			}
 			//	이전에 실행되어 동작중인 프로세스에 대한 정보들 수집
 			//	이 정보는 APP단에서 얻으려니 이모 저모 잘 안된다.
 			//	커널단에서 받아야 겠다.
@@ -207,12 +232,12 @@ public:
 		Log("%s end", __FUNCTION__);
 		return false;
 	}
-	void		Destroy() {
+	void		DestroyCallback() {
 		Log("%s", __FUNCTION__);
-		CProcessCallback::Destroy();
-		CModuleCallback::Destroy();
-		CThreadCallback::Destroy();
-
+		for (auto t : m_events) {
+			Log("%s %s", __FUNCTION__, t.second->Name());
+			//t.second->Destroy();
+		}
 #if 1 == IDLE_COMMIT
 		if (Db()->IsOpened())	Db()->Commit(__FUNCTION__);
 #endif
@@ -238,7 +263,6 @@ public:
 
 	} m_counter;
 protected:
-
 	void	Wait(IN DWORD dwMilliSeconds)
 	{
 		WaitForSingleObject(m_hWait, dwMilliSeconds);
@@ -317,6 +341,7 @@ private:
 	EventCallbackTable		m_table;
 	CLock					m_lock;
 	HANDLE					m_hWait;
+	EventCallbackMap		m_events;
 
 
 	void					CommitAndBegin(DWORD dwTicks)

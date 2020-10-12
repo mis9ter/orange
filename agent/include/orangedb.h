@@ -78,7 +78,8 @@ public:
 		sqlite3_prepare_v2(m_pDb, query, -1, &stmt, NULL);
 		if (NULL == stmt)
 		{
-			printf("%s	%s\n%s\n", __FUNCTION__, query, sqlite3_errmsg(m_pDb));
+			printf("%s	%s\n", __FUNCTION__, query);
+			printf("%s	%s\n", __FUNCTION__, sqlite3_errmsg(m_pDb));
 		}
 		return stmt;
 	}

@@ -80,6 +80,7 @@ namespace YFilter
 			Process,
 			Thread,
 			Module,
+			Boot,
 			Count
 		};
 		enum SubType {

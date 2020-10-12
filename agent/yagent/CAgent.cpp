@@ -50,7 +50,7 @@ bool	CAgent::Initialize()
 			Log("%s can not open db %ws", __FUNCTION__, m_config.szEventDBPath);
 			__leave;
 		}
-		if( false == CEventCallback::Initialize() ) {
+		if( false == CEventCallback::CreateCallback() ) {
 			Log("%s CEventCallback::Initialize() failed.", __FUNCTION__);
 			__leave;
 		}
@@ -64,7 +64,7 @@ bool	CAgent::Initialize()
 void	CAgent::Destroy()
 {
 	if (m_config.bInitialize) {
-		CEventCallback::Destroy();
+		CEventCallback::DestroyCallback();
 		m_config.bInitialize = false;
 	}
 	if (CDB::IsOpened()) {

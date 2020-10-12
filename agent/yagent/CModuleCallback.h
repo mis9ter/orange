@@ -6,21 +6,24 @@
 
 class CModuleCallback
 	:
+	protected		IEventCallback,
 	public virtual	CAppLog
 {
 public:
 	CModuleCallback() {
 		ZeroMemory(&m_stmt, sizeof(m_stmt));
-
+		m_name = EVENT_CALLBACK_NAME;
 	}
 	~CModuleCallback() {
 
 	}
-	virtual	CDB* Db() = NULL;
+	virtual	CDB*		Db() = NULL;
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
 	virtual	bool		GetProcess(PCWSTR pProcGuid, PWSTR pValue, IN DWORD dwSize)	= NULL;
-
-	void					Create()
+	PCSTR				Name() {
+		return m_name.c_str();
+	}
+	void				Create()
 	{
 		const char* pInsert = "insert into module"	\
 			"("\
@@ -31,7 +34,7 @@ public:
 			",?,?)";
 		const char* pIsExisting = "select count(ProcGuid) from module where ProcGuid=? and FilePath=?";
 		const char* pUpdate = "update module "	\
-			"set LoadCount=LoadCount+1, LastTime=CURRENT_TIMESTAMP, BaseAddress=? "\
+			"set LoadCount=LoadCount+1, LastTime=datetime('now','localtime'), BaseAddress=? "\
 			"where ProcGuid=? and FilePath=?";
 		const char*	pSelect	= "select p.ProcGuid,p.ProcPath, m.FilePath "\
 			"from process p, module m "\
@@ -51,7 +54,7 @@ public:
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
 	}
-	void					Destroy()
+	void				Destroy()
 	{
 		if (Db()->IsOpened()) {
 			if (m_stmt.pInsert)		Db()->Free(m_stmt.pInsert);
@@ -61,7 +64,7 @@ public:
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
 	}
-	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress, PWSTR pValue, DWORD dwSize)
+	bool				GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress, PWSTR pValue, DWORD dwSize)
 	{
 		bool	bRet = false;
 		sqlite3_stmt* pStmt = m_stmt.pSelect;
@@ -126,6 +129,7 @@ protected:
 		return true;
 	}
 private:
+	std::string		m_name;
 	struct {
 		sqlite3_stmt* pInsert;
 		sqlite3_stmt* pUpdate;

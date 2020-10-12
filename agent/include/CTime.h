@@ -201,6 +201,24 @@ public:
 		//Convert ticks since 1/1/1970 into seconds
 		return (li.QuadPart - UNIX_TIME_START) / TICKS_PER_SECOND;
 	}
+	static	INT64	GetBootTimestamp()
+	{
+		return GetUnixTimestamp() - GetTickCount64();
+	}
+	static	void	GetBootTime(OUT SYSTEMTIME * p)
+	{
+		GetBootLocalTime(p);
+	}
+	static	void	GetBootSystemTime(OUT SYSTEMTIME * p)
+	{
+		DWORD64		dwTimestamp = GetUnixTimestamp() - ::GetTickCount64();
+		UnixTimeStampToSystemTime(dwTimestamp, p);
+	}
+	static	void	GetBootLocalTime(OUT SYSTEMTIME * p)
+	{
+		DWORD64		dwTimestamp = GetUnixTimestamp() - ::GetTickCount64();
+		UnixTimeStampToLocalTime(dwTimestamp, p);
+	}
 private:
 
 };

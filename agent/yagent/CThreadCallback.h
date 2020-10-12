@@ -41,22 +41,26 @@ inline	BOOL GetModule(__in DWORD dwProcId,
 
 class CThreadCallback
 	:
+	protected		IEventCallback,
 	public virtual	CAppLog
 {
 public:
 	CThreadCallback()
 	{
 		ZeroMemory(&m_stmt, sizeof(m_stmt));
+		m_name = EVENT_CALLBACK_NAME;
 	}
 	~CThreadCallback()
 	{
 
 	}
-	virtual	CDB* Db() = NULL;
+	virtual	CDB*		Db() = NULL;
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
 	virtual	bool		GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 						PWSTR pValue, DWORD dwSize)	= NULL;
-
+	PCSTR				Name() {
+		return m_name.c_str();
+	}
 protected:
 	void		Create()
 	{
@@ -176,6 +180,7 @@ protected:
 		return true;
 	}
 private:
+	std::string		m_name;
 	struct {
 		sqlite3_stmt* pInsert;
 		sqlite3_stmt* pUpdate;
