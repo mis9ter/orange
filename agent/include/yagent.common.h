@@ -5,9 +5,12 @@
 #include "CAppRegistry.h"
 #include "CTime.h"
 
-#define LBUFSIZE	4096
-#define MBUFSIZE	1024
-#define SBUFSIZE	128
+#ifndef LBUFSIZE
+#define	LBUFSIZE	(4096)
+#define	MBUFSIZE	(1024)
+#define	SBUFSIZE	(256)
+#define TBUFSIZE	(64)
+#endif
 
 #define PRECOMPILED_HEADER	"pch.h"
 #define YAGENT_COMMON_BEGIN	namespace YAgent {

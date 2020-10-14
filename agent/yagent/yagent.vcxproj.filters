@@ -22,6 +22,9 @@
     <Filter Include="Library\MD5">
       <UniqueIdentifier>{cb84917a-6ff2-4441-8ae3-2242e319f00d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="module">
+      <UniqueIdentifier>{43621fa9-98a0-4013-afd4-30cbfab4590f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -84,6 +87,15 @@
     <ClInclude Include="CBootCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\module\IObject.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\module\CService.h">
+      <Filter>module</Filter>
+    </ClInclude>
+    <ClInclude Include="..\module\IService.h">
+      <Filter>module</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">
@@ -110,6 +122,15 @@
     </ClCompile>
     <ClCompile Include="MD5\MD5C.cpp">
       <Filter>Library\MD5</Filter>
+    </ClCompile>
+    <ClCompile Include="..\module\CService.cpp">
+      <Filter>module</Filter>
+    </ClCompile>
+    <ClCompile Include="Dialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Console.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

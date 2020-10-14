@@ -1,11 +1,10 @@
 #pragma once
 #include "DbgHelp.h"
+#include "yagent.common.h"
 
-#ifndef SBUFSIZE
-#define	SBUFSIZE	128
-#endif
 #define	MAXIMUM_DUMP_COUNT	5
-
+#define DUMP_PATH			L"dump"
+#define DUMP_EXT			L"dmp"
 typedef BOOL(WINAPI* PMiniDumpWriteDump)
 (
 	HANDLE hProcess,
@@ -29,9 +28,9 @@ public:
 
 	}
 
-	static	LPCTSTR		GetDumpPath(IN LPTSTR pPath, IN DWORD dwSize, IN LPTSTR pExt)
+	static	LPCWSTR		GetDumpPath(IN LPTSTR pPath, IN DWORD dwSize, IN LPCWSTR pExt)
 	{
-		TCHAR	szName[SBUFSIZE] = _T("");
+		TCHAR	szName[SBUFSIZE] = L"";
 
 		SYSTEMTIME		st;
 		static DWORD	dwCount;
@@ -39,7 +38,7 @@ public:
 
 		::GetLocalTime(&st);
 		YAgent::GetModulePath(szBasePath, sizeof(szBasePath));
-		::StringCbCat(szBasePath, sizeof(szBasePath), _T("\\DUMP"));
+		::StringCbCat(szBasePath, sizeof(szBasePath), DUMP_PATH);
 		if (!YAgent::IsDirectory(szBasePath))
 		{
 			YAgent::MakeDirectory(szBasePath);
@@ -66,8 +65,8 @@ public:
 
 		for (unsigned i = 0; i < MAXIMUM_DUMP_COUNT; i++)
 		{
-			::StringCbPrintf(szName, sizeof(szName), _T("\\%s(%d).%s"), pFileName, i, pExt);
-			::StringCbPrintf(szDumpPath, sizeof(szDumpPath), _T("%s%s"), szBasePath, szName);
+			::StringCbPrintf(szName, sizeof(szName), L"\\%s(%d).%s", pFileName, i, pExt);
+			::StringCbPrintf(szDumpPath, sizeof(szDumpPath), L"%s%s", szBasePath, szName);
 			if (YAgent::IsFileExist(szDumpPath))
 			{
 				//::StringCbPrintf(szName, sizeof(szName), _T("\\%s(%d).%s"), pFileName, dwCount, pExt);
@@ -86,7 +85,7 @@ public:
 #endif
 
 		YAgent::GetModulePath(pPath, dwSize);
-		::StringCbCat(pPath, dwSize, _T("\\DUMP"));
+		::StringCbCat(pPath, dwSize, DUMP_PATH);
 		if (!YAgent::IsDirectory(pPath))
 		{
 			YAgent::MakeDirectory(pPath);
@@ -99,37 +98,30 @@ public:
 	{
 		TCHAR	szPath[MBUFSIZE] = _T("");
 
-		GetDumpPath(szPath, sizeof(szPath), (LPTSTR)_T("dmp"));
+		GetDumpPath(szPath, sizeof(szPath), (LPTSTR)DUMP_EXT);
 		//xcommon::_nlogA(_T("exception"), __line);
 		//xcommon::_nlogA(_T("exception"), "exception - %s", pCause);
 		Dump(pCause, dwLine, szPath, p);
 
 		return EXCEPTION_EXECUTE_HANDLER;
 	}
-
 	static	LONG WINAPI GlobalFilter(struct _EXCEPTION_POINTERS* p)
 	{
 		return Handler(__FUNCTION__, __LINE__, p);
 	}
-
 	static	bool	Save(IN LPCSTR pCause, IN char* p, IN DWORD dwSize)
 	{
 		TCHAR	szPath[MBUFSIZE] = _T("");
 
 		if (p && dwSize)
 		{
-			GetDumpPath(szPath, sizeof(szPath), (LPTSTR)_T("packet"));
-			//xcommon::_nlogA(_T("exception"), "packet(%s) dumping at [%S]", pCause, szPath);
-			//xcommon::SetFileContent(szPath, (char*)p, dwSize);
+			GetDumpPath(szPath, sizeof(szPath), DUMP_EXT);
 		}
 		else
 		{
-			//xcommon::_nlog(_T("exception"), _T("cause:%s"), pCause);
 		}
-
 		return true;
 	}
-
 	static	bool	Dump(IN LPCSTR pFile, IN DWORD dwLine, IN LPCTSTR lpPath, IN struct _EXCEPTION_POINTERS* p,
 		bool bExitProcess = true, IN int nExitCode = 0)
 	{
@@ -139,25 +131,17 @@ public:
 
 		__try
 		{
-			//xcommon::_nlog(_T("exception"), _T("%S(%d) at [%s]"), pFile, dwLine, lpPath);
 			if (NULL == hDll)	__leave;
-
 			PMiniDumpWriteDump pDump = (PMiniDumpWriteDump)::GetProcAddress(hDll, "MiniDumpWriteDump");
-
 			if (NULL == pDump)	__leave;
-
 			hFile = ::CreateFile(lpPath, GENERIC_WRITE, FILE_SHARE_WRITE, NULL,
 				CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
 			if (INVALID_HANDLE_VALUE == hFile)	__leave;
 
-
 			_MINIDUMP_EXCEPTION_INFORMATION   ExInfo;
-
 			ExInfo.ThreadId = ::GetCurrentThreadId();
 			ExInfo.ExceptionPointers = p;       // Exception 정보 설정
 			ExInfo.ClientPointers = NULL;
-
 			if (pDump(::GetCurrentProcess(), ::GetCurrentProcessId(), hFile, MiniDumpWithFullMemory, &ExInfo, NULL, NULL))
 			{
 				bRet = true;
@@ -172,11 +156,9 @@ public:
 
 			if (hDll)	FreeLibrary(hDll);
 		}
-
 		if (bExitProcess)
 			::ExitProcess(nExitCode);
 		return bRet;
 	}
 
 };
-
