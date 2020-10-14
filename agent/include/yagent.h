@@ -6,6 +6,7 @@
 
 #include "yagent.define.h"
 #include "yagent.common.h"
+#include "yagent.string.h"
 #include "CAppLog.h"
 #include "CDialog.h"
 #include "CMemory.h"

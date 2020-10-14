@@ -1,7 +1,6 @@
 ﻿#pragma once
-#include "yagent.define.h"
+#include "yagent.h"
 #include "IModule.h"
-#include "CAppLog.h"
 #include <functional>
 
 //typedef	std::function<bool (PVOID pCallbackPtr, int nType, int nSubType, PVOID pData, size_t nSize)>	EventCallbackProc;

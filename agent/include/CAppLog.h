@@ -1,12 +1,25 @@
 ﻿#pragma once
-#include "yagent.h"
+#pragma warning(disable:4819)
+#include "spdlog/spdlog.h"
+#include "spdlog/cfg/env.h" // for loading levels from the environment variable
+#include "spdlog/sinks/basic_file_sink.h"
 
 class CAppLog
 {
 public:
-	CAppLog(IN PCWSTR pFilePath = AGENT_LOG_NAME)
+	enum LogLevel
 	{
-		MakeLogPath(pFilePath);
+		debug,
+		info,
+		warn,
+		error,
+		critical,
+	};
+
+	CAppLog(IN PCSTR pFilePath = AGENT_LOG_NAME)
+	{
+		//MakeLogPath(pFilePath);
+		m_logger = spdlog::basic_logger_mt("basic", pFilePath);
 	}
 	~CAppLog()
 	{
@@ -35,6 +48,8 @@ public:
 	}
 
 private:
+	std::shared_ptr<spdlog::logger>	m_logger;
+
 	HANDLE		m_hFile;
 	WCHAR		m_szLogPath[AGENT_PATH_SIZE];
 	void		MakeLogPath(PCWSTR pFilePath)

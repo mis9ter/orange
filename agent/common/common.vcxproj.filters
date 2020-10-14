@@ -80,5 +80,11 @@
     <ClCompile Include="GetRegistryValues.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="GetCurrentSessionId.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="String.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

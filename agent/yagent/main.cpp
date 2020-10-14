@@ -20,6 +20,7 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 void    RunInDialog(CAgent * pAgent);
 void    RunInConsole(CAgent * pAgent);
+void    RunInService(CAgent * pAgent);
 
 #ifdef _CONSOLE
 int     main()
@@ -29,7 +30,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
 {
    CAgent       agent;
    char         szCmd[100]  = "";
-   RunInDialog(&agent);
+   RunInService(&agent);
    return 0;
 }
 /*

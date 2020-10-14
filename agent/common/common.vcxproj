@@ -186,6 +186,7 @@ copy /v /y "$(IntDir)$(ProjectName).pdb" "..\binary\lib
     <ClCompile Include="common.cpp" />
     <ClCompile Include="CompareString.cpp" />
     <ClCompile Include="CreateDirectory.cpp" />
+    <ClCompile Include="GetCurrentSessionId.cpp" />
     <ClCompile Include="GetRegistryValues.cpp" />
     <ClCompile Include="GetFileExt.cpp" />
     <ClCompile Include="GetFileSize.cpp" />
@@ -200,6 +201,7 @@ copy /v /y "$(IntDir)$(ProjectName).pdb" "..\binary\lib
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="ReplaceString.cpp" />
+    <ClCompile Include="String.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -16,6 +16,41 @@
 #define	__mstrstr(a,b)		_mbsstr((const unsigned char*)(a? a:""), (const unsigned char*)(b? b:""))
 #define _t(p)				_T(p)
 
+class CBuffer
+{
+public:
+	CBuffer(IN DWORD dwSize = STRING_BUFFER_SIZE)
+		:
+		m_pBuf(NULL),
+		m_dwSize(0)
+	{
+		try
+		{
+			m_pBuf		= new char[dwSize];
+			m_dwSize = dwSize;
+		}
+		catch (std::exception & e)
+		{
+			(e.what());
+		}
+	}
+	~CBuffer()
+	{
+		if (m_pBuf)	delete m_pBuf;
+	}
+	void *		Data()
+	{
+		return  m_pBuf;
+	}
+	DWORD		Size()
+	{
+		return m_dwSize;
+	}
+private:
+	void		*m_pBuf;
+	DWORD		m_dwSize;
+};
+
 class CANSI
 {
 public:

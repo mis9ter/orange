@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#pragma warning(disable:4819)
+
 #include <Windows.h>
 #include <functional>
 #include <thread>

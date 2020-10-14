@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "CAppLog.h"
+#include "yagent.h"
 #include <atlstr.h>
 
 class CAppRegistry

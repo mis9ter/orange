@@ -5,14 +5,13 @@
 typedef GUID UUID;
 #endif UUID
 
-
-#define AGENT_SERVICE_NAME		L"xagent"
+#define AGENT_SERVICE_NAME		L"orange.app"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
-#define AGENT_LOG_NAME			L"orange.log"
+#define AGENT_LOG_NAME			"orange.log"
 #define	AGENT_PATH_SIZE			1024
 #define AGENT_NAME_SIZE			64
-#define DRIVER_SERVICE_NAME		L"orange"
+#define DRIVER_SERVICE_NAME		L"orange.driver"
 #define DRIVER_FILE_NAME		L"orange.sys"
 #define DRIVER_COMMAND_PORT		L"\\orange_command"
 #define DRIVER_EVENT_PORT		L"\\orange_event"
@@ -20,7 +19,7 @@ typedef GUID UUID;
 #define DRIVER_INSTANCE_NAME	L"orange filter"
 #define DRIVER_ALTITUDE			(385200)			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
 #define DRIVER_STRING_ALTITUDE	L"385200"			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
-#define DRIVER_MAX_MESSAGE_SIZE			4096
+#define DRIVER_MAX_MESSAGE_SIZE	4096
 
 #define DB_EVENT_DB				L"event.db"
 

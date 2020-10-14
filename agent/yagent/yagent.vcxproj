@@ -134,6 +134,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -156,7 +157,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include</AdditionalIncludeDirectories>
       <ExceptionHandling>Sync</ExceptionHandling>
     </ClCompile>
     <Link>
@@ -213,6 +214,7 @@ copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Misc.cpp" />
+    <ClCompile Include="Service.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc" />
@@ -224,6 +226,9 @@ copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
   <ItemGroup>
     <None Include="..\binary\driver\x64\orange.sys" />
     <None Include="db\event.odb" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="opensource.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -2,8 +2,11 @@
 #include <strsafe.h>
 #include <algorithm>
 #include <memory>
+#include <string>
 #include "CAppRegistry.h"
 #include "CTime.h"
+
+#define	__logf(...)
 
 #ifndef LBUFSIZE
 #define	LBUFSIZE	(4096)
@@ -15,6 +18,15 @@
 #define PRECOMPILED_HEADER	"pch.h"
 #define YAGENT_COMMON_BEGIN	namespace YAgent {
 #define YAGENT_COMMON_END	};
+
+
+#define	__ansi(str)			CANSI(str).Get()
+#define __wide(str)			CWIDE(str).Get()
+#define __utf8(str)			CUTF8(str).Get()
+#define __utf16(str)		CUTF16(str).Get()
+#define	__mstricmp(a,b)		_mbsicmp((const unsigned char*)(a? a:""), (const unsigned char*)(b? b:""))
+#define	__mstrstr(a,b)		_mbsstr((const unsigned char*)(a? a:""), (const unsigned char*)(b? b:""))
+
 
 typedef	BOOL(WINAPI* PInitializeCriticalSectionEx)
 (
@@ -101,7 +113,15 @@ private:
 #define	__function_lock(lock)	CFunctionLock(lock, __FUNCTION__)
 #endif
 
+
+
 namespace YAgent {
+	LPSTR		WideToAnsiString(LPCWSTR pSrc);
+	LPTSTR		AnsiToWide(LPCSTR szSrc, UINT uCodePage = CP_ACP);
+	LPSTR		WideToAnsi(LPCWSTR szSrcWStr, UINT uCodePage = CP_ACP);
+	void		FreeString(LPVOID szStrBuf);
+
+	DWORD		GetCurrentSessionId();
 	DWORD		GetBootId();
 	PCWSTR		GetMachineGuid(IN PWSTR pValue, IN DWORD dwSize);
 	BOOL		CreateDirectory(LPCTSTR lpPath);
@@ -114,8 +134,8 @@ namespace YAgent {
 	bool		GetModulePath(OUT LPTSTR szPath, IN DWORD dwSize);
 	bool		GetInstancePath(IN HINSTANCE hInstance, OUT LPTSTR szPath, IN DWORD dwSize);
 	bool		GetLinkPath(IN LPCTSTR pLinkFile,
-					OUT LPTSTR pLinkPath, IN DWORD dwLinkPathSize,
-					OUT WIN32_FIND_DATA* pFd);
+		OUT LPTSTR pLinkPath, IN DWORD dwLinkPathSize,
+		OUT WIN32_FIND_DATA* pFd);
 	bool		GetLinkInfo
 	(
 		IN	LPCTSTR		pLinkFile,
@@ -141,5 +161,5 @@ namespace YAgent {
 	DWORD		GetFileSize(IN LPCTSTR lpPath, OUT bool* bExist);
 
 	LPTSTR		ReplaceString(IN LPTSTR lpSrc, IN DWORD dwSrcSize,
-					IN LPCTSTR lpKey, IN LPCTSTR lpRep);
+		IN LPCTSTR lpKey, IN LPCTSTR lpRep);
 };
