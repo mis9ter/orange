@@ -30,6 +30,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
 {
    CAgent       agent;
    char         szCmd[100]  = "";
+
    RunInService(&agent);
    return 0;
 }

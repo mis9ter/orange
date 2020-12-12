@@ -74,6 +74,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetName>orangedb</TargetName>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
@@ -83,6 +85,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
+    <TargetName>orangedb</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>

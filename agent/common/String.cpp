@@ -134,7 +134,7 @@ LPSTR	WideToAnsi(LPCWSTR szSrcWStr, UINT uCodePage)
 		if(0 == WideCharToMultiByte(uCodePage, 0, szSrcWStr, -1,
 			pszDestStr, nDestSize, NULL, NULL))
 		{
-			_nlogA(_T("xcommon"), "WideCharToMultiByte() failed. code = %d", ::GetLastError());
+			//_nlogA(_T("xcommon"), "WideCharToMultiByte() failed. code = %d", ::GetLastError());
 			delete pszDestStr;
 			pszDestStr = NULL;
 		}

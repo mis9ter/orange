@@ -96,6 +96,21 @@
     <ClInclude Include="..\module\IService.h">
       <Filter>module</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\CAppLog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\INotifyCenter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\CNotifyCenter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\CIpc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IIPc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">
@@ -133,6 +148,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Service.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="IPC.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

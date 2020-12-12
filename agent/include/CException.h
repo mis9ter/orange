@@ -3,7 +3,7 @@
 #include "yagent.common.h"
 
 #define	MAXIMUM_DUMP_COUNT	5
-#define DUMP_PATH			L"dump"
+#define DUMP_PATH			L"\\dump"
 #define DUMP_EXT			L"dmp"
 typedef BOOL(WINAPI* PMiniDumpWriteDump)
 (

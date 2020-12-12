@@ -46,6 +46,7 @@ class CFilterCtrl
 public:
 	CFilterCtrl(IN LPVOID p1, IN LPVOID p2)
 		:
+		CAppLog(L"CFilterCtrl.log"),
 		m_pInstance(NULL)
 	{
 		Log(__FUNCTION__);

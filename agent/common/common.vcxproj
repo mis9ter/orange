@@ -73,8 +73,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <TargetName>$(ProjectName)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -85,8 +85,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <TargetName>$(ProjectName)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -102,7 +102,7 @@
       <AdditionalIncludeDirectories>..\include</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -111,10 +111,13 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib64
-copy /v /y "$(IntDir)$(TargetName).pdb" "..\binary\lib64
-</Command>
+      <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
+copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
     </PostBuildEvent>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -157,7 +160,7 @@ copy /v /y "$(IntDir)$(TargetName).pdb" "..\binary\lib64
       <AdditionalIncludeDirectories>..\include</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -166,10 +169,13 @@ copy /v /y "$(IntDir)$(TargetName).pdb" "..\binary\lib64
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib
-copy /v /y "$(IntDir)$(ProjectName).pdb" "..\binary\lib
-</Command>
+      <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
+copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
     </PostBuildEvent>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\include\CDialog.h" />

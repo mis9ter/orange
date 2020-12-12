@@ -1,29 +1,17 @@
 ﻿#pragma once
-#pragma warning(disable:4819)
-#include "spdlog/spdlog.h"
-#include "spdlog/cfg/env.h" // for loading levels from the environment variable
-#include "spdlog/sinks/basic_file_sink.h"
+#include "yagent.h"
 
 class CAppLog
 {
 public:
-	enum LogLevel
+	CAppLog(IN PCWSTR pFilePath = AGENT_DEFAULT_LOG_NAME)
 	{
-		debug,
-		info,
-		warn,
-		error,
-		critical,
-	};
-
-	CAppLog(IN PCSTR pFilePath = AGENT_LOG_NAME)
-	{
-		//MakeLogPath(pFilePath);
-		m_logger = spdlog::basic_logger_mt("basic", pFilePath);
+		InitializeCriticalSection(&m_lock);
+		MakeLogPath(pFilePath);
 	}
 	~CAppLog()
 	{
-
+		DeleteCriticalSection(&m_lock);
 	}
 	bool	Log(IN const char *pFmt, ...)
 	{
@@ -44,12 +32,12 @@ public:
 		nLength = lstrlenA(szBuf);
 		puts(szBuf);
 		StringCbCopyA(szBuf + nLength, sizeof(szBuf) - nLength, "\n");
-		return WriteLog(szBuf, nLength + 1) ? true : false;
+		bool	bRet	= WriteLog(szBuf, nLength + 1) ? true : false;
+		return bRet;
 	}
 
 private:
-	std::shared_ptr<spdlog::logger>	m_logger;
-
+	CRITICAL_SECTION	m_lock;
 	HANDLE		m_hFile;
 	WCHAR		m_szLogPath[AGENT_PATH_SIZE];
 	void		MakeLogPath(PCWSTR pFilePath)
@@ -68,7 +56,7 @@ private:
 		HANDLE		hFile;
 		DWORD		dwBytes;
 
-		hFile = ::CreateFile(m_szLogPath, FILE_APPEND_DATA | SYNCHRONIZE, FILE_SHARE_READ, NULL, OPEN_ALWAYS,
+		hFile = ::CreateFile(m_szLogPath, FILE_APPEND_DATA | SYNCHRONIZE, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS,
 			FILE_ATTRIBUTE_NORMAL, NULL);
 		if (INVALID_HANDLE_VALUE == hFile)
 		{

@@ -47,6 +47,7 @@
     <Platform Condition="'$(Platform)' == ''">Win32</Platform>
     <RootNamespace>yfilterctrl</RootNamespace>
     <DriverType>KMDF</DriverType>
+    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -97,12 +98,13 @@
     <IntDir>$(SolutionDir)$(ConfigurationName)\TEMP\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -115,7 +117,19 @@
     <ClCompile>
       <PreprocessorDefinitions>WINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP;WINAPI_PARTITION_DESKTOP=1;WINAPI_PARTITION_SYSTEM=1;WINAPI_PARTITION_APP=1;WINAPI_PARTITION_PC_APP=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>false</ExceptionHandling>
+      <AdditionalIncludeDirectories>..\Include;..\lib\spdlog\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>Disabled</Optimization>
+      <AdditionalOptions>/kernel %(ClCompile.AdditionalOptions)</AdditionalOptions>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+    </Lib>
+    <PostBuildEvent>
+      <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
+copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -126,14 +140,20 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <PreprocessorDefinitions>WINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP;WINAPI_PARTITION_DESKTOP=1;WINAPI_PARTITION_SYSTEM=1;WINAPI_PARTITION_APP=1;WINAPI_PARTITION_PC_APP=1;CONSOLE;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\Include;..\lib\spdlog\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>false</ExceptionHandling>
+      <Optimization>Disabled</Optimization>
+      <AdditionalOptions>/kernel %(ClCompile.AdditionalOptions)</AdditionalOptions>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <PostBuildEvent>
-      <Command>copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib64
-copy /v /y "$(IntDir)$(ProjectName).pdb" "..\binary\lib64
-</Command>
+      <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
+copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
     </PostBuildEvent>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+    </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

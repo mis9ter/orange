@@ -24,19 +24,16 @@ public:
 		m_pBuf(NULL),
 		m_dwSize(0)
 	{
-		try
-		{
-			m_pBuf		= new char[dwSize];
+		m_pBuf		= HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize);
+		if( m_pBuf )
 			m_dwSize = dwSize;
-		}
-		catch (std::exception & e)
-		{
-			(e.what());
-		}
 	}
 	~CBuffer()
 	{
-		if (m_pBuf)	delete m_pBuf;
+		if (m_pBuf)	{
+			HeapFree(GetProcessHeap(), 0, m_pBuf);
+			m_pBuf	= NULL;
+		}
 	}
 	void *		Data()
 	{
@@ -246,6 +243,25 @@ public:
 private:
 	LPSTR		m_pStr;
 	CHAR		m_szNull[1];
+};
+class CErrorMessage {
+public:
+	CErrorMessage(IN DWORD dwError = 0) {
+		m_dwError	= dwError;
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, dwError, 0, m_szErrMsg, sizeof(m_szErrMsg), NULL);
+	}
+	~CErrorMessage() {
+
+	}
+	operator	DWORD() {
+		return m_dwError;
+	}
+	operator	PCSTR() {
+		return m_szErrMsg;
+	}
+private:
+	DWORD	m_dwError;
+	CHAR	m_szErrMsg[1024];
 };
 class CStringBuffer
 {

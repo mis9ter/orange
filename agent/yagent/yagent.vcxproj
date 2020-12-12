@@ -84,14 +84,15 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
+    <TargetName>orange.service</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
-    <TargetName>orange</TargetName>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
+    <TargetName>orange.service</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -134,7 +135,8 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -144,7 +146,16 @@
       <AdditionalDependencies>kernel32.lib; user32.lib</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
+      <AdditionalLibraryDirectories>..\binary\lib</AdditionalLibraryDirectories>
+      <ProgramDatabaseFile>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDatabaseFile>
     </Link>
+    <PostBuildEvent>
+      <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
+..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
+copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -157,8 +168,10 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <Optimization>Disabled</Optimization>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -167,20 +180,26 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>kernel32.lib; user32.lib</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
-      <AdditionalLibraryDirectories>..\binary\lib64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\binary\lib</AdditionalLibraryDirectories>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
+      <ProgramDatabaseFile>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDatabaseFile>
     </Link>
     <PostBuildEvent>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
 ..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
 copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
-</Command>
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\CAppLog.h" />
     <ClInclude Include="..\include\CException.h" />
+    <ClInclude Include="..\include\CIpc.h" />
+    <ClInclude Include="..\include\CNotifyCenter.h" />
     <ClInclude Include="..\include\IFilterCtrl.h" />
+    <ClInclude Include="..\include\IIPc.h" />
+    <ClInclude Include="..\include\INotifyCenter.h" />
     <ClInclude Include="..\include\orangedb.h" />
     <ClInclude Include="..\include\yagent.define.h" />
     <ClInclude Include="..\include\yagent.h" />
@@ -208,6 +227,7 @@ copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
     <ClCompile Include="CAgent.cpp" />
     <ClCompile Include="Console.cpp" />
     <ClCompile Include="Dialog.cpp" />
+    <ClCompile Include="IPC.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MD5\MD5C.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>

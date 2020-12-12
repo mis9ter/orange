@@ -6,12 +6,20 @@
 
 #include "yagent.define.h"
 #include "yagent.common.h"
-#include "yagent.string.h"
 #include "CAppLog.h"
 #include "CDialog.h"
 #include "CMemory.h"
 
-#pragma comment(lib, "yfilterctrl.lib")
+#include "json\json.h"
+
+#ifdef _M_X64
+#pragma comment(lib, "yfilterctrl.x64.lib")
+#pragma comment(lib, "jsoncpp.x64.lib")
+#else 
+#pragma comment(lib, "yfilterctrl.win32.lib")
+#pragma comment(lib, "jsoncpps.win32.lib")
+#endif
+
 
 #ifndef __function_lock
 class CFunctionLock

@@ -34,9 +34,12 @@
   view-driver.tis 6373 compressed to 3048 (47%)
   -----------------------------
   compressed size 50109 bytes
+  resources not changed
   inspector.cpp
   sciter-win-main.cpp
   코드를 생성하고 있습니다.
-  All 209 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  209 of 209 functions (100.0%) were compiled.
+    1 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
   코드를 생성했습니다.
-  inspector.vcxproj -> D:\WORK\ORANGE\agent\reference\sciter-sdk-master\build.windows\..\bin.win\x32\inspector.exe
+  inspector.vcxproj -> C:\WORK\orange\agent\reference\sciter-sdk-master\build.windows\..\bin.win\x32\inspector.exe

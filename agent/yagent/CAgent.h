@@ -7,13 +7,14 @@
 #include <thread>
 
 #include "yagent.h"
+#include "yagent.common.h"
 #include "CThread.h"
 #include "IFilterCtrl.h"
 #include "CDialog.h"
 #include "CException.h"
-
-#include "yagent.common.h"
-#pragma comment(lib, "yagent.common.lib")
+#include "CNotifyCenter.h"
+#include "CIpc.h"
+#include "CService.h"
 
 #include "CEventCallback.h"
 
@@ -258,7 +259,9 @@ class CAgent
 	public	CDB,
 	public	CFilterCtrl,
 	public	CEventCallback,
-	public	CFilePath
+	public	CFilePath,
+	public	CNotifyCenter,
+	public	CIPc
 {
 public:
 	CAgent();
@@ -267,17 +270,34 @@ public:
 	CDB* Db() {
 		return dynamic_cast<CDB*>(this);
 	}
+	INotifyCenter *	NotifyCenter() {
+		return dynamic_cast<INotifyCenter *>(this);
+	}
+	IService *		Service() {
+		return dynamic_cast<IService *>(CService::GetInstance());
+	}
 	bool			IsInitialized() {
 		return m_config.bInitialize;
 	}
-	bool			Initialize();
-	void			Destroy();
 	bool			Install();
 	void			Uninstall();
-	bool			Start(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback);
-	void			Shutdown();
-	void			RunLoop();
+	bool			Start();
+	void			Shutdown(IN DWORD dwControl);
+	void			RunLoop(IN DWORD dwMilliSeconds);
 
+	PCWSTR			AppPath() {
+		return m_config.szAppPath;
+	}
+	void			SetRunLoop(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
+	{
+		m_config.pRunLoopFunc	= pCallback;
+		m_config.pRunLoopPtr	= pCallbackPtr;
+	}
+	static	void	CALLBACK	ServiceHandler
+	(
+		IN DWORD dwControl, IN DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext
+	);
+	static	bool	CALLBACK	ServiceFunction(DWORD dwFunction, DWORD dwControl, LPVOID lpContext);
 private:
 	struct m_config {
 		bool				bInitialize;
@@ -287,9 +307,20 @@ private:
 		PFUNC_AGENT_RUNLOOP	pRunLoopFunc;
 
 		WCHAR				szPath[AGENT_PATH_SIZE];
+		WCHAR				szAppPath[AGENT_PATH_SIZE];
 		WCHAR				szDriverPath[AGENT_PATH_SIZE];
 		WCHAR				szEventDBPath[AGENT_PATH_SIZE];
 	} m_config;
 	CThread					m_main;
-	static	void			MainThread(void * ptr, HANDLE hShutdown);
+
+	bool			Initialize();
+	void			Destroy();
+
+	static	void	MainThread(void * ptr, HANDLE hShutdown);
+	static	bool	CALLBACK	IPCCallback(
+		IN	HANDLE		hClient,
+		IN	IIPcClient	*pClient,
+		IN	void		*pContext,
+		IN	HANDLE		hShutdown
+	);
 };

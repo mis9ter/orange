@@ -1,17 +1,26 @@
 ﻿#pragma once
 #include <process.h>
 
-typedef std::function<void(void* pThreadPtr, HANDLE hShutdown)>		PFUNC_THREAD;
+typedef std::function<void(void* pContext, HANDLE hShutdown)>		PFUNC_THREAD;
+
+typedef struct Thread
+{
+	DWORD		dwTID;
+	HANDLE		hThread;
+	HANDLE		hShutdown;
+} Thread, *PThread;
 
 class CThread
 {
 public:
 	CThread()
 		:
+		m_dwTID(0),
 		m_hThread(NULL),
-		m_pThreadPtr(NULL),
-		m_pThreadFunc(NULL),
-		m_hShutdown(CreateEvent(NULL, TRUE, FALSE, NULL))
+		m_hShutdown(NULL),
+		m_bCloseShutdownHandle(false),
+		m_pContext(NULL),
+		m_pCallback(NULL)
 	{
 		
 	}
@@ -22,13 +31,17 @@ public:
 			CloseHandle(m_hThread);
 			m_hThread	= NULL;
 		}
-		CloseHandle(m_hShutdown);
+		if( m_bCloseShutdownHandle )	CloseHandle(m_hShutdown);
 	}
-	bool			Start(IN void * pThreadPtr, IN PFUNC_THREAD p)
+	bool			Start(
+		IN	void *			pContext, 
+		IN	HANDLE			pShutdown,		
+		IN	PFUNC_THREAD	p
+	)
 	{
 		printf("%-30s begin\n", __FUNCTION__);
-		m_pThreadFunc	= p;
-		m_pThreadPtr	= pThreadPtr;
+		//m_pThreadFunc	= p;
+		//m_pThreadPtr	= pContext;
 		m_hThread = (HANDLE)_beginthreadex(NULL, 0, Thread, this, 0, NULL);
 		printf("  m_hThread=%p\n", m_hThread);
 		if (NULL == m_hThread)	return false;
@@ -53,17 +66,19 @@ public:
 		return (WAIT_OBJECT_0 == dwRet)? true : false;
 	}
 private:
+	DWORD			m_dwTID;
 	HANDLE			m_hThread;
+	bool			m_bCloseShutdownHandle;
 	HANDLE			m_hShutdown;
-	void			*m_pThreadPtr;
-	PFUNC_THREAD	m_pThreadFunc;
+	PVOID			m_pContext;
+	PFUNC_THREAD	m_pCallback;
 
 	static	unsigned	__stdcall	Thread(void* ptr)
 	{
 		CThread* pClass = (CThread*)ptr;
 
-		if( pClass->m_pThreadFunc )
-			pClass->m_pThreadFunc(pClass->m_pThreadPtr, pClass->m_hShutdown);
+		//if( pClass->m_pThreadFunc )
+		//	pClass->m_pThreadFunc(pClass->m_pThreadPtr, pClass->m_hShutdown);
 		return 0;
 	}
 };

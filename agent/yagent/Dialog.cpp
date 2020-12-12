@@ -23,7 +23,7 @@ void    ShowCounter(CAgent* pAgent, HWND hWnd) {
     dwThread    = pAgent->m_counter.dwThread;
     dwModule    = pAgent->m_counter.dwModule;
 }
-void    Timer(
+void    CALLBACK    Timer(
     HWND        hWnd,
     UINT        uMsg,
     UINT_PTR    pCallbackPtr,
@@ -105,8 +105,8 @@ void    RunInDialog(CAgent * pAgent)
 
         }
         else {
-            pAgent->Initialize();
-            pAgent->Start(pAgent, AgentRunLoop);
+            pAgent->SetRunLoop(pAgent, AgentRunLoop);
+            pAgent->Start();
             RefreshButton(pAgent, hWnd);
         }
     });
@@ -118,8 +118,7 @@ void    RunInDialog(CAgent * pAgent)
         IN	PVOID	ptr
         ) {
         CAgent* pAgent = (CAgent*)ptr;
-        pAgent->Shutdown();
-        pAgent->Destroy();
+        pAgent->Shutdown(SERVICE_CONTROL_STOP);
         RefreshButton(pAgent, hWnd);
     });
 

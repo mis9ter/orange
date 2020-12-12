@@ -6,7 +6,13 @@
 #include "CAppRegistry.h"
 #include "CTime.h"
 
-#define	__logf(...)
+
+#ifdef _M_X64
+#pragma comment(lib, "yagent.common.x64.lib")
+#else 
+#pragma comment(lib, "yagent.common.win32.lib")
+#endif
+
 
 #ifndef LBUFSIZE
 #define	LBUFSIZE	(4096)
@@ -112,8 +118,6 @@ private:
 };
 #define	__function_lock(lock)	CFunctionLock(lock, __FUNCTION__)
 #endif
-
-
 
 namespace YAgent {
 	LPSTR		WideToAnsiString(LPCWSTR pSrc);

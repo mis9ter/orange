@@ -5,12 +5,20 @@
 typedef GUID UUID;
 #endif UUID
 
-#define AGENT_SERVICE_NAME		L"orange.app"
+#define AGENT_SERVICE_NAME		L"orange.service"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
-#define AGENT_LOG_NAME			"orange.log"
+#define AGENT_SERVICE_DESC		L"orange.service"
+#define AGENT_DEFAULT_LOG_NAME	L"orange.log"
+#define AGENT_PIPE_NAME			L"\\\\.\\pipe\\{523E4858-04BA-4CB1-AE5D-6AD6C9503C16}"
+
+
+
+
 #define	AGENT_PATH_SIZE			1024
 #define AGENT_NAME_SIZE			64
+#define AGENT_RUNLOOP_PERIOD	3000
+
 #define DRIVER_SERVICE_NAME		L"orange.driver"
 #define DRIVER_FILE_NAME		L"orange.sys"
 #define DRIVER_COMMAND_PORT		L"\\orange_command"
@@ -34,6 +42,7 @@ typedef GUID UUID;
 #define SAFEBOOT_REG_MINIMAL	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Minimal"
 #define SAFEBOOT_REG_NETWORK	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Network"
 #define TEXTLINE				"--------------------------------------------------------------------------------"
+
 
 typedef union _PS_PROTECTION
 {

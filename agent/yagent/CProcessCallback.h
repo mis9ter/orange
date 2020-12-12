@@ -16,6 +16,7 @@ public:
 	~CProcessCallback() {
 
 	}
+	virtual	DWORD	BootId()	= NULL;
 	virtual	CDB *	Db()	= NULL;
 	virtual	PCWSTR	UUID2String(IN UUID * p, PWSTR pValue, DWORD dwSize)	= NULL;
 	PCSTR			Name() {
@@ -41,6 +42,12 @@ public:
 		const char	*pSelect		= "select ProcPath,PID "\
 			"from	process "\
 			"where	ProcGuid=?";
+		const char*	pProcessList	= "select ProcName, ProcPath, count(*) cnt "	\
+			"from process "	\
+			"where bootid=? "	\
+			"group by ProcPath "	\
+			"order by cnt desc";
+
 
 		if (Db()->IsOpened()) {
 			
@@ -52,6 +59,8 @@ public:
 				Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if (NULL == (m_stmt.pSelect = Db()->Stmt(pSelect)))
 				Log("%s", sqlite3_errmsg(Db()->Handle()));
+			if (NULL == (m_stmt.pProcessList = Db()->Stmt(pProcessList)))
+				Log("%s", sqlite3_errmsg(Db()->Handle()));
 		}
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
@@ -60,14 +69,46 @@ public:
 	void					Destroy()
 	{
 		if (Db()->IsOpened()) {
-			if( m_stmt.pIsExisting)	Db()->Free(m_stmt.pIsExisting);
-			if( m_stmt.pInsert)		Db()->Free(m_stmt.pInsert);
-			if( m_stmt.pUpdate)		Db()->Free(m_stmt.pUpdate);
-			if (m_stmt.pSelect)		Db()->Free(m_stmt.pSelect);
+			if( m_stmt.pIsExisting)		Db()->Free(m_stmt.pIsExisting);
+			if( m_stmt.pInsert)			Db()->Free(m_stmt.pInsert);
+			if( m_stmt.pUpdate)			Db()->Free(m_stmt.pUpdate);
+			if (m_stmt.pSelect)			Db()->Free(m_stmt.pSelect);
+			if (m_stmt.pProcessList)	Db()->Free(m_stmt.pProcessList);
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
 	}
-	bool	GetProcess(PCWSTR pProcGuid, PWSTR pValue, DWORD dwSize)
+	DWORD		ProcessList(
+		PVOID	pContext,
+		std::function<bool 
+			(PVOID pContext, PCWSTR pProcName, PCWSTR pProcPath, int nCount)> pCallback
+	
+	) {
+		DWORD			dwCount	= 0;
+		sqlite3_stmt	*pStmt	= m_stmt.pProcessList;
+		Log("%-32s BootId=%d", __FUNCTION__, BootId());
+		if (pStmt) {
+			int		nIndex = 0;
+			sqlite3_bind_int(pStmt, ++nIndex, BootId());
+			while ( SQLITE_ROW == sqlite3_step(pStmt)) {
+				wchar_t		*pProcName	= (wchar_t *)sqlite3_column_text16(pStmt, 0);
+				wchar_t		*pProcPath	= (wchar_t *)sqlite3_column_text16(pStmt, 1);
+				int			nCount		= sqlite3_column_int(pStmt, 2);
+				if( pCallback ) {
+					bool	bRet	= pCallback(pContext, pProcName, pProcPath, nCount);
+					if( false == bRet )	break;
+				}
+				else 
+					break;
+				dwCount++;
+			}
+			sqlite3_reset(pStmt);
+		}
+		else {
+			Log("%-32s pStmt is null.", __FUNCTION__);
+		}
+		return dwCount;
+	}
+	bool		GetProcess(PCWSTR pProcGuid, PWSTR pValue, DWORD dwSize)
 	{
 		bool	bRet = false;
 		sqlite3_stmt* pStmt = m_stmt.pSelect;
@@ -191,6 +232,7 @@ private:
 		sqlite3_stmt	*pUpdate;
 		sqlite3_stmt	*pIsExisting;
 		sqlite3_stmt	*pSelect;
+		sqlite3_stmt	*pProcessList;
 	}	m_stmt;
 
 	bool	IsExisting(

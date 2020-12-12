@@ -71,16 +71,16 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
-    <OutDir>$(SolutionDir)$build\$(ConfigurationName)\$(Platform)\</OutDir>
-    <IntDir>$(SolutionDir)$build\$(ConfigurationName)\temp\$(Platform)\</IntDir>
+    <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(WindowsSDK_IncludePath)\um;$(IncludePath)</IncludePath>
     <EnableInf2cat>false</EnableInf2cat>
     <TargetName>orange</TargetName>
@@ -91,6 +91,7 @@
       <PreprocessorDefinitions>PHNT_MODE=PHNT_MODE_KERNEL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Optimization>Disabled</Optimization>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <PostBuildEvent>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
@@ -117,6 +118,9 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <Link>
       <ProgramDatabaseFile>$(OutDir)$(TargetName)$(TargetExt).pdb</ProgramDatabaseFile>
     </Link>
+    <ClCompile>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Inf Include="orange.inf" />

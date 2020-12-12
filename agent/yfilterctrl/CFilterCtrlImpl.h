@@ -8,6 +8,9 @@
 
 #pragma comment(lib, "FltLib.lib")
 
+#define	CFILTER_CTRLIMPL_LOGGER		"CFilterCtrlImpl"
+#define CFILTER_CTRLIMPL_LOGNAME	"CFilterCtrlImpl.log"
+
 #pragma pack(push, 1)
 typedef struct YFILTERCTRL_MESSAGE
 {
@@ -45,6 +48,8 @@ class CFilterCtrlImpl
 {
 public:
 	CFilterCtrlImpl()
+		:	
+		CAppLog(L"CFilterCtrlImpl.log")
 	{
 		Log(__FUNCTION__);
 		ZeroMemory(&m_driver, sizeof(m_driver));

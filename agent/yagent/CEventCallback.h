@@ -168,7 +168,11 @@ public:
 		Log("%s %s", __FUNCTION__, pCallback->Name());
 		m_events[pCallback->Name()] = pCallback;
 	}
+	virtual	DWORD	BootId() {
+		return CBootCallback::BootId();	
+	}
 	virtual	CDB*	Db() = NULL;
+	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 				PWSTR pValue, DWORD dwSize) {
 		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
@@ -176,14 +180,25 @@ public:
 	bool	GetProcess(PCWSTR pProcGuid, PWSTR pValue, IN DWORD dwSize) {
 		return CProcessCallback::GetProcess(pProcGuid, pValue, dwSize);
 	}
+	static	void	SystemCallback(
+		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
+	) {
+		CEventCallback	*pClass	= (CEventCallback *)pContext;
+		pClass->Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
+	}
+	static	void	SessionCallback(
+		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
+	) {
+		CEventCallback	*pClass	= (CEventCallback *)pContext;
+		pClass->Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
+	}
 	bool		CreateCallback()
 	{	
-		Log("%s begin", __FUNCTION__);
+		Log(__FUNCTION__);
 		if( Db()->IsOpened() ) {
 #if 1 == IDLE_COMMIT
 			Db()->Begin(__FUNCTION__);
 #endif
-
 			for (auto t : m_events) {
 				t.second->Create();
 			}
@@ -224,12 +239,13 @@ public:
 				Log("-------------------------------------------");
 			});
 			*/
+			NotifyCenter()->RegisterNotifyCallback("SessionCallback", NOTIFY_TYPE_SESSION, 
+				NOTIFY_EVENT_SESSION, this, SessionCallback);
 			return true;
 		}
 		else {
 			Log("%s IsOpened() = %d", __FUNCTION__, Db()->IsOpened());
 		}
-		Log("%s end", __FUNCTION__);
 		return false;
 	}
 	void		DestroyCallback() {
@@ -346,10 +362,11 @@ private:
 
 	void					CommitAndBegin(DWORD dwTicks)
 	{
+		int		nCount	= 0;
 		static	std::atomic<DWORD>	dwCount;
 		__function_lock(m_lock.Get());
-		Log("COMMIT-BEGIN");
-		Db()->Commit(__FUNCTION__);
+
+		nCount	= Db()->Commit(__FUNCTION__);
 		Db()->Begin(__FUNCTION__);
 
 		//if( 0 == dwCount++ % 10 )
