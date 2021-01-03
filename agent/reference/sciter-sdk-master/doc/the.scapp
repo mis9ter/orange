@@ -1,9 +1,0 @@
-// Sciter Application Manifest
-{
-  name        :"scidoc",
-  definition  :"Sciter Help System",
-  version     :1,
-  revision    :0,
-  icon        :"icon.png",
-  author      :"Andrew Fedoniouk"
-}

@@ -1,6 +1,0 @@
-<section>
-<% for(var i in quantity) { %>
-  <p>Paragraph <%= i %> </p>
-<% } %>
-</section>
-

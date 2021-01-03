@@ -51,7 +51,7 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,0,1,5
+ FILEVERSION 0,0,1,8
  PRODUCTVERSION 0,0,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
@@ -69,7 +69,7 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "OrangeWorks.org"
             VALUE "FileDescription", "ORANGE YFILTER"
-            VALUE "FileVersion", "0.0.1.5"
+            VALUE "FileVersion", "0.0.1.8"
             VALUE "InternalName", "yfilterc.lib"
             VALUE "LegalCopyright", "Copyright (C) 2020"
             VALUE "OriginalFilename", "yfilterc.lib"

@@ -1,1 +1,0 @@
-wsciter.exe sciter-gfx=d2d-warp

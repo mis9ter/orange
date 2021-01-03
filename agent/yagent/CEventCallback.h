@@ -25,6 +25,7 @@ public:
 		int		nSystemRoot = (int)wcslen(pSystemRoot);
 		WCHAR	szWinDir[200] = L"";
 
+		if( L'\\' != pLinkPath[0] )	return false;
 		if (0 == _wcsnicmp(pSystemRoot, pLinkPath, nSystemRoot)) {
 			ExpandEnvironmentStrings(pWinDir, szWinDir, _countof(szWinDir));
 			StringCbPrintf(pValue, dwSize, L"%s%s", szWinDir, pLinkPath + nSystemRoot);

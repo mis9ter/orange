@@ -42,15 +42,16 @@ public:
 		const char	*pSelect		= "select ProcPath,PID "\
 			"from	process "\
 			"where	ProcGuid=?";
-		const char*	pProcessList	= "select ProcName, ProcPath, count(*) cnt "	\
+		const char*	pProcessList	= "select ProcName, ProcPath, count(*) cnt, sum(KernelTime+UserTime) time, sum(KernelTime) ktime, sum(UserTime) utime "	\
 			"from process "	\
 			"where bootid=? "	\
 			"group by ProcPath "	\
-			"order by cnt desc";
-
+			"order by time desc";
 
 		if (Db()->IsOpened()) {
-			
+	
+			Db()->AddStmt("process.list", pProcessList);
+
 			if( NULL == (m_stmt.pIsExisting	= Db()->Stmt(pIsExisting)) )
 				Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if( NULL == (m_stmt.pInsert	= Db()->Stmt(pInsert)) )
@@ -85,9 +86,18 @@ public:
 	) {
 		DWORD			dwCount	= 0;
 		sqlite3_stmt	*pStmt	= m_stmt.pProcessList;
+
+		pStmt	= Db()->GetStmt("process.list");
 		Log("%-32s BootId=%d", __FUNCTION__, BootId());
 		if (pStmt) {
-			int		nIndex = 0;
+			int			nIndex = 0;
+			int			nColumnCount	= sqlite3_column_count(pStmt);
+			const char	*pColumnName	= NULL;
+
+			for( auto i = 0 ; i < nColumnCount ; i++ ) {
+				pColumnName	= sqlite3_column_name(pStmt, i);			
+			Log("%d %s", i, pColumnName);
+			}
 			sqlite3_bind_int(pStmt, ++nIndex, BootId());
 			while ( SQLITE_ROW == sqlite3_step(pStmt)) {
 				wchar_t		*pProcName	= (wchar_t *)sqlite3_column_text16(pStmt, 0);
@@ -146,6 +156,8 @@ protected:
 		if (YFilter::Message::SubType::ProcessStart		== p->subType	||
 			YFilter::Message::SubType::ProcessStart2	== p->subType	) {
 			pClass->UUID2String(&p->PProcGuid, szPProcGuid, sizeof(szPProcGuid));
+			if( 0 == p->PPID || 4 == p->PPID )
+				pClass->Log("%s %6d %ws", __FUNCTION__, p->PID, p->szPath);
 			if( false == CAppPath::GetFilePath(p->szPath, szPath, sizeof(szPath)) )
 				StringCbCopy(szPath, sizeof(szPath), p->szPath);
 			if (pClass->IsExisting(szProcGuid))
@@ -266,7 +278,7 @@ private:
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
 			sqlite3_bind_int(pStmt,		++nIndex, YAgent::GetBootId());
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcPath, -1, SQLITE_STATIC);
-			sqlite3_bind_text16(pStmt,	++nIndex, pProcName ? pProcName + 1 : L"", -1, SQLITE_TRANSIENT);
+			sqlite3_bind_text16(pStmt,	++nIndex, pProcName ? pProcName + 1 : pProcPath, -1, SQLITE_TRANSIENT);
 			sqlite3_bind_text16(pStmt,	++nIndex, pData->szCommand, -1, SQLITE_STATIC);
 
 			sqlite3_bind_int(pStmt,		++nIndex, pData->PID);

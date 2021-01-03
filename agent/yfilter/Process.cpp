@@ -983,8 +983,10 @@ bool		StartProcessFilter()
 					}
 					CMemory::Free(pParentImageFileName);
 				}
-				__log("%6d %ws", pMsg->data.PID, pMsg->data.szPath);
-				__log("       %ws", pMsg->data.szCommand);
+				if( pMsg->data.PID <= 4 || pMsg->data.PPID <= 4) {
+					__log("%6d %ws", pMsg->data.PID, pMsg->data.szPath);
+					__log("       %ws", pMsg->data.szCommand);
+				}
 
 				ProcessTable()->Add(false, PID, PPID, &pMsg->data.ProcGuid, pImageFileName, pCmdLine);
 				pMsg->header.mode = YFilter::Message::Mode::Event;
@@ -1002,7 +1004,7 @@ bool		StartProcessFilter()
 					false))
 				{
 					//	pMsg는 SendMessage 성공 후 해제될 것이다. 
-					__log("pushed");
+					//__log("pushed");
 					MessageThreadPool()->Alert(YFilter::Message::Category::Process);
 				}
 				else {

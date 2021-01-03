@@ -511,16 +511,13 @@ NTSTATUS	GetProcessImagePathByProcessId
 	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
 	if (pProcessId <= (HANDLE)4)	{
 		if( (HANDLE)0 == pProcessId ) {
-			if( CMemory::AllocateUnicodeString(NonPagedPoolNx, pStr, L"[System Process]") )
+			if( CMemory::AllocateUnicodeString(NonPagedPoolNx, pStr, L"System idle process") )
 				return STATUS_SUCCESS;
-			__log("%s 1", __FUNCTION__);
 		}
 		if( (HANDLE)4 == pProcessId ) {
 			if (CMemory::AllocateUnicodeString(NonPagedPoolNx, pStr, L"System"))
 				return STATUS_SUCCESS;		
-			__log("%s 2", __FUNCTION__);
 		}
-		__log("%s 3", __FUNCTION__);
 		return STATUS_INVALID_PARAMETER;
 	}
 	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	{

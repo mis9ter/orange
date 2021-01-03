@@ -22,7 +22,7 @@ public:
 
 	void		Create(IN DWORD dwCategory, IN LPCSTR pName)
 	{
-		__log("%s %s", __FUNCTION__, pName);
+		//__log("%s %s", __FUNCTION__, pName);
 		RtlStringCbCopyA(m_szName, sizeof(m_szName), pName);
 		m_dwCategory	= dwCategory;
 		KeInitializeSpinLock(&m_lock);
@@ -33,7 +33,7 @@ public:
 	}
 	void		Destroy()
 	{
-		__log("%s %s", __FUNCTION__, m_szName);
+		//__log("%s %s", __FUNCTION__, m_szName);
 		InterlockedExchange8(&m_bRunning, true);
 		while( Pop(__FUNCTION__, NULL, NULL) );
 	}

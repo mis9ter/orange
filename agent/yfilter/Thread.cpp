@@ -253,13 +253,16 @@ void CreateThreadNotifyRoutine(
 		__log("%s Config() is NULL.", __FUNCTION__);
 		return;
 	}
+	UNREFERENCED_PARAMETER(PPID);
+	UNREFERENCED_PARAMETER(CTID);
+	UNREFERENCED_PARAMETER(TID);
 	if ((HANDLE)4		== PID	||
 		PASSIVE_LEVEL	!= irql	||
 		bIsSystem					
 		) {
-		__dlog("%s Create=%1d IsSystem=%1d PID=%6d CPID=%6d PPID=%6d TID=%6d CTID=%6d",
-			__FUNCTION__,
-			Create, bIsSystem, PID, CPID, PPID, TID, CTID);
+		//__dlog("%s Create=%1d IsSystem=%1d PID=%6d CPID=%6d PPID=%6d TID=%6d CTID=%6d",
+		//	__FUNCTION__,
+		//	Create, bIsSystem, PID, CPID, PPID, TID, CTID);
 		return;
 	}
 	//if (KeGetCurrentIrql() != PASSIVE_LEVEL ||

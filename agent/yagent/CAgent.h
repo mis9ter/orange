@@ -6,6 +6,7 @@
 #include <functional>
 #include <thread>
 
+
 #include "yagent.h"
 #include "yagent.common.h"
 #include "CThread.h"
@@ -15,8 +16,8 @@
 #include "CNotifyCenter.h"
 #include "CIpc.h"
 #include "CService.h"
-
 #include "CEventCallback.h"
+#include "CProtect.h"
 
 typedef std::function<void(HANDLE hShutdown, void * pCallbackPtr)>	PFUNC_AGENT_RUNLOOP;
 
@@ -33,10 +34,15 @@ public:
 	}
 	bool	SetResourceToFile(UINT nId, LPCWSTR pFilePath)
 	{
+		Log("%s %ws", __FUNCTION__, pFilePath);
 		CMemoryPtr	res = GetResourceData(NULL, nId);
 		if (res && res->Data() && res->Size())
-			if (SetFileData(pFilePath, res->Data(), res->Size())) {
-				Log("%s %ws", __FUNCTION__, pFilePath);
+			if (SetFileData(pFilePath, res->Data(), res->Size(), 
+				[&](CErrorMessage & err) {
+				
+				Log("%-32s (%d)%s", "CFilePath::SetResourceToFile", (DWORD)err, (PCSTR)err);
+				
+			})) {
 				return true;
 			}
 			else {
@@ -177,7 +183,10 @@ public:
 		*/
 		return ptr;
 	}
-	static	bool		SetFileData(IN LPCTSTR lpPath, IN LPCVOID pData, IN DWORD dwSize)
+	static	bool		SetFileData(IN LPCTSTR lpPath, IN LPCVOID pData, 
+		IN DWORD dwSize,
+		IN std::function<void(CErrorMessage & err)> pErrorCallback	
+	)
 	{
 		bool	bRet = false;
 		DWORD	dwWrittenBytes;
@@ -192,10 +201,9 @@ public:
 		HANDLE	hFile = INVALID_HANDLE_VALUE;
 
 		ConvertPath(lpPath, szPath, sizeof(szPath));
-		::SetFileAttributes(szPath, FILE_ATTRIBUTE_ARCHIVE);
-		__try
-		{
-			hFile = ::CreateFile(
+		::SetFileAttributes(szPath, FILE_ATTRIBUTE_NORMAL);
+
+		hFile = ::CreateFile(
 				szPath,
 				GENERIC_WRITE,
 				FILE_SHARE_READ,
@@ -203,15 +211,16 @@ public:
 				CREATE_ALWAYS,
 				FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_HIDDEN,
 				NULL);
-			if (INVALID_HANDLE_VALUE == hFile)
-			{
-				__leave;
-			}
-			if (::WriteFile(hFile, pData, dwSize, &dwWrittenBytes, NULL) && dwWrittenBytes == dwSize)	bRet = true;
-		}
-		__finally
+		if (INVALID_HANDLE_VALUE == hFile)
 		{
-			if (INVALID_HANDLE_VALUE != hFile)	::CloseHandle(hFile);
+			if( pErrorCallback ) {
+				CErrorMessage	err(GetLastError());
+				pErrorCallback(err);
+			}
+		}
+		else {
+			if (::WriteFile(hFile, pData, dwSize, &dwWrittenBytes, NULL) && dwWrittenBytes == dwSize)	bRet = true;
+			::CloseHandle(hFile);
 		}
 		::SetFileAttributes(szPath, FILE_ATTRIBUTE_NORMAL);
 		return bRet;
@@ -261,7 +270,8 @@ class CAgent
 	public	CEventCallback,
 	public	CFilePath,
 	public	CNotifyCenter,
-	public	CIPc
+	public	CIPc,
+	public	CProtect
 {
 public:
 	CAgent();

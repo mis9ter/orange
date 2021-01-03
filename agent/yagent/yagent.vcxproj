@@ -24,6 +24,7 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>yagent</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
+    <ProjectName>Service</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -135,7 +136,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
@@ -168,7 +169,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\include;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
       <ExceptionHandling>Sync</ExceptionHandling>
       <Optimization>Disabled</Optimization>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
@@ -197,6 +198,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     <ClInclude Include="..\include\CException.h" />
     <ClInclude Include="..\include\CIpc.h" />
     <ClInclude Include="..\include\CNotifyCenter.h" />
+    <ClInclude Include="..\include\CProtect.h" />
     <ClInclude Include="..\include\IFilterCtrl.h" />
     <ClInclude Include="..\include\IIPc.h" />
     <ClInclude Include="..\include\INotifyCenter.h" />

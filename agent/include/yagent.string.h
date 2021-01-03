@@ -24,9 +24,11 @@ public:
 		m_pBuf(NULL),
 		m_dwSize(0)
 	{
-		m_pBuf		= HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize);
-		if( m_pBuf )
+		m_pBuf		= HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize + 1);
+		if( m_pBuf ) {
 			m_dwSize = dwSize;
+			((char *)m_pBuf)[dwSize]	= NULL;
+		}
 	}
 	~CBuffer()
 	{

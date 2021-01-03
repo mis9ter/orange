@@ -1,1 +1,0 @@
-The Plus is AngularJS kind of MV[Whatever] framework: https://plus.google.com/+AngularJS/posts/aZNVhj355G2

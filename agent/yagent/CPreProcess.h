@@ -62,7 +62,7 @@ public:
 						PUNICODE_STRING	pCmdLine	= NULL;
 						NTSTATUS		status;
 						if ((HANDLE)0 == PID) {
-							StringCbCopy(szPath, sizeof(szPath), L"[System Process]");
+							StringCbCopy(szPath, sizeof(szPath), L"System idle process");
 						}
 						else if ((HANDLE)4 == PID) {
 							StringCbCopy(szPath, sizeof(szPath), L"System");

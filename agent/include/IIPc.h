@@ -1,19 +1,17 @@
 #ifndef __IIPC_H__
 #define __IIPC_H__
 
+#include <functional>
+
 #define IPC_PARAMS_SIZE			64
 
 typedef enum 
 {
-	IPCClose,
-	IPCRequestJson,
-	IPCRequestString,
-	IPCResponsePacketData,
-	IPCResponseData,
-	IPCResponseString,
-	IPCError,
-	IPCResponseDone,
-	IPCDummy,
+	IPCDone,
+	IPCJson,
+	IPCBInary,
+	IPCText,
+
 } IPCType;
 
 typedef struct
@@ -44,16 +42,26 @@ interface IIPcClient
 	virtual	HANDLE	Connect(IN LPCTSTR pName, IN LPCSTR pCause)	= NULL;
 	virtual void	Disconnect(HANDLE hIpc, IN LPCSTR pCause)		= NULL;
 
-	virtual bool	Write(
+	virtual DWORD	Write(
+						IN PCSTR	pCause,
 						IN HANDLE	hIpc,
 						IN void		*pData,
 						IN DWORD	dwDataSize
 					)	= NULL;
-	virtual bool	Read(
+	virtual DWORD	Read(
+						IN PCSTR	pCause,
 						IN HANDLE	hIpc,
 						OUT void	*pData,
 						IN DWORD	dwDataSize
 					)	= NULL;
+
+	virtual	bool	Request(
+		IN PCSTR	pCause,
+		IN	HANDLE	hIpc,
+		IN	PVOID	pRequest,
+		IN	DWORD	dwRequestSize,
+		IN	std::function<void(PVOID pResponseData, DWORD dwResponseSize)> pCallback 	
+	)	= NULL;
 
 };
 

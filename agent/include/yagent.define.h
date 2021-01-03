@@ -43,7 +43,13 @@ typedef GUID UUID;
 #define SAFEBOOT_REG_NETWORK	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Network"
 #define TEXTLINE				"--------------------------------------------------------------------------------"
 
+#ifdef ENABLE_RTL_NUMBER_OF_V2
+#define RTL_NUMBER_OF(A) RTL_NUMBER_OF_V2(A)
+#else
+#define RTL_NUMBER_OF(A) RTL_NUMBER_OF_V1(A)
+#endif
 
+#ifndef _PHLIB_
 typedef union _PS_PROTECTION
 {
 	UCHAR Level;
@@ -75,6 +81,7 @@ typedef enum _PS_PROTECTED_TYPE
 	PsProtectedTypeMax = 3
 
 } PS_PROTECTED_TYPE;
+#endif
 
 namespace YFilter
 {
@@ -197,8 +204,7 @@ typedef struct YFILTER_HEADER {
 	아.. 그래서 xfilter 에서 주고 받는 구조체에 union이 많은 거구나.
 	서로 다른 애들끼리는 필드를 중첩 시키려고.
 */
-#ifndef _NTDDK_
-
+#if !defined(_NTDDK_) && !defined(_PHLIB_)
 typedef struct _KERNEL_USER_TIMES {
 	LARGE_INTEGER CreateTime;
 	LARGE_INTEGER ExitTime;
@@ -206,7 +212,6 @@ typedef struct _KERNEL_USER_TIMES {
 	LARGE_INTEGER UserTime;
 } KERNEL_USER_TIMES;
 typedef KERNEL_USER_TIMES* PKERNEL_USER_TIMES;
-
 #endif
 
 #define YFILTER_COMMAND_START	0x00000001

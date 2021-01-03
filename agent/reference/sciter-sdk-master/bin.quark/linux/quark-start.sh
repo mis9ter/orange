@@ -1,1 +1,0 @@
-../../bin.lnx/x64/scapp ../../quark/index.htm

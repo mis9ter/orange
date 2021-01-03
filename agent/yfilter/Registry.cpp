@@ -91,6 +91,7 @@ BOOLEAN	NTAPI	GetRegistryPath
 	}
 	return bRet;
 }
+/*
 static	bool		IsAllowedOperation(PVOID pObject)
 {
 	bool			bRet = true;
@@ -128,6 +129,24 @@ static	bool		IsAllowedOperation(PVOID pObject)
 	}
 	return bRet;
 }
+*/
+
+void		RegistryLog(PCSTR pType, HANDLE PID, PVOID pObject)
+{
+	PUNICODE_STRING	pValue = NULL;
+	if (GetRegistryPath(pObject, &pValue)) {
+		__log("%-32s %6d %wZ", pType, PID, pValue);
+	}
+	else {
+		__log("%-32s %6d GetRegistryPath() failed.", pType, PID);
+	}
+	if (pValue)
+	{
+		CMemory::Free(pValue);
+	}
+}
+
+
 NTSTATUS	RegistryCallback
 (
 	IN	PVOID	pCallbackContext,
@@ -148,13 +167,15 @@ NTSTATUS	RegistryCallback
 	UNREFERENCED_PARAMETER(pCallbackContext);
 	UNREFERENCED_PARAMETER(pArgument2);
 
+	//__log("%-32s pArgument2=%p, KeGetCurrentIrql()=%d", __FUNCTION__, pArgument2, KeGetCurrentIrql());
+
 	if (NULL == pArgument2 ||
 		KeGetCurrentIrql() > APC_LEVEL ||
 		PsGetCurrentProcessId() <= (HANDLE)4 ||
 		KernelMode == ExGetPreviousMode()
 	)	return status;
 
-	//CFltObjectReference	filter(Config()->pFilter);
+	CFltObjectReference	filter(Config()->pFilter);
 	//kvnif (!filter.Reference())	return status;
 
 	REG_NOTIFY_CLASS	notifyClass = (REG_NOTIFY_CLASS)(ULONG_PTR)pArgument;;
@@ -164,22 +185,28 @@ NTSTATUS	RegistryCallback
 		PVOID		reserved;
 
 	} BASE_REG_KEY_INFO, *PBASE_REG_KEY_INFO;
+
+	HANDLE	PID	= PsGetCurrentProcessId();
+
 	switch (notifyClass)
 	{
 	case RegNtSetValueKey:
-	case RegNtDeleteValueKey:
-	case RegNtRenameKey:
-	case RegNtDeleteKey:
-		if (IsRegisteredProcess(PsGetCurrentProcessId()))	break;
-		if (IsAllowedOperation(((PBASE_REG_KEY_INFO)pArgument2)->pObject))
-		{
-
-		}
-		else
-		{
-			status = STATUS_ACCESS_DENIED;
-		}
+		//RegistryLog("RegNtSetValueKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
 		break;
+	case RegNtDeleteValueKey:
+		RegistryLog("RegNtDeleteValueKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
+		break;
+
+	case RegNtRenameKey:
+		RegistryLog("RegNtRenameKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
+		break;
+
+	case RegNtPreCreateKey:
+
+		break;
+	case RegNtDeleteKey:
+		RegistryLog("RegNtDeleteKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
+	break;
 	case RegNtPreSetKeySecurity:
 
 		break;
@@ -203,10 +230,14 @@ bool	StartRegistryFilter(IN PDRIVER_OBJECT pDriverObject)
 		RtlStringCbPrintfW(szAltitude, sizeof(szAltitude), L"%ws.%d", DRIVER_STRING_ALTITUDE, lTickCount.LowPart);
 		RtlInitUnicodeString(&altitude, szAltitude);
 
+		g_nCookie.QuadPart	= 0;
 		status = CmRegisterCallbackEx(RegistryCallback, &altitude, pDriverObject, NULL, &g_nCookie, NULL);
 		//status	= CmRegisterCallback((PEX_CALLBACK_FUNCTION)RegistryCallback, NULL, &g_nCookie);
-		if (NT_FAILED(status))	__leave;
-
+		if (NT_FAILED(status))	{
+			__log("%-32s CmRegisterCallbackEx() failed. status=%08x", __FUNCTION__, status);
+			
+			__leave;
+		}
 		bRet = true;
 	}
 	__finally

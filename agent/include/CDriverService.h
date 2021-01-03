@@ -7,9 +7,9 @@ typedef struct _CONFIG
 {
 	_CONFIG
 	(
-		IN PCWSTR	pDriverPath = NULL,
-		IN PCWSTR	pServiceName = AGENT_SERVICE_NAME,
-		IN PCWSTR	pDisplayName = AGENT_DISPLAY_NAME
+		IN PCWSTR	pDriverPath		= DRIVER_FILE_NAME,
+		IN PCWSTR	pServiceName	= AGENT_SERVICE_NAME,
+		IN PCWSTR	pDisplayName	= AGENT_DISPLAY_NAME
 	)
 	{
 		InitializeCriticalSection(&lock);
@@ -19,28 +19,11 @@ typedef struct _CONFIG
 		StringCbCopyW(szDisplayName, sizeof(szDisplayName), pDisplayName);
 
 		CString		driverPath;
-		// 부모 경로가 NULL일경우 현재 경로를 기준으로 한다.
-		if (pDriverPath == NULL)
-		{
-			WCHAR szModulePath[MAX_PATH] = { 0 };
-			GetModuleFileNameW((HMODULE)&__ImageBase, szModulePath, MAX_PATH);
-			*wcsrchr(szModulePath, L'\\') = L'\0';
-			driverPath.Format(L"%s\\%s.sys", szModulePath, szServiceName);
-		}
-		else
-		{
-			if (pDriverPath[wcslen(pDriverPath) - 1] == L'\\')
-			{
-				driverPath.Format(L"%s%s.sys", pDriverPath, szServiceName);
-			}
-			else if (PathIsDirectory(pDriverPath))
-			{
-				driverPath.Format(L"%s\\%s.sys", pDriverPath, szServiceName);
-			}
-			else {
-				driverPath.Format(L"%s", pDriverPath);
-			}
-		}
+		WCHAR		szModulePath[MAX_PATH] = { 0 };
+		GetModuleFileNameW((HMODULE)&__ImageBase, szModulePath, MAX_PATH);
+		*wcsrchr(szModulePath, L'\\') = L'\0';
+		driverPath.Format(L"%s\\%s", szModulePath, pDriverPath);
+
 		StringCbCopyW(szDriverPath, sizeof(szDriverPath), driverPath);
 		StringCbCopyW(szDriverInstallPath, sizeof(szDriverInstallPath), driverPath);
 		CString deviceName;
@@ -95,9 +78,9 @@ class CDriverService
 public:
 	CDriverService
 	(
-		IN PCWSTR	pDriverPath = NULL,
-		IN PCWSTR	pServiceName = DRIVER_SERVICE_NAME,
-		IN PCWSTR	pDisplayName = DRIVER_DISPLAY_NAME
+		IN PCWSTR	pDriverPath		= DRIVER_FILE_NAME,
+		IN PCWSTR	pServiceName	= DRIVER_SERVICE_NAME,
+		IN PCWSTR	pDisplayName	= DRIVER_DISPLAY_NAME
 	)
 		:
 		m_config(pDriverPath, pServiceName, pDisplayName)

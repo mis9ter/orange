@@ -1,1 +1,0 @@
-..\..\bin\tiscript.exe -o "compiled\foo.tis" -c "foo.tis"

@@ -23,6 +23,7 @@ bool	CAgent::Install()
 	YAgent::GetModulePath(szPath, sizeof(szPath));
 	StringCbCat(szPath, sizeof(szPath), L"\\");
 	StringCbCat(szPath, sizeof(szPath), DRIVER_FILE_NAME);
+	Log("%-32s %ws", __FUNCTION__, szPath);
 	CFilterCtrl::Install(DRIVER_SERVICE_NAME, szPath, false);
 	return true;
 }
@@ -39,8 +40,11 @@ bool	CAgent::Initialize()
 			L"%s\\%s", m_config.szPath, DRIVER_FILE_NAME);
 		StringCbPrintf(m_config.szEventDBPath, sizeof(m_config.szEventDBPath),
 			L"%s\\%s", m_config.szPath, DB_EVENT_DB);
-		if( false == SetResourceToFile(IDR_KERNEL_DRIVER, m_config.szDriverPath) )
-			__leave;
+		if (!PathFileExists(m_config.szDriverPath)) {
+			if( false == SetResourceToFile(IDR_KERNEL_DRIVER, m_config.szDriverPath) )
+				Log("%s SetReqourceToFile(%ws) failed.", __FUNCTION__, m_config.szDriverPath);
+				__leave;
+		}
 		if (!PathFileExists(m_config.szEventDBPath)) {
 			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventDBPath) ) {
 				Log("%s SetReqourceToFile(%ws) failed.", __FUNCTION__, m_config.szEventDBPath);

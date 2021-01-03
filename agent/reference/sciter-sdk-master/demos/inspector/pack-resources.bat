@@ -1,1 +1,0 @@
-..\..\bin.win\packfolder.exe res resources.cpp -v "resources"

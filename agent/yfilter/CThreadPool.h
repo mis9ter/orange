@@ -132,7 +132,7 @@ private:
 		PVOID		events[YFilter::Message::Category::Count + 1];
 		//IoInitializeRemoveLock()
 
-		__log("%s %d %d begin", __FUNCTION__, PsGetCurrentProcessId(), PsGetCurrentThreadId());
+		//__log("%s %d %d begin", __FUNCTION__, PsGetCurrentProcessId(), PsGetCurrentThreadId());
 
 		MAXIMUM_WAIT_OBJECTS;
 		THREAD_WAIT_OBJECTS;
@@ -177,7 +177,7 @@ private:
 			CMemory::Free(pWaitBlock);
 		}
 	
-		__log("%s %d %d end", __FUNCTION__, PsGetCurrentProcessId(), PsGetCurrentThreadId());
+		//__log("%s %d %d end", __FUNCTION__, PsGetCurrentProcessId(), PsGetCurrentThreadId());
 		PsTerminateSystemThread(STATUS_SUCCESS);
 	}
 };

@@ -120,6 +120,8 @@ private:
 #endif
 
 namespace YAgent {
+	bool		Alert(PCWSTR pFormat, ...);
+
 	LPSTR		WideToAnsiString(LPCWSTR pSrc);
 	LPTSTR		AnsiToWide(LPCSTR szSrc, UINT uCodePage = CP_ACP);
 	LPSTR		WideToAnsi(LPCWSTR szSrcWStr, UINT uCodePage = CP_ACP);

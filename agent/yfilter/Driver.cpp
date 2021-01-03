@@ -188,7 +188,7 @@ Return Value:
 --*/
 {
 	__function_log;
-	//__dlog("built at %s %s", __DATE__, __TIME__);
+	__dlog("built at %s %s", __DATE__, __TIME__);
 
     NTSTATUS status	= STATUS_UNSUCCESSFUL;
     UNREFERENCED_PARAMETER( pRegistryPath );
@@ -250,6 +250,8 @@ Return Value:
 			__log("FltStartFiltering() failed. status=%08x", status);
 			__leave;
 		}
+		//	Registry 콜백 시작 - 단 초기엔 콜백만 걸려있지 아무 것도 하지 않음.
+		StartRegistryFilter(pDriverObject);
 		status	= STATUS_SUCCESS;
 	}
 	__finally
@@ -299,6 +301,7 @@ Return Value:
 	if (Config())
 	{
 		StopDriver();
+		StopRegistryFilter();
 		if (Config()->pDeviceObject)
 		{
 			IoDeleteSymbolicLink(&Config()->dosDeviceName);
