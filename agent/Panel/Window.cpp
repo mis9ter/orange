@@ -3,8 +3,8 @@
 #define MAIN_WINDOW_CLASSNAME   L"Orange.User"
 #define MAIN_WINDOW_NAME        L"Orange.User"
 HINSTANCE               g_hInstance;
-HWND                    PhMainWndHandle;
-HWND                    TabControlHandle;
+HWND                    m_hWnd;
+HWND                    m_hTab;
 BOOLEAN                 PhPluginsEnabled = FALSE;
 PPH_STRING              PhSettingsFileName = NULL;
 PH_STARTUP_PARAMETERS   PhStartupParameters;
@@ -235,14 +235,14 @@ VOID OnMenuCommand(
         */
     }
 }
-VOID OnSize(
-    _In_ HWND hWnd
-)
+void OnSize(const HWND hwnd,int cx,int cy,UINT flags)
 {
-    if (!IsMinimized(hWnd))
-    {
+    // Get the header control handle which has been previously stored in the user
+    // data associated with the parent window.
+    HWND hTabCntrl=reinterpret_cast<HWND>(static_cast<LONG_PTR>
+        (GetWindowLongPtr(hwnd,GWLP_USERDATA)));
 
-    }
+    MoveWindow(hTabCntrl, 2, 2, cx - 4, cy - 4, TRUE);
 }
 
 VOID OnSizing(
@@ -325,7 +325,7 @@ LRESULT CALLBACK PhMwpWndProc(
     break;
     case WM_SIZE:
     {
-        OnSize(hWnd);
+        OnSize(hWnd, LOWORD(lParam), HIWORD(lParam), static_cast<UINT>(wParam));
     }
     break;
     case WM_SIZING:
@@ -394,7 +394,7 @@ LONG PhMainMessageLoop(
 
     acceleratorTable = LoadAccelerators(g_hInstance, MAKEINTRESOURCE(IDR_USER_ACCEL));
 
-    ShowWindow(PhMainWndHandle, SW_SHOW);
+    ShowWindow(m_hWnd, SW_SHOW);
     while (GetMessage(&message, NULL, 0, 0))
     {
         TranslateMessage(&message);
@@ -473,39 +473,94 @@ VOID SetApplicationWindowIcon(
     }
 }
 
-/*
-PPH_MAIN_TAB_PAGE PhMwpCreateInternalPage(
-    _In_ PWSTR Name,
-    _In_ ULONG Flags,
-    _In_ PPH_MAIN_TAB_PAGE_CALLBACK Callback
-)
+HWND	m_hWndTab;
+enum {
+    IDC_TAB=200,
+};
+
+HWND CreateTab(const HWND hParent,const HINSTANCE hInst,DWORD dwStyle,
+    const RECT& rc,const int id)
 {
-    PH_MAIN_TAB_PAGE page;
+    dwStyle |= WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | TCS_MULTILINE;
 
-    memset(&page, 0, sizeof(PH_MAIN_TAB_PAGE));
-    PhInitializeStringRef(&page.Name, Name);
-    page.Flags = Flags;
-    page.Callback = Callback;
-
-    return PhMwpCreatePage(&page);
+    return CreateWindowEx(0,    //  extended styles
+        WC_TABCONTROL,          //  control 'class' name
+        0,                      //  control caption
+        dwStyle,                //  wnd style
+        rc.left,                //  position: left
+        rc.top,                 //  position: top
+        rc.right,               //  width
+        rc.bottom,              //  height
+        hParent,                //  parent window handle
+                                //  control's ID
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
+        hInst,              //instance
+        0);                 //user defined info
 }
-*/
 
-void    InitializeMainWindowControls(HWND hWnd) {
+int InsertItem(HWND hTc,const std::wstring & txt,int item_index,int image_index,
+    UINT mask = TCIF_TEXT|TCIF_IMAGE)
+{
+    std::vector<TCHAR> tmp(txt.begin(),txt.end());
+    tmp.push_back(_T('\0'));
 
-    TabControlHandle = CreateWindow(
-        WC_TABCONTROL,
-        NULL,
-        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | TCS_MULTILINE,
-        0,
-        0,
-        3,
-        3,
-        hWnd,
-        NULL,
-        g_hInstance,
-        NULL
-    );
+    TCITEM tabPage={0};
+
+    tabPage.mask=mask;
+    tabPage.pszText=&tmp[0];
+    tabPage.cchTextMax=static_cast<int>(txt.length());
+    tabPage.iImage=image_index;
+    return static_cast<int>(SendMessage(hTc,TCM_INSERTITEM,item_index,
+        reinterpret_cast<LPARAM>(&tabPage)));
+}
+int AddTabControl(HWND hWnd, int nIndex, PCWSTR pStr)
+{
+    TCITEM item;
+
+    item.mask       = TCIF_TEXT;
+    item.pszText    = (PWSTR)pStr;
+
+    return TabCtrl_InsertItem(hWnd, nIndex, &item);
+}
+
+void StartCommonControls(DWORD flags)
+{
+    INITCOMMONCONTROLSEX iccx;
+    iccx.dwSize=sizeof(INITCOMMONCONTROLSEX);
+    iccx.dwICC=flags;
+    InitCommonControlsEx(&iccx);
+}
+void	InitializeTabControl(IN HINSTANCE hInstance, IN HWND hWnd)
+{
+
+    RECT rc={0,0,0,0};
+    StartCommonControls(ICC_TAB_CLASSES);
+
+    HWND hTabCntrl=CreateTab(hWnd, hInstance,TCS_FIXEDWIDTH,rc, IDC_TAB);
+
+    // Store the tab control handle as the user data associated with the
+    // parent window so that it can be retrieved for later use
+    SetWindowLongPtr(hWnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(hTabCntrl));
+
+    AddTabControl(hTabCntrl, 0, L"프로세스");
+    AddTabControl(hTabCntrl, 1, L"Page 2");
+    AddTabControl(hTabCntrl, 2, L"Page 3");
+
+    //set the font of the tabs to a more typical system GUI font
+    SendMessage(hTabCntrl,WM_SETFONT,
+        reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),0);                   
+}
+
+void    DestroyTabControl(const HWND hwnd)
+{
+    HWND hTabCntrl=reinterpret_cast<HWND>(static_cast<LONG_PTR>
+        (GetWindowLongPtr(hwnd,GWLP_USERDATA)));
+
+    HIMAGELIST hImages=reinterpret_cast<HIMAGELIST>(SendMessage(hTabCntrl,
+        TCM_GETIMAGELIST,0,0)); 
+
+    ImageList_Destroy(hImages);
+    PostQuitMessage(0);
 }
 
 void	CreateMainWindowMenu(IN HWND hWnd);
@@ -542,28 +597,28 @@ int	CreateMainWindow(
     }
     RECT    rect    = {100,100,100,100};
 
-    PhMainWndHandle  = CreateWindow(MAKEINTATOM(windowAtom), MAIN_WINDOW_NAME, WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN, 
+    m_hWnd  = CreateWindow(MAKEINTATOM(windowAtom), MAIN_WINDOW_NAME, WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN, 
         windowRectangle.Left,
         windowRectangle.Top,
         windowRectangle.Width,
         windowRectangle.Height,
         NULL, NULL, NULL, NULL);
 
-   // CreateMainWindowMenu(PhMainWndHandle);
+   // CreateMainWindowMenu(m_hWnd);
 
-    SetApplicationWindowIcon(PhMainWndHandle);
+    SetApplicationWindowIcon(m_hWnd);
     // Choose a more appropriate rectangle for the window.
-    PhAdjustRectangleToWorkingArea(PhMainWndHandle, &windowRectangle);
+    PhAdjustRectangleToWorkingArea(m_hWnd, &windowRectangle);
     MoveWindow(
-        PhMainWndHandle, 
+        m_hWnd, 
         windowRectangle.Left, windowRectangle.Top,
         windowRectangle.Width, windowRectangle.Height,
         FALSE
     );
-    UpdateWindow(PhMainWndHandle);
+    UpdateWindow(m_hWnd);
 
-    InitializeMainWindowControls(PhMainWndHandle);
-   // PhInitializeWindowTheme(PhMainWndHandle, PhEnableThemeSupport); // HACK
+    //InitializeTabControl(g_hInstance, m_hWnd);
+   // PhInitializeWindowTheme(m_hWnd, PhEnableThemeSupport); // HACK
 
     LONG    nRet    = PhMainMessageLoop();
     PhExitApplication(nRet);
