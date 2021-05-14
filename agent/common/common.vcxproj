@@ -103,6 +103,7 @@
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -161,6 +162,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -183,6 +185,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     <ClInclude Include="..\include\CMemory.h" />
     <ClInclude Include="..\include\CTime.h" />
     <ClInclude Include="..\include\yagent.common.h" />
+    <ClInclude Include="..\include\yagent.define.h" />
     <ClInclude Include="..\include\yagent.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
@@ -193,6 +196,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     <ClCompile Include="common.cpp" />
     <ClCompile Include="CompareString.cpp" />
     <ClCompile Include="CreateDirectory.cpp" />
+    <ClCompile Include="Folder.cpp" />
     <ClCompile Include="GetCurrentSessionId.cpp" />
     <ClCompile Include="GetRegistryValues.cpp" />
     <ClCompile Include="GetFileExt.cpp" />
@@ -209,6 +213,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     </ClCompile>
     <ClCompile Include="ReplaceString.cpp" />
     <ClCompile Include="String.cpp" />
+    <ClCompile Include="Run.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

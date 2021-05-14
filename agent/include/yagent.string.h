@@ -49,6 +49,66 @@ private:
 	void		*m_pBuf;
 	DWORD		m_dwSize;
 };
+class CWSTR
+{
+public:
+	CWSTR(IN PCWSTR p)
+		:
+		CWSTR()
+	{
+		if( p )
+		{
+			m_str	= p;
+		}
+	}
+	CWSTR()
+	{
+		m_szNull[0] = NULL;
+	}
+	~CWSTR()
+	{
+
+	}
+	std::wstring &	operator =(CWSTR & p) {
+		return m_str;
+	}
+
+	CWSTR &	operator =(std::wstring & p) {
+		m_str	= p;		
+		return *this;
+	}
+	CWSTR &	operator =(PWSTR & p) {
+		m_str	= p;		
+		return *this;
+	}
+	CWSTR &	operator =(PCWSTR & p) {
+	
+		m_str	= p;		
+		return *this;
+	}
+	operator LPCWSTR()
+	{
+		return Get();
+	}
+	void		Set(PCWSTR p) {
+		m_str	= p;
+	}
+	PCWSTR		Get()
+	{
+		return m_str.empty()? m_szNull : m_str.c_str();
+	}
+	size_t		CbSize()
+	{
+		return m_str.length() * sizeof(WCHAR);
+	}
+	size_t		Len() 
+	{
+		return m_str.length();
+	}
+private:
+	std::wstring	m_str;
+	WCHAR			m_szNull[1];
+};
 
 class CANSI
 {

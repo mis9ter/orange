@@ -120,6 +120,8 @@ private:
 #endif
 
 namespace YAgent {
+	PCWSTR		GetDataFolder(IN PCWSTR pName, OUT PWSTR pValue, IN DWORD dwSize);
+	HANDLE		Run(IN LPCWSTR pFilePath, IN PCWSTR pArg);
 	bool		Alert(PCWSTR pFormat, ...);
 
 	LPSTR		WideToAnsiString(LPCWSTR pSrc);

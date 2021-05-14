@@ -1,0 +1,1 @@
+xcopy /E /Y .\dist\* C:\ProgramData\OrangeWorks\Orange\User\p7
