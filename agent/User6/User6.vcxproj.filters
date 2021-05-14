@@ -1,0 +1,130 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="소스 파일\WEBAPP">
+      <UniqueIdentifier>{3ecdbc54-6915-411e-9a12-a55cfcfd91b9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\WEBAPP\components">
+      <UniqueIdentifier>{13ccf4c1-3bf2-42b4-8e81-ceeee956afab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\WEBAPP\router">
+      <UniqueIdentifier>{cab48d16-1da2-4d9c-945b-f063574cab80}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="framework.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="User6.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\yagent.common.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\CAppRegistry.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\CHttp.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CheckFailure.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="HelloWebView.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="CheckFailure.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="User6.rc">
+      <Filter>리소스 파일</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="small.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+    <Image Include="User6.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="..\webapp\p7\src\App.vue">
+      <Filter>소스 파일\WEBAPP</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\main.js">
+      <Filter>소스 파일\WEBAPP</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\AppBar.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\App - 복사본.vue">
+      <Filter>소스 파일\WEBAPP</Filter>
+    </None>
+    <None Include="..\webapp\p7\package.json">
+      <Filter>소스 파일\WEBAPP</Filter>
+    </None>
+    <None Include="..\webapp\p7\vue.config.js">
+      <Filter>소스 파일\WEBAPP</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\router\index.js">
+      <Filter>소스 파일\WEBAPP\router</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\pprocess.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\Bar.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\eprocess.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\eproduct.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\Foo.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\HelloWorld.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\NotFound.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\pproduct.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\components\resizable-page.vue">
+      <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+  </ItemGroup>
+</Project>
