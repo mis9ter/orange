@@ -23,7 +23,7 @@
     <ProjectGuid>{181599B0-1CC1-4E11-8D8E-6DD4D262EFB9}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>reddb</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
     <ProjectName>orangedb.lib</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

@@ -200,6 +200,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     <ClInclude Include="..\include\CException.h" />
     <ClInclude Include="..\include\CIpc.h" />
     <ClInclude Include="..\include\CNotifyCenter.h" />
+    <ClInclude Include="..\include\CPathConvertor.h" />
     <ClInclude Include="..\include\CProtect.h" />
     <ClInclude Include="..\include\IFilterCtrl.h" />
     <ClInclude Include="..\include\IIPc.h" />

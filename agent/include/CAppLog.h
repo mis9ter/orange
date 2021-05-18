@@ -56,20 +56,14 @@ private:
 		HANDLE		hFile	= INVALID_HANDLE_VALUE;
 		DWORD		dwBytes;
 
-		try {
-		
-			hFile = ::CreateFile(m_szLogPath, FILE_APPEND_DATA | SYNCHRONIZE, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS,
-						FILE_ATTRIBUTE_NORMAL, NULL);
-			if (INVALID_HANDLE_VALUE == hFile)
-			{
-				return false;
-			}
-			::SetFilePointer(hFile, 0, NULL, FILE_END);
-			::WriteFile(hFile, pMsg, (DWORD)dwSize, &dwBytes, NULL);
+		hFile = ::CreateFile(m_szLogPath, FILE_APPEND_DATA | SYNCHRONIZE, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL, NULL);
+		if (INVALID_HANDLE_VALUE == hFile)
+		{
+			return false;
 		}
-		catch( std::exception & e ) {
-			UNREFERENCED_PARAMETER(e);
-		}
+		::SetFilePointer(hFile, 0, NULL, FILE_END);
+		::WriteFile(hFile, pMsg, (DWORD)dwSize, &dwBytes, NULL);
 		if( INVALID_HANDLE_VALUE != hFile )	::CloseHandle(hFile);
 		return true;
 	}

@@ -25,7 +25,7 @@ static wil::com_ptr<ICoreWebView2> webviewWindow;
 #define WEBVIEW2_x86_INSTALL_ROOTKEY	L"SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 #define WEBVIEW2_INSTALL_KEY		L"{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
-CAppLog	g_log(L"user6.log");
+static	CAppLog	g_log(L"user6.log");
 
 bool	IsWebview2Installed(PWSTR pVer = NULL, DWORD dwVerSize = 0) {
 	//	x64	
@@ -96,12 +96,7 @@ void	ExitFullScreen(HWND hWnd)
 		SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
 }
 
-int CALLBACK WinMain(
-	_In_ HINSTANCE hInstance,
-	_In_ HINSTANCE hPrevInstance,
-	_In_ LPSTR     lpCmdLine,
-	_In_ int       nCmdShow
-)
+int		W1(HINSTANCE hInstance, int nCmdShow)
 {
 	if( false == IsWebview2Installed() ) 
 	{
@@ -202,8 +197,7 @@ int CALLBACK WinMain(
 	// The parameters to ShowWindow explained:
 	// hWnd: the value returned from CreateWindow
 	// nCmdShow: the fourth parameter from WinMain
-	ShowWindow(hWnd,
-		nCmdShow);
+	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
 	HICON hicon = (HICON)LoadImageW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDI_SMALL), 

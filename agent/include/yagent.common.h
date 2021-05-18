@@ -33,6 +33,7 @@
 #define	__mstricmp(a,b)		_mbsicmp((const unsigned char*)(a? a:""), (const unsigned char*)(b? b:""))
 #define	__mstrstr(a,b)		_mbsstr((const unsigned char*)(a? a:""), (const unsigned char*)(b? b:""))
 
+#include "yagent.string.h"
 
 typedef	BOOL(WINAPI* PInitializeCriticalSectionEx)
 (
@@ -40,6 +41,7 @@ typedef	BOOL(WINAPI* PInitializeCriticalSectionEx)
 	DWORD dwSpinCount,
 	DWORD Flags
 );
+
 class CLock
 {
 public:

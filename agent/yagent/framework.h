@@ -19,8 +19,6 @@
 
 #include <iostream>
 
-using namespace std;
-
 #include "resource.h"
 #include "CAgent.h"
 //	https://devblogs.microsoft.com/cppblog/making-cpp-exception-handling-smaller-x64/

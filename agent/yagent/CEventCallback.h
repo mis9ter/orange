@@ -273,6 +273,133 @@ public:
 		return m_dwBootId;
 	}
 
+	void		SetResult(
+		IN	PCSTR	pFile, PCSTR pFunction, int nLine,
+		IN	Json::Value & res, IN bool bRet, IN int nCode, IN PCSTR pMsg /*utf8*/
+	) {
+		Json::Value	&_result	= res["result"];
+		
+		_result["ret"]	= bRet;
+		_result["code"]	= nCode;
+		_result["msg"]	= pMsg;
+		_result["file"]	= pFile;
+		_result["line"]	= nLine;
+		_result["function"]	= pFunction;
+
+		if( false == bRet ) {
+			Log("%-32s %s @%s(%d)", pFunction, pMsg? pMsg : "", pFile, nLine);
+		}
+	}
+	DWORD		QueryUnknonwn
+	(
+		Json::Value		&query,
+		Json::Value		&bind,
+		Json::Value		&res
+
+	) {
+		DWORD			dwCount		= 0;
+		sqlite3_stmt	*pStmt		= NULL;
+		Json::Value		&resdata	= res["data"];
+		Json::Value		&rescolumn	= resdata["column"];
+		Json::Value		&resrow		= resdata["row"];
+		Json::Value		&resmore	= resdata["more"];
+
+		resmore	= false;
+		try {
+			pStmt	= Db()->Stmt(query.asCString());
+			if( pStmt ) {
+				int				nIndex = 0;
+				int				nColumnCount	= sqlite3_column_count(pStmt);
+				const wchar_t	*pColumnName	= NULL;
+
+				for( auto i = 0 ; i < nColumnCount ; i++ ) {
+					pColumnName	= (wchar_t *)sqlite3_column_name16(pStmt, i);			
+					rescolumn.append(__utf8(pColumnName));
+				}
+				for( auto & t : bind ) {
+					int			nType	= t["type"].asInt();
+					Json::Value	&value	= t["value"];
+
+					switch( nType ) {
+						case 0:						//	int
+						case SQLITE_INTEGER:		//	int64
+							sqlite3_bind_int64(pStmt, ++nIndex, value.asInt64());
+							break;
+
+						case SQLITE_FLOAT:
+							sqlite3_bind_double(pStmt, ++nIndex, value.asDouble());
+							break;
+
+						case SQLITE_TEXT:			//	string
+							sqlite3_bind_text16(pStmt, ++nIndex, __utf16(value.asCString()), -1, SQLITE_TRANSIENT);
+							break;					
+
+						default:
+							Log("%-32s unknown type:%d in bind", __func__, nType);
+							break;
+					}					
+				}		
+
+				int		nStatus;
+				while ( SQLITE_ROW == (nStatus = sqlite3_step(pStmt)) ) {
+					Json::Value		row;
+					if( dwCount > 1000 )	{
+						resmore	= true;
+						break;
+					}
+					row.clear();
+					for( auto i = 0 ; i < nColumnCount ; i++ ) {
+						int			nType	= sqlite3_column_type(pStmt, i);
+						wchar_t		*pText	= NULL;
+						double		dDouble	= 0;
+						PVOID		*pBlob	= NULL;
+						int64_t		nInt	= 0;
+
+						std::string	name	= __utf8((PCWSTR)sqlite3_column_name16(pStmt, i));
+						switch( nType ) {
+							case SQLITE_INTEGER:
+								row[name]	= sqlite3_column_int64(pStmt, i);
+								break;
+
+							case SQLITE_FLOAT:
+								row[name]	= sqlite3_column_double(pStmt, i);
+								break;
+
+							case SQLITE_TEXT:
+								row[name]	= __utf8((wchar_t *)sqlite3_column_text16(pStmt, i));
+								break;
+
+							case SQLITE_BLOB:
+								row[name]	= "blob";
+								break;
+
+							case SQLITE_NULL:
+								row[name]	= Json::Value::null;
+								break;
+
+							default:
+								row[name]	= "unknown";
+								break;
+						}
+					}
+					resrow.append(row);
+					dwCount++;
+				}
+				Db()->Free(pStmt);
+				SetResult(__FILE__, __func__, __LINE__, res, true, 0, "");
+			}
+			else {
+				//	invalid stmt
+				SetResult(__FILE__, __func__, __LINE__, res, false, sqlite3_errcode(Db()->Handle()), sqlite3_errmsg(Db()->Handle()) );
+			}
+		}
+		catch( std::exception & e) {
+			SetResult(__FILE__, __func__, __LINE__, res, false, 0, e.what());
+			SQLITE_OK;
+		}
+		resdata["count"]	= (int)dwCount;
+		return dwCount;
+	}
 	struct {
 		std::atomic<DWORD>		dwProcess;
 		std::atomic<DWORD>		dwThread;

@@ -9,6 +9,8 @@
 
 #include "yagent.h"
 #include "yagent.common.h"
+#include "CPathConvertor.h"
+
 #include "CThread.h"
 #include "IFilterCtrl.h"
 #include "CDialog.h"

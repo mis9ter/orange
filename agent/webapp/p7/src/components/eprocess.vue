@@ -1,57 +1,66 @@
 <template>
-    <v-container fluid id="mycontainer">
-        <h2>EPROCESS</h2>
-        <div id="outer">
-            <v-data-table id="mytable"
-                          :headers="headers"
-                          :items="items"
-                          :height="height"
-                          disable-pagination
-                          fixed-header
-                          hide-default-footer
-                          class="elevation-1">
-            </v-data-table>
-        </div>
+    <v-container fluid>
+        <v-row>
+            <v-col cols="12"
+                   md="12">
+                <v-textarea clearable
+                            clear-icon="mdi-close-circle"
+                            label="req"
+                            v-model="req"
+                            value=""></v-textarea>
+            </v-col>
+            <v-btn block @click="request">
+                query
+            </v-btn>
+            <v-col cols="12"
+                   md="12">
+                <v-textarea clearable
+                            clear-icon="mdi-close-circle"
+                            label="res"
+                            v-model="res"
+                            value=""></v-textarea>
+            </v-col>
+        </v-row>
     </v-container>
 
 </template>
 <script>
     import ResizablePage from "../components/resizable-page";
+    import Control from "../common/control.js"
 
     export default {
-        name: 'PProcess',
+        name: 'EProcess',
+        components: {
+            ResizablePage,
+            Control
+        },
         data: () => ({
-            headers: [
-                { text: "Header A", value: "a" },
-                { text: "Header B, longer", value: "b" },
-                { text: "Header C", value: "c" }
-            ],
-            items: [],
+            req: '',
+            res:'',
             height: 100
         }),
+        created() {
+            Control.setResponse(this.response)
+        },
+        destroyed() {
+            Control.removeResponse(this.response)
+        },
         computed: {
-
+            Control
         },
         methods: {
-            getHeight() {
-                var h   = window.innerHeight -
-                            this.$refs.resizableDiv.getBoundingClientRect().y - 59;
-                return h;
-
+            response: function (event) {
+                this.res    = event.data
+                this.onResize()
             },
-            onResize() {
-                console.log('onResize()')
-                this.height = this.getHeight()
+            request: function () {
+
+                Control.request(JSON.parse(this.req))
             }
         },
         mounted() {
             console.log('mounted()')
-            for (var i = 1; i <= 100; i++) {
-                this.items.push({ a: "Row " + i, b: "Column B", c: "Column C", key:i });
-            }
-            this.height = this.getHeight();
-            window.addEventListener("resize", this.onResize);
-            this.$nextTick(this.onResize);
+
         }
     }
 </script>

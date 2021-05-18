@@ -115,10 +115,6 @@
             })
             this.path = this.$router.currentRoute.path
             console.log('App.vue created')
-            if (typeof window.chrome.webview != 'undefined') {
-                window.chrome.webview.addEventListener('message',
-                    event => console.log(event.data))
-            }
         },
         computed: {
             mini() {

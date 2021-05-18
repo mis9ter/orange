@@ -49,6 +49,30 @@ private:
 	void		*m_pBuf;
 	DWORD		m_dwSize;
 };
+class CoPWSTR
+{
+public:
+	CoPWSTR() 
+		:
+		m_pStr(NULL)
+	{
+
+	}
+	~CoPWSTR() {
+		if( m_pStr )	CoTaskMemFree(m_pStr);
+	}
+	operator PCWSTR() {
+		return m_pStr;
+	}
+	operator PWSTR() {
+		return m_pStr;
+	}
+	operator PWSTR *() {
+		return &m_pStr;
+	}
+private:
+	PWSTR		m_pStr;
+};
 class CWSTR
 {
 public:
@@ -70,6 +94,7 @@ public:
 
 	}
 	std::wstring &	operator =(CWSTR & p) {
+		UNREFERENCED_PARAMETER(p);
 		return m_str;
 	}
 
@@ -333,21 +358,13 @@ public:
 		m_pBuf(NULL),
 		m_dwSize(dwSize)
 	{
-		static	TCHAR	szNull[]	= _T("");
-		try
-		{
-			m_pBuf		= new TCHAR[dwSize];
-			m_dwSize	= dwSize;
-		}
-		catch (std::exception& e)
-		{
-			m_pBuf		= szNull;
-			puts(e.what());
-		}
+		static	WCHAR	szNull[]	= _T("");
+		m_pBuf		=  (WCHAR *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize);
+		m_dwSize	= dwSize;
 	}
 	~CStringBuffer()
 	{
-		if (m_pBuf)	delete m_pBuf;
+		if (m_pBuf)	HeapFree(GetProcessHeap(), 0, m_pBuf);
 	}
 	operator	LPTSTR() {
 		return m_pBuf;
@@ -361,7 +378,6 @@ public:
 	operator size_t() {
 		return m_dwSize;
 	}
-
 	void* Buffer()
 	{
 		return  m_pBuf;
@@ -373,111 +389,4 @@ public:
 private:
 	TCHAR		*m_pBuf;
 	DWORD		m_dwSize;
-};
-class CPathConvertor
-{
-public:
-	CPathConvertor(void)
-	{
-		InitPathInformation();
-	}
-	virtual ~CPathConvertor(void)
-	{
-
-	}
-	void    InitPathInformation(void)
-	{
-		m_pathMap.clear();
-
-		static const int MAX_DRV_COUNT = 'Z' - 'A';
-
-		WCHAR tmpSymName[8] = { 0 };
-		WCHAR tmpDevName[MAX_PATH] = { 0 };
-		for (WCHAR name = 'A'; name <= 'Z'; ++name)
-		{
-			StringCbPrintf(tmpSymName, sizeof(tmpSymName), L"%c:", name);
-			QueryDosDevice(tmpSymName, tmpDevName, MAX_PATH);
-			m_pathMap[name] = tmpDevName;
-		}
-	}
-	BOOL    MakeDevicePath(PCWSTR pSymbolicPath, PWSTR pDevicePath, SIZE_T devicePathSize)
-	{
-		WCHAR drive = pSymbolicPath[0];
-		PATH_MAP::iterator it = m_pathMap.find(drive);
-		if (it == m_pathMap.end())
-		{
-			InitPathInformation();
-
-			drive = pSymbolicPath[0];
-			it = m_pathMap.find(drive);
-			if (it == m_pathMap.end())
-			{
-				return FALSE;
-			}
-		}
-		CString devicePath;
-		StringCbPrintf(pDevicePath, devicePathSize, L"%s%s", it->second, &pSymbolicPath[2]);
-		return TRUE;
-	}
-	CString MakeDevicePath(CString symbolicPath)
-	{
-		if (PathIsRelative(symbolicPath) || !PathFileExists(symbolicPath))
-			return CString(symbolicPath);
-
-		WCHAR drive = symbolicPath.GetAt(0);
-		PATH_MAP::iterator it = m_pathMap.find(drive);
-		if (it == m_pathMap.end())
-		{
-			InitPathInformation();
-
-			drive = symbolicPath.GetAt(0);
-			it = m_pathMap.find(drive);
-			if (it == m_pathMap.end())
-			{
-				return CString(symbolicPath);
-			}
-		}
-		CString devicePath;
-		devicePath.Format(L"%s%s", it->second, symbolicPath.Mid(2));
-		return devicePath;
-	}
-	CString	MakeRegistryPath(CString path)
-	{
-		const WCHAR* pMachineKey = L"HKEY_LOCAL_MACHINE";
-		const WCHAR* pUserKey = L"HKEY_USERS";
-
-		CString			regPath(path);
-		if (0 == _wcsnicmp(path, pMachineKey, wcslen(pMachineKey)))
-		{
-			regPath.Replace(pMachineKey, L"\\REGISTRY\\MACHINE");
-		}
-		else if (0 == _wcsnicmp(path, pUserKey, wcslen(pUserKey)))
-		{
-			regPath.Replace(pUserKey, L"\\REGISTRY\\USER");
-		}
-		return regPath;
-	}
-	CString MakeSymbolicPath(CString devicePath)
-	{
-		PATH_MAP::iterator it = m_pathMap.begin();
-		for (; it != m_pathMap.end(); ++it)
-		{
-			CString& travDevPath = it->second;
-			SIZE_T length = travDevPath.GetLength();
-			if (length > 0)
-			{
-				if (it->second.CompareNoCase(devicePath.Left((int)length)) == 0)
-				{
-					CString symbolicPath;
-					symbolicPath.Format(L"%c:%s", it->first, devicePath.Mid(it->second.GetLength()));
-					return symbolicPath;
-				}
-			}
-		}
-		return CString(L"");
-	}
-
-private:
-	typedef std::map<WCHAR, CString> PATH_MAP;
-	PATH_MAP m_pathMap;
 };

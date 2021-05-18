@@ -22,6 +22,9 @@
     <Filter Include="소스 파일\WEBAPP\router">
       <UniqueIdentifier>{cab48d16-1da2-4d9c-945b-f063574cab80}</UniqueIdentifier>
     </Filter>
+    <Filter Include="소스 파일\WEBAPP\common">
+      <UniqueIdentifier>{922fdd24-ab77-47eb-a405-700cccd543ce}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -51,6 +54,12 @@
     <ClInclude Include="CheckFailure.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\yagent.string.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CWebview.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -60,6 +69,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="CheckFailure.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
@@ -125,6 +137,9 @@
     </None>
     <None Include="..\webapp\p7\src\components\resizable-page.vue">
       <Filter>소스 파일\WEBAPP\components</Filter>
+    </None>
+    <None Include="..\webapp\p7\src\common\control.js">
+      <Filter>소스 파일\WEBAPP\common</Filter>
     </None>
   </ItemGroup>
 </Project>

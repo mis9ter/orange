@@ -10,21 +10,7 @@
 #include <memory.h>
 #include <tchar.h>
 
-#include <wrl.h>
-#include <wil/com.h>
-using namespace Microsoft::WRL;
-
-#include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Foundation.Collections.h>
-
 #include "Resource.h"
 // include WebView2 header
-#include "WebView2.h"
-#include "CheckFailure.h"
-
-#include "CAppRegistry.h"
-#include "CAppLog.h"
-#include "yagent.common.h"
-#include "Chttp.h"
-
+#include "CWebview.h"
 

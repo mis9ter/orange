@@ -9,6 +9,8 @@
   "dependencies": {
     "core-js": "^3.6.5",
     "vue": "^2.6.11",
+    "vue-columns-resizable": "^0.0.1",
+    "vue-columns-resizable-vuetify": "^1.0.3",
     "vue-router": "^3.5.1",
     "vue-toast-notification": "^0.6.1",
     "vuetify": "^2.4.0"

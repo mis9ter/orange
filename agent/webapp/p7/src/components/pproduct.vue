@@ -39,10 +39,13 @@
 
         },
         created() {
-            if (typeof window.chrome.webview != 'undefined') {
-                window.chrome.webview.addEventListener('message',
-                    event => this.response(event.data))
-            }
+            console.log('---- pproduct created ----')
+            Control.test()
+            Control.setResponse(this.response)
+        },
+        destroyed() {
+            console.log('---- pproduct destroyed ----')
+            Control.removeResponse(this.response)
         },
         methods: {
             getHeight() {
@@ -56,30 +59,56 @@
                 console.log('onResize()')
                 this.height = this.getHeight()
             },
-            response: function (data) {
-                console.log('---- pproduct response')
+            response: function (event) {
+                console.log('---- pproduct response ----')
+                //console.log(event.data)
+                const doc = JSON.parse(event.data)
+                console.log(doc.header.command)
+                if ('pproduct.header' == doc.header.command) {
+                    this.headers = []
+                    for (var i = 0; i < doc.data.length; i++) {
+                        this.headers.push(doc.data[i])
+                    }
+                    this.request('pproduct.data', 0)
+                }
+                else if ('pproduct.data' == doc.header.command) {
+                    this.items = []
+                    for (var i = 0; i < doc.data.length; i++) {
+                        console.log(doc.data[i])
+                        this.items.push(doc.data[i])
+                    }
+                }
+                this.onResize()
             },
             request: function (cmd, type) {
-                console.log('-- pproduct request ' + cmd + ':' + type)
-                var doc = { 'command': cmd, 'type': type, 'from': 'pproduct', 'to': 'main' }
-                this.$emit('request', doc)
+                console.log('---- pproduct request ----')
+                var obj = new Object()
+
+                obj.header  = new Object()
+                obj.header.command  = cmd
+                obj.header.type = type
+                obj.header.from = 'pproduct'
+                obj.header.to = 'main'
+
+                //var doc = { 'command': cmd, 'type': type, 'from': 'pproduct', 'to': 'main' }
+                //this.$emit('request', doc)
+                var doc = JSON.stringify(obj)
+                Control.request(obj)
             }
         },
         mounted() {
             console.log('mounted()')
-            this.request('query.pproduct.header', 0) 
+            this.request('pproduct.header', 0) 
+            //this.headers.push({ text: "Header A", value: "a" })
+            //this.headers.push({ text: "Header B, longer", value: "b" })
+            //this.headers.push({ text: "Header C", value: "c" })
 
-            this.headers.push({ text: "Header A", value: "a" })
-            this.headers.push({ text: "Header B, longer", value: "b" })
-            this.headers.push({ text: "Header C", value: "c" })
-
-            for (var i = 1; i <= 100; i++) {
-                this.items.push({ key: i, a: "Row " + i, b: "Column B", c: "Column C" });
-                //this.items.push({ i: { a: "Row " + i, b: "Column B", c: "Column C" } });
-            }
-            this.height = this.getHeight();
-            //window.addEventListener("resize", this.onResize);
-            //this.$nextTick(this.onResize);
+            //for (var i = 1; i <= 100; i++) {
+            //    this.items.push({ key: i, a: "Row " + i, b: "Column B", c: "Column C" });
+            //    //this.items.push({ i: { a: "Row " + i, b: "Column B", c: "Column C" } });
+            //}
+            window.addEventListener("resize", this.onResize);
+            this.$nextTick(this.onResize);
         }
     }
 </script>
