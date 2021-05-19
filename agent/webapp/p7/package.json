@@ -13,7 +13,8 @@
     "vue-columns-resizable-vuetify": "^1.0.3",
     "vue-router": "^3.5.1",
     "vue-toast-notification": "^0.6.1",
-    "vuetify": "^2.4.0"
+    "vuetify": "^2.4.0",
+    "vuetify-dialog": "^2.0.14"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "~4.5.0",

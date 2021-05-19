@@ -15,6 +15,7 @@ using namespace Microsoft::WRL;
 #include "CAppLog.h"
 #include "yagent.common.h"
 #include "Chttp.h"
+#include "CIpc.h"
 
 #define WEBVIEW_LOG_NAME				L"webview.log"
 #define	WEBVIEW_CLASS_NAME2				L"OrangeClass"
@@ -29,16 +30,15 @@ typedef std::function<bool (IN PVOID pContext, IN Json::Value & req, OUT Json::V
 
 class CWebview
 	:
-	public	CAppLog
-
+	virtual	public	CAppLog
 {
 public:
-	CWebview(HINSTANCE hInstance) 
+	CWebview() 
 	:
 		CAppLog(WEBVIEW_LOG_NAME),
 		m_szWindowClass(WEBVIEW_CLASS_NAME2),
 		m_szAppTitle(WEBVIEW_APP_TITLE2),
-		m_hInstance(hInstance),
+		m_hInstance(NULL),
 		m_webviewController(nullptr),
 		m_webviewWindow(nullptr)
 	{
@@ -75,11 +75,13 @@ public:
 		m_callback.webMessage.pContext		= pContext;
 		m_callback.webMessage.pCallback		= pCallback;	
 	}
-	bool			Run(IN HWND hWnd, IN PCWSTR pStartPath, IN PCWSTR pStartPage) {
+	bool			Run(IN HINSTANCE hInstance, IN HWND hWnd, IN PCWSTR pStartPath, IN PCWSTR pStartPage) {
 		// <-- WebView2 sample code starts here -->
 
 		// Step 3 - Create a single WebView within the parent window
 		// Locate the browser and set up the environment for WebView
+		m_hInstance	= hInstance;
+
 		HRESULT	hr;
 		hr	= CreateCoreWebView2EnvironmentWithOptions(nullptr, pStartPath, nullptr,
 			Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(

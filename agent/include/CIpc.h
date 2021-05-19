@@ -68,7 +68,7 @@ private:
 class CRequestThread
 {
 public:
-	CRequestThread(IN IIPcClient * p) :
+	CRequestThread(IN IIPCClient * p) :
 		hThread(NULL),
 		hPipe(INVALID_HANDLE_VALUE) ,
 		pContext(NULL),
@@ -92,7 +92,7 @@ public:
 	HANDLE		hShutdown;
 	HANDLE		hPipe;
 	PVOID		pContext;
-	IIPcClient *pClient;
+	IIPCClient *pClient;
 private:
 
 };
@@ -101,11 +101,84 @@ private:
 typedef std::shared_ptr<CRequestThread>		RequestThreadPtr;
 typedef std::list<RequestThreadPtr>			RequestThreadList;
 
-class CIPc : 
-	public	IIPc
+/*
+	IPC 명령 처리자
+	header {
+	command	:"",
+	type	:""
+	}
+
+	header의 command - type 조합으로 명령을 연결한다.
+*/
+typedef bool	(*PIPCCallback)(
+	PVOID	pContext, 
+	const	Json::Value &req, 
+	const	Json::Value	&header,
+	Json::Value & res);
+
+typedef struct {
+	std::string		command;
+	std::string		type;
+	PVOID			pContext;
+	PIPCCallback	pCallback;
+} IPC_COMMAND;
+typedef std::shared_ptr<IPC_COMMAND>			IPCCommandPtr;
+typedef	std::map<std::string, IPCCommandPtr>	IPCCommandMap;
+
+class CIPCCommand
 {
 public:
-	CIPc() 
+	CIPCCommand() {
+
+	}
+	~CIPCCommand() {
+
+
+	}
+	void	AddCommand(IN PCSTR pCommand, IN PCSTR pType, 
+		PVOID pContext, PIPCCallback pCallback) {
+		std::string		key	= std::string(pCommand) + std::string(pType);
+		auto	t	= m_table.find(key);
+		//auto	SetCommand	=	[](IPCCommandPtr & ptr, 
+		//	std::string &command, std::string &type, 
+		//	PVOID pContext, PIPCCallback pCallback)	{
+		//	ptr->command	= command;
+		//	ptr->type		= type;
+		//	ptr->pContext	= pContext;
+		//	ptr->pCallback	= pCallback;		
+		//};
+		auto	p	= (t==m_table.end())? std::make_shared<IPC_COMMAND>() : t->second;
+		p->command		= pCommand;
+		p->type			= pType;
+		p->pContext		= pContext;
+		p->pCallback	= pCallback;
+		if( t == m_table.end() )
+			m_table[key]	= p;
+	}
+	void	ResetCommand() {
+		m_table.clear();
+	}
+	bool	CallCommand(
+		IN	const	Json::Value &req, 
+		IN	const	Json::Value	&header, 
+		IN	const	std::string	&command,
+		IN	const	std::string	&type,
+		Json::Value &res
+	) {
+		auto	t	= m_table.find(command + type);
+		if( m_table.end() == t)	return false;
+		return t->second->pCallback(t->second->pContext, req, header, res);
+	}
+private:
+	IPCCommandMap	m_table;
+};
+
+
+class CIPC : 
+	public	IIPC
+{
+public:
+	CIPC() 
 		:
 		m_log(L"ipc.log")
 	{
@@ -130,7 +203,7 @@ public:
 			m_pCreateFileW = ::CreateFileW;
 		}
 	}
-	virtual ~CIPc() {
+	virtual ~CIPC() {
 		::CloseHandle(m_hShutdown);
 		m_hShutdown = NULL;
 		::DeleteCriticalSection(&m_lock);
@@ -139,7 +212,7 @@ public:
 	// The Virtual functions of XModule
 	//////////////////////////////////////////////////////////////////////////////
 	long			__retainCount;
-	VOID			DeleteInstance(IIPc* pInstance)
+	VOID			DeleteInstance(IIPC* pInstance)
 	{
 		pInstance->Release();
 	}
@@ -157,11 +230,11 @@ public:
 	///////////////////////////////////////////////////////////////////////////
 	// The Virtual functions of IIpc
 	///////////////////////////////////////////////////////////////////////////
-	IIPcServer *	GetServer() {
-		return dynamic_cast<IIPcServer *>(this);
+	IIPCServer *	GetServer() {
+		return dynamic_cast<IIPCServer *>(this);
 	}
-	IIPcClient *	GetClient() {
-		return dynamic_cast<IIPcClient *>(this);
+	IIPCClient *	GetClient() {
+		return dynamic_cast<IIPCClient *>(this);
 	}
 	void			Free(IN VOID *ptr = NULL) {
 		if( ptr )
@@ -537,7 +610,7 @@ private:
 		return TRUE;
 	}
 	static unsigned	__stdcall	ServiceThread(IN LPVOID p) {
-		CIPc		*pClass	= (CIPc *)p;
+		CIPC		*pClass	= (CIPC *)p;
 		BOOL		bInitialized = FALSE;
 
 		PACL		pAcl = NULL;
@@ -580,7 +653,7 @@ private:
 			RequestThreadPtr	ptr;	
 
 			try {
-				ptr	= std::shared_ptr<CRequestThread>(new CRequestThread(dynamic_cast<IIPcClient *>(pClass)));
+				ptr	= std::shared_ptr<CRequestThread>(new CRequestThread(dynamic_cast<IIPCClient *>(pClass)));
 			}
 			catch( std::exception & e ) {
 				pClass->m_log.Log("%-32s exception:%s", __FUNCTION__, e.what());
@@ -633,7 +706,7 @@ private:
 	{
 		//	pipe 연결이 맺어지면 이 스레드가 1개 생긴다.
 		CRequestThread	*p		= (CRequestThread *)ptr;
-		CIPc			*pClass	= (CIPc*)p->pContext;
+		CIPC			*pClass	= (CIPC*)p->pContext;
 
 		pClass->m_log.Log("%-32s %p connected", __FUNCTION__, p->hPipe);
 		if( pClass->m_pCallback )

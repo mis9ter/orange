@@ -10,7 +10,8 @@ typedef GUID UUID;
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
 #define AGENT_SERVICE_DESC		L"orange.service"
 #define AGENT_DEFAULT_LOG_NAME	L"orange.log"
-#define AGENT_PIPE_NAME			L"\\\\.\\pipe\\{523E4858-04BA-4CB1-AE5D-6AD6C9503C16}"
+#define AGENT_SERVICE_PIPE_NAME	L"\\\\.\\pipe\\{523E4858-04BA-4CB1-AE5D-6AD6C9503C16}"
+#define AGENT_UI_PIPE_NAME		L"\\\\.\\pipe\\{D12BB45C-977B-4FBA-88A2-1A4F6B3D1D75}"
 #define AGENT_DATA_FOLDERNAME	L"\\Orangeworks\\Orange"
 
 

@@ -12,5 +12,5 @@
 
 #include "Resource.h"
 // include WebView2 header
-#include "CWebview.h"
+#include "CWebApp.h"
 

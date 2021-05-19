@@ -5,7 +5,7 @@
 #include <Windows.h>
 #include <functional>
 #include <thread>
-
+#include <memory>
 
 #include "yagent.h"
 #include "yagent.common.h"
@@ -265,6 +265,40 @@ private:
 
 };
 
+class CIPCCommandCallback
+{
+public:
+	CIPCCommandCallback() {
+	
+	}
+	~CIPCCommandCallback() {
+	
+	}
+
+protected:
+	static	bool	Sqllite3QueryUnknown
+	(
+		PVOID pContext, 
+		const	Json::Value &req, 
+		const	Json::Value	&header,
+		Json::Value & res
+	);
+	bool			Sqllite3QueryKnown
+	(
+		PVOID pContext, 
+		const	Json::Value &req, 
+		const	Json::Value	&header,
+		Json::Value & res
+	);
+	bool			RegisterListener
+	(
+		PVOID pContext, 
+		const	Json::Value &req, 
+		const	Json::Value	&header,
+		Json::Value & res
+	);
+};
+
 class CAgent
 	:
 	public	CDB,
@@ -272,7 +306,9 @@ class CAgent
 	public	CEventCallback,
 	public	CFilePath,
 	public	CNotifyCenter,
-	public	CIPc,
+	public	CIPC,
+	public	CIPCCommand,
+	public	CIPCCommandCallback,
 	public	CProtect
 {
 public:
@@ -310,6 +346,14 @@ public:
 		IN DWORD dwControl, IN DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext
 	);
 	static	bool	CALLBACK	ServiceFunction(DWORD dwFunction, DWORD dwControl, LPVOID lpContext);
+
+	void			LogDoc(PCSTR pTitle, const Json::Value & res) {
+		std::string					str;
+		Json::StreamWriterBuilder	wbuilder;
+		wbuilder["indentation"]	= "\t";
+		str	= Json::writeString(wbuilder, res);
+		Log(str.c_str());
+	}
 private:
 	struct m_config {
 		bool				bInitialize;
@@ -329,9 +373,9 @@ private:
 	void			Destroy();
 
 	static	void	MainThread(void * ptr, HANDLE hShutdown);
-	static	bool	CALLBACK	IPCCallback(
+	static	bool	CALLBACK	IPCRecvCallback(
 		IN	HANDLE		hClient,
-		IN	IIPcClient	*pClient,
+		IN	IIPCClient	*pClient,
 		IN	void		*pContext,
 		IN	HANDLE		hShutdown
 	);

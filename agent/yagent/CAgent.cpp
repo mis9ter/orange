@@ -106,6 +106,10 @@ bool	CAgent::Start()
 				break;
 			}
 		}
+
+		CIPCCommand::AddCommand("sqlite3.query", "unknown", this, Sqllite3QueryUnknown);
+
+
 		if (false == CFilterCtrl::Start(
 				NULL, NULL, 
 				dynamic_cast<CEventCallback *>(this),
@@ -126,9 +130,8 @@ bool	CAgent::Start()
 			break;
 		}
 
-		CIPc::SetServiceCallback(IPCCallback, this);
-
-		if( CIPc::Start(AGENT_PIPE_NAME, true) ) {
+		CIPC::SetServiceCallback(IPCRecvCallback, this);
+		if( CIPC::Start(AGENT_SERVICE_PIPE_NAME, true) ) {
 			Log("%s ipc pipe created.", __FUNCTION__);
 		}
 		else {
@@ -156,7 +159,7 @@ void	CAgent::Shutdown(IN DWORD dwControl)
 			Service()->SetServiceRecoveryMode(true);
 
 			SetEvent(m_config.hShutdown);
-			CIPc::Shutdown();
+			CIPC::Shutdown();
 			if (CFilterCtrl::IsRunning())
 			{
 				CFilterCtrl::Shutdown();

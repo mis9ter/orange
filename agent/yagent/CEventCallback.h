@@ -292,8 +292,8 @@ public:
 	}
 	DWORD		QueryUnknonwn
 	(
-		Json::Value		&query,
-		Json::Value		&bind,
+		const	Json::Value		&query,
+		const	Json::Value		&bind,
 		Json::Value		&res
 
 	) {
@@ -318,7 +318,7 @@ public:
 				}
 				for( auto & t : bind ) {
 					int			nType	= t["type"].asInt();
-					Json::Value	&value	= t["value"];
+					const	Json::Value	&value	= t["value"];
 
 					switch( nType ) {
 						case 0:						//	int

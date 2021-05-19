@@ -20,24 +20,24 @@ typedef struct
 	DWORD		dwSize;
 } IPCHeader;
 
-interface IIPcClient;
-interface IIPcServer;
+interface IIPCClient;
+interface IIPCServer;
 
 typedef bool	(CALLBACK * IPCServiceCallback)(
 	IN	HANDLE		hClient,
-	IN	IIPcClient	*pClient,
+	IN	IIPCClient	*pClient,
 	IN void			*pContext,
 	IN	HANDLE		hShutdown		//	이 핸들이 set되면 즉시 종료해야 됩니다.
 );
 
-interface IIPcServer 
+interface IIPCServer 
 {
 	virtual	bool	Start(IN LPCTSTR pName, BOOL	LowIntegrityMode = FALSE, LONG		RequestThreadCount = 1) = NULL;
 	virtual void	Shutdown()					= NULL;
 	virtual void	SetServiceCallback(IN IPCServiceCallback pCallback, IN LPVOID pCallbackPtr)	= NULL;
 };
 
-interface IIPcClient
+interface IIPCClient
 {
 	virtual	HANDLE	Connect(IN LPCTSTR pName, IN LPCSTR pCause)	= NULL;
 	virtual void	Disconnect(HANDLE hIpc, IN LPCSTR pCause)		= NULL;
@@ -65,10 +65,10 @@ interface IIPcClient
 
 };
 
-interface IIPc : public IIPcServer, public IIPcClient
+interface IIPC : public IIPCServer, public IIPCClient
 {
-	virtual IIPcServer *	GetServer()			= NULL;
-	virtual IIPcClient *	GetClient()			= NULL;
+	virtual IIPCServer *	GetServer()			= NULL;
+	virtual IIPCClient *	GetClient()			= NULL;
 	virtual void			Free(IN void *ptr = NULL)	= NULL;
 	virtual	void			Release()			= NULL;
 };
