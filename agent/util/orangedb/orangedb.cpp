@@ -4,7 +4,7 @@
 #include <iostream>
 #include "orangedb.h"
 
-const	char* _pname = "redeye";
+const	char* _pname = "orange";
 
 extern "C"	void	zipvfsInit_v2();
 
