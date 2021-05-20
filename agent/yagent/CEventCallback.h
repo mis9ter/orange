@@ -173,6 +173,10 @@ public:
 		return CBootCallback::BootId();	
 	}
 	virtual	CDB*	Db() = NULL;
+	virtual	void	SetResult(
+		IN	PCSTR	pFile, PCSTR pFunction, int nLine,
+		IN	Json::Value & res, IN bool bRet, IN int nCode, IN PCSTR pMsg /*utf8*/
+	)	= NULL;
 	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 				PWSTR pValue, DWORD dwSize) {
@@ -271,24 +275,6 @@ public:
 	DWORD	GetBootId()
 	{
 		return m_dwBootId;
-	}
-
-	void		SetResult(
-		IN	PCSTR	pFile, PCSTR pFunction, int nLine,
-		IN	Json::Value & res, IN bool bRet, IN int nCode, IN PCSTR pMsg /*utf8*/
-	) {
-		Json::Value	&_result	= res["result"];
-		
-		_result["ret"]	= bRet;
-		_result["code"]	= nCode;
-		_result["msg"]	= pMsg;
-		_result["file"]	= pFile;
-		_result["line"]	= nLine;
-		_result["function"]	= pFunction;
-
-		if( false == bRet ) {
-			Log("%-32s %s @%s(%d)", pFunction, pMsg? pMsg : "", pFile, nLine);
-		}
 	}
 	DWORD		QueryUnknonwn
 	(
@@ -410,6 +396,59 @@ protected:
 	void	Wait(IN DWORD dwMilliSeconds)
 	{
 		WaitForSingleObject(m_hWait, dwMilliSeconds);
+	}
+	bool	SendMessageToWebApp(Json::Value & req, Json::Value & res) 
+	{
+		CIPC	client;
+		HANDLE	hClient;
+
+		if( INVALID_HANDLE_VALUE != (hClient = client.Connect(AGENT_WEBAPP_PIPE_NAME, __func__)) ) {
+
+			Log("%-32s connected", __FUNCTION__);
+			IPCHeader   header  = {IPCJson, };
+
+			std::string					str;
+			Json::StreamWriterBuilder	builder;
+			builder["indentation"]	= "";
+			str	= Json::writeString(builder, req);
+			header.dwSize   = (DWORD)(str.length() + 1);
+
+			DWORD   dwBytes = 0;
+
+			if( client.Request(__FUNCTION__, hClient, (PVOID)str.c_str(), (DWORD)str.length()+1,
+				[&](PVOID pResponseData, DWORD dwResponseSize) {
+				Log("%-32s response %d bytes", __FUNCTION__, dwResponseSize);
+				Log("%s", pResponseData);
+
+				Json::CharReaderBuilder	rbuilder;
+				const std::unique_ptr<Json::CharReader>		reader(rbuilder.newCharReader());
+
+				std::string		errors;
+				try {
+					if( reader->parse((const char *)pResponseData, (const char *)pResponseData + dwResponseSize, 
+						&res, &errors) ) {
+
+					}
+				}
+				catch( std::exception & e) {
+					res["exception"]["function"]	= __func__;
+					res["exception"]["file"]		= __FUNCTION__;
+					res["exception"]["line"]		= __LINE__;
+					res["exception"]["msg"]			= e.what();
+				}
+
+			}) ) {
+
+
+
+			}
+			client.Disconnect(hClient, __FUNCTION__);
+		}
+		else {
+			//Log("%-32s WebApp is not connected", __func__);
+			return false;
+		}
+		return true;
 	}
 
 	/*

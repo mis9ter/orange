@@ -173,6 +173,7 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"</Co
     <ClInclude Include="..\include\yagent.common.h" />
     <ClInclude Include="..\include\yagent.string.h" />
     <ClInclude Include="CheckFailure.h" />
+    <ClInclude Include="CIPCCommandCallback.h" />
     <ClInclude Include="CWebApp.h" />
     <ClInclude Include="CWebview.h" />
     <ClInclude Include="framework.h" />
@@ -183,6 +184,7 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"</Co
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CheckFailure.cpp" />
+    <ClCompile Include="CWebApp.cpp" />
     <ClCompile Include="HelloWebView.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="pch.cpp">

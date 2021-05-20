@@ -1,0 +1,7 @@
+
+ZIPVFS:
+An SQLite Extension For Compressed Read/Write Databases
+
+This website (http://www.sqlite.org/zipvfs) is where all of the source code for the SQLite Compressed Read/Write Database (ZIPVFS) extension is stored and archived. If you are an ZIPVFS licensee, this is where you come to view and/or download the latest ZIPVFS source code.
+
+Note to ZIPVFS licensees: This is a live software configuration management system. What you see here is exactly what the developers see. There are no secrets. Every effort is made to ensure that check-ins on the "trunk" are stable and ready to use. However, it is possible that errors can slip into the trunk branch. Just because code appears on the trunk does not necessarily mean that it works. Consult the SQLite.org staff for further information.

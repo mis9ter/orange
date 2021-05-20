@@ -315,6 +315,19 @@ public:
 	CAgent();
 	virtual	~CAgent();
 
+	void		SetResult(
+		IN	PCSTR	pFile, PCSTR pFunction, int nLine,
+		IN	Json::Value & res, IN bool bRet, IN int nCode, IN PCSTR pMsg /*utf8*/
+	) {
+		Json::Value	&_result	= res["result"];
+
+		_result["ret"]	= bRet;
+		_result["code"]	= nCode;
+		_result["msg"]	= pMsg;
+		_result["file"]	= pFile;
+		_result["line"]	= nLine;
+		_result["function"]	= pFunction;
+	}
 	CDB* Db() {
 		return dynamic_cast<CDB*>(this);
 	}

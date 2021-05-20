@@ -19,6 +19,7 @@ public:
 	virtual	DWORD	BootId()	= NULL;
 	virtual	CDB *	Db()	= NULL;
 	virtual	PCWSTR	UUID2String(IN UUID * p, PWSTR pValue, DWORD dwSize)	= NULL;
+	virtual	bool	SendMessageToWebApp(Json::Value & req, Json::Value & res) = NULL;
 	PCSTR			Name() {
 		return m_name.c_str();
 	}
@@ -150,9 +151,16 @@ protected:
 		PWSTR	pFileName = NULL;
 		char	szTime[40] = "";
 
-		CProcessCallback	*pClass = (CProcessCallback *)pCallbackPtr;
+		Json::Value	req;
 
+		CProcessCallback	*pClass = (CProcessCallback *)pCallbackPtr;
 		pClass->UUID2String(&p->ProcGuid, szProcGuid, sizeof(szProcGuid));
+
+		req["ProcPath"]		= __utf8(p->szPath);
+		req["SubType"]		= p->subType;
+		req["PID"]			= (int)p->PID;
+		req["PPID"]			= (int)p->PPID;
+
 		if (YFilter::Message::SubType::ProcessStart		== p->subType	||
 			YFilter::Message::SubType::ProcessStart2	== p->subType	) {
 			pClass->UUID2String(&p->PProcGuid, szPProcGuid, sizeof(szPProcGuid));
@@ -234,6 +242,9 @@ protected:
 		{
 			pClass->Log("%s unknown", __FUNCTION__);
 		}
+
+		Json::Value		res;
+		pClass->SendMessageToWebApp(req, res);
 		return true;
 	}
 

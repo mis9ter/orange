@@ -237,7 +237,9 @@ public:
 				_T("Windows Desktop Guided Tour"),
 				NULL);
 		}
-	
+		return true;
+	}
+	void	MessagePump() {
 		// Main message loop:
 		MSG msg;
 		while (GetMessage(&msg, NULL, 0, 0))
@@ -245,7 +247,6 @@ public:
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
-		return true;
 	}
 	void	OnSize(IN HWND hWnd) {
 		if (m_webviewController != nullptr) {

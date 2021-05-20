@@ -1,13 +1,20 @@
 #pragma once
 #include "CWebview.h"
+#include "CIPCCommandCallback.h"
 
 class CWebApp
 	:
-	public	CWebview
+	public	CWebview,
+	public	CIPC,
+	public	CIPCCommand,
+	public	CIPCCommandCallback,
+	virtual	public	CAppLog
+
 {
 public:
 	CWebApp() 
 		:
+		CAppLog(WEBVIEW_LOG_NAME),
 		m_hInstance(NULL),
 		m_hWnd(NULL)
 	{
@@ -90,10 +97,35 @@ public:
 
 		SetWebMessageCallback(this, WebMessageHandler);
 		CWebview::Run(m_hInstance, m_hWnd, szStartPath, szStartPage);
+		CIPC::SetServiceCallback(IPCRecvCallback, this);
+		if( CIPC::Start(AGENT_WEBAPP_PIPE_NAME, true) ) {
+			Log("%s ipc pipe created.", __FUNCTION__);
+		}
+		else {
+			Log("%s ipc pipe not created. code=%d", __FUNCTION__, GetLastError());
+		}
+		CWebview::MessagePump();
 		return true;
 	}
 	void	Destroy() {
-		
+		CIPC::Shutdown();	
+	}
+	void		SetResult(
+		IN	PCSTR	pFile, PCSTR pFunction, int nLine,
+		IN	Json::Value & res, IN bool bRet, IN int nCode, IN PCSTR pMsg /*utf8*/
+	) {
+		Json::Value	&_result	= res["result"];
+
+		_result["ret"]	= bRet;
+		_result["code"]	= nCode;
+		_result["msg"]	= pMsg;
+		_result["file"]	= pFile;
+		_result["line"]	= nLine;
+		_result["function"]	= pFunction;
+
+		if( false == bRet ) {
+			Log("%-32s %s(%d) %s", pFunction, pFile, nLine, pMsg);		
+		}
 	}
 
 private:
@@ -166,7 +198,7 @@ private:
 		HANDLE	hClient;
 
 		Log("%-32s", __func__);
-		if( hClient = client.Connect(AGENT_SERVICE_PIPE_NAME, __func__) ) {
+		if( INVALID_HANDLE_VALUE != (hClient = client.Connect(AGENT_SERVICE_PIPE_NAME, __func__)) ) {
 
 			Log("%-32s connected", __FUNCTION__);
 			IPCHeader   header  = {IPCJson, };
@@ -221,5 +253,10 @@ private:
 		pClass->ServiceMessageHandler(req, res);
 		return true;
 	}
-
+	static	bool	IPCRecvCallback(
+		IN	HANDLE		hClient,
+		IN	IIPCClient	*pClient,
+		IN	void		*pContext,
+		IN	HANDLE		hShutdown
+	);
 };
