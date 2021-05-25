@@ -31,6 +31,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
    CAgent       agent;
    char         szCmd[100]  = "";
 
+   ::SetUnhandledExceptionFilter(CException::GlobalFilter);
    RunInService(&agent);
    return 0;
 }

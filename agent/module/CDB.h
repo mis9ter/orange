@@ -4,12 +4,13 @@
 #include "sqlite3.h"
 #include "yagent.common.h"
 #include "yagent.string.h"
-#include <functional>
 
 #ifdef _WIN64	//_M_X64
 #pragma comment(lib, "orangedb.x64.lib")
+#pragma comment(lib, "lz4lib.x64.lib")
 #else 
 #pragma comment(lib, "orangedb.win32.lib")
+#pragma comment(lib, "lz4lib.win32.lib")
 #endif
 int		sqlite3_open_db(const char* zName, sqlite3** pDb);
 
@@ -76,9 +77,31 @@ public:
 private:
 	STMTMap		m_table;
 };
+
+class CDB;
+class CPatchDB
+	:
+	virtual	public	CAppLog
+{
+public:
+	CPatchDB() {
+
+	}
+	~CPatchDB() {
+
+	}
+	DWORD		Patch(
+		IN PCWSTR	pSrcPath, 
+		IN PCWSTR	pDestPath
+	);
+private:
+	bool	GetSchemaList(IN CDB & db, OUT Json::Value & doc);
+	bool	GetColumnList(IN CDB & db, IN PCSTR pTableName, OUT Json::Value & doc);
+};
 class CDB
 	:
-	public	CStmtTable
+	public	CStmtTable,
+	public	CPatchDB
 {
 public:
 	CDB()	:
@@ -289,7 +312,6 @@ public:
 		__function_lock(m_lock.Get());
 		return m_pDb;
 	}
-
 	static	void FreeStmtCallback(std::string & name, std::string & query, sqlite3_stmt * p) {
 		Free(p);
 	}

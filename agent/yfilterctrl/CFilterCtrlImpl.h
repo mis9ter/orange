@@ -72,9 +72,11 @@ public:
 	bool	IsInstalled()
 	{
 		bool	bRet	= false;
+		Log(__func__);
 		__try
 		{
-
+			if( DriverIsInstalled() )
+				bRet	= true;
 		}
 		__finally
 		{
@@ -92,6 +94,9 @@ public:
 		UNREFERENCED_PARAMETER(pDriverPath);
 		UNREFERENCED_PARAMETER(pDriverName);
 		bool	bRet	= false;
+
+		Log("%-32s pDriverPath:%ws", __func__, pDriverPath);
+		Log("%-32s pDriverName:%ws", __func__, pDriverName);
 		__try
 		{
 			SetDriver(pDriverName, pDriverPath);
@@ -159,13 +164,16 @@ public:
 		IN PVOID pEventCallbackPtr, IN EventCallbackProc pEventCallback
 	)
 	{
-		Log("%s pEventCallback=%p, pEventCallbackPtr=%p", 
+		Log("%-32s pEventCallback=%p, pEventCallbackPtr=%p", 
 			__FUNCTION__, pEventCallbackPtr, pEventCallback);
 		m_callback.command.pCallback		= pCommandCallback;
 		m_callback.command.pCallbackPtr		= pCommandCallbackPtr;
 		m_callback.event.pCallback			= pEventCallback;
 		m_callback.event.pCallbackPtr		= pEventCallbackPtr;
-		if (DriverIsRunning())	return true;
+		if (DriverIsRunning())	{
+			return true;
+		}
+		Log("%-32s driver is not running.", __func__);
 		return DriverStart();
 	}
 	void	Shutdown()

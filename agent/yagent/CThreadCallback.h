@@ -129,6 +129,8 @@ protected:
 
 		char		szTime[40]	= "";
 
+		return true;
+
 		CTime::LargeInteger2SystemTime(&p->times.CreateTime, &stCreate);
 		CTime::LargeInteger2SystemTime(&p->times.ExitTime, &stExit);
 		CTime::LargeInteger2SystemTime(&p->times.KernelTime, &stKernel, false);

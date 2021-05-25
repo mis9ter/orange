@@ -23,8 +23,9 @@ public:
 		GetLocalTime(&st);
 		va_list		argptr;
 		char		szBuf[4096] = "";
-		StringCbPrintfA(szBuf, sizeof(szBuf), "%02d/%02d %02d:%02d:%02d.%03d ",
-			st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+		StringCbPrintfA(szBuf, sizeof(szBuf), "%02d/%02d %02d:%02d:%02d.%03d P:%06d T:%06d ",
+			st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+			GetCurrentProcessId(), GetCurrentThreadId());
 		va_start(argptr, pFmt);
 		int		nLength = lstrlenA(szBuf);
 		::StringCbVPrintfA(szBuf + nLength, sizeof(szBuf) - nLength, pFmt, argptr);

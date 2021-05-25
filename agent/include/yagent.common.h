@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <functional>
+#include <iostream>
+#include <fstream>
+
 #include "CAppRegistry.h"
 #include "CTime.h"
 
@@ -86,7 +90,6 @@ private:
 	CRITICAL_SECTION				m_section;
 	PInitializeCriticalSectionEx	m_proc;
 };
-
 typedef std::shared_ptr <CLock>	CLockPtr;
 
 #ifndef __function_lock 
@@ -98,8 +101,8 @@ public:
 		m_bLog = bLog;
 		m_pCause = pCause;
 
-		::EnterCriticalSection(pSection);
 		m_pSection = pSection;
+		::EnterCriticalSection(pSection);
 	}
 	CFunctionLock(IN CLockPtr lockptr, IN LPCSTR pCause, IN bool bLog = false)
 		: CFunctionLock(lockptr.get()->Get(), pCause, bLog)
@@ -122,6 +125,9 @@ private:
 #endif
 
 namespace YAgent {
+	bool		SetFileContent(IN LPCTSTR lpPath, IN PVOID lpContent, IN DWORD dwSize);
+	PVOID		GetFileContent(IN LPCTSTR lpPath, OUT DWORD * pSize);
+	void		FreeFileContent(PVOID p);
 	PCWSTR		GetDataFolder(IN PCWSTR pName, OUT PWSTR pValue, IN DWORD dwSize);
 	HANDLE		Run(IN LPCWSTR pFilePath, IN PCWSTR pArg);
 	bool		Alert(PCWSTR pFormat, ...);
@@ -173,3 +179,5 @@ namespace YAgent {
 	LPTSTR		ReplaceString(IN LPTSTR lpSrc, IN DWORD dwSrcSize,
 		IN LPCTSTR lpKey, IN LPCTSTR lpRep);
 };
+
+#include "yagent.json.h"

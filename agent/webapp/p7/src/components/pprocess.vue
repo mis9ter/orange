@@ -113,7 +113,8 @@
                     "bind": [
                         {
                             "type": 0,
-                            "value": 50
+                            "value": 0,
+                            "name":"[LastBootId]"
                         }
                     ],
                     "reqid":0

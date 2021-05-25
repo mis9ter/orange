@@ -378,7 +378,9 @@ private:
 		WCHAR				szPath[AGENT_PATH_SIZE];
 		WCHAR				szAppPath[AGENT_PATH_SIZE];
 		WCHAR				szDriverPath[AGENT_PATH_SIZE];
-		WCHAR				szEventDBPath[AGENT_PATH_SIZE];
+
+		WCHAR				szEventCDBPath[AGENT_PATH_SIZE];
+		WCHAR				szEventODBPath[AGENT_PATH_SIZE];
 	} m_config;
 	CThread					m_main;
 

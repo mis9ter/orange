@@ -111,7 +111,8 @@
       <AdditionalLibraryDirectories>..\..\binary\lib</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\..\build\$(PlatformTarget)"</Command>
+      <Command>..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\..\build\$(PlatformTarget)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -159,6 +160,10 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\..\build\$(PlatformTarget)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\orangedb.h" />

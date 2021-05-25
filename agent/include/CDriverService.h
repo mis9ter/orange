@@ -172,7 +172,9 @@ protected:
 		bool	bRet = false;
 		__try
 		{
-			if (false == StartDriverService())	__leave;
+			if (false == StartDriverService())	{
+				__leave;
+			}
 			bRet = true;
 		}
 		__finally
@@ -473,28 +475,32 @@ private:
 			hScm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
 			if (NULL == hScm)
 			{
-				Log("OpenSCManager() failed. code=%d", GetLastError());
+				CErrorMessage	err(GetLastError());
+				Log("%-32s OpenSCManager() failed. %s(%d)",
+					__func__, (PCSTR)err, (DWORD)err);
 				__leave;
 			}
 			hService = OpenServiceW(hScm, GetDriverServiceName(), SERVICE_START);
 			if (NULL == hService)
 			{
-				Log("OpenService() failed. code=%d", GetLastError());
+				CErrorMessage	err(GetLastError());
+				Log("%-32s OpenService() failed. %s(%d)",
+					__func__, (PCSTR)err, (DWORD)err);
 				__leave;
 			}
-			Log("StartServiceW");
 			if (StartServiceW(hService, 0, NULL)) {
 
 			}
 			else {
-				DWORD	dwError = GetLastError();
-				if (ERROR_SERVICE_ALREADY_RUNNING == dwError)
+				CErrorMessage	err(GetLastError());
+				if (ERROR_SERVICE_ALREADY_RUNNING == (DWORD)err)
 				{
 
 				}
 				else
 				{
-					Log("StartServiceW() failed. code=%d", dwError);
+					Log("%-32s StartService() failed.\n%s(%d)",
+						__func__, (PCSTR)err, (DWORD)err);
 					__leave;
 				}
 			}

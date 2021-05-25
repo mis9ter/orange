@@ -30,7 +30,9 @@ typedef GUID UUID;
 #define DRIVER_STRING_ALTITUDE	L"385200"			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
 #define DRIVER_MAX_MESSAGE_SIZE	4096
 
-#define DB_EVENT_DB				L"event.db"
+#define DB_EVENT_ODB			L"event.odb"
+#define DB_EVENT_CDB			L"event.db"
+
 
 #define GUID_STRING_SIZE		36
 #define NANOSECONDS(nanos) (((signed __int64)(nanos)) / 100L)

@@ -38,25 +38,40 @@ bool	CAgent::Initialize()
 		ResetEvent(m_config.hShutdown);
 		StringCbPrintf(m_config.szDriverPath, sizeof(m_config.szDriverPath),
 			L"%s\\%s", m_config.szPath, DRIVER_FILE_NAME);
-		StringCbPrintf(m_config.szEventDBPath, sizeof(m_config.szEventDBPath),
-			L"%s\\%s", m_config.szPath, DB_EVENT_DB);
+		StringCbPrintf(m_config.szEventODBPath, sizeof(m_config.szEventODBPath),
+			L"%s\\%s", m_config.szPath, DB_EVENT_ODB);
+		StringCbPrintf(m_config.szEventCDBPath, sizeof(m_config.szEventCDBPath),
+			L"%s\\%s", m_config.szPath, DB_EVENT_CDB);
+
+		Log("%-32s CURPATH:%ws", __func__, m_config.szPath);
+		Log("%-32s DRIVER :%ws", __func__, m_config.szDriverPath);
+		Log("%-32s ODB    :%ws", __func__, m_config.szEventODBPath);
+		Log("%-32s CDB    :%ws", __func__, m_config.szEventCDBPath);
+
 		if (!PathFileExists(m_config.szDriverPath)) {
 			if( false == SetResourceToFile(IDR_KERNEL_DRIVER, m_config.szDriverPath) )
-				Log("%s SetReqourceToFile(%ws) failed.", __FUNCTION__, m_config.szDriverPath);
+				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szDriverPath);
 				__leave;
 		}
-		if (!PathFileExists(m_config.szEventDBPath)) {
-			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventDBPath) ) {
-				Log("%s SetReqourceToFile(%ws) failed.", __FUNCTION__, m_config.szEventDBPath);
+		if (!PathFileExists(m_config.szEventODBPath)) {
+			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventODBPath) ) {
+				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szEventODBPath);
 				__leave;
 			}
 		}
-		if (false == CDB::Open(m_config.szEventDBPath, __FUNCTION__)) {
-			Log("%s can not open db %ws", __FUNCTION__, m_config.szEventDBPath);
+		if (!PathFileExists(m_config.szEventCDBPath)) {
+			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventCDBPath) ) {
+				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szEventCDBPath);
+				__leave;
+			}
+		}
+		Patch(m_config.szEventODBPath, m_config.szEventCDBPath);
+		if (false == CDB::Open(m_config.szEventCDBPath, __func__)) {
+			Log("%s can not open db %ws", __func__, m_config.szEventCDBPath);
 			__leave;
 		}
 		if( false == CEventCallback::CreateCallback() ) {
-			Log("%s CEventCallback::Initialize() failed.", __FUNCTION__);
+			Log("%s CEventCallback::Initialize() failed.", __func__);
 			__leave;
 		}
 		m_config.bInitialize = true;
@@ -90,25 +105,26 @@ bool	CAgent::Start()
 		EnableRegistration(false);
 		if (CFilterCtrl::IsInstalled())
 		{
+			Log("%-32s driver is installed.", __func__);
 			if (CFilterCtrl::IsConnected() ) {
+				Log("%-32s driver is connected.", __func__);
 				return true;
 			}
 		}
 		else
 		{
+			Log("%-32s driver is not installed.", __func__);
 			if (CFilterCtrl::Install(DRIVER_SERVICE_NAME, m_config.szDriverPath, false))
 			{
-
+				Log("%-32s driver is installed.", __func__);
 			}
 			else
 			{
-				Log("%s install failure.", __FUNCTION__);
+				Log("%-32s driver install failure.", __FUNCTION__);
 				break;
 			}
 		}
-
 		CIPCCommand::AddCommand("sqlite3.query", "unknown", this, Sqllite3QueryUnknown);
-
 
 		if (false == CFilterCtrl::Start(
 				NULL, NULL, 

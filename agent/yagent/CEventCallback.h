@@ -2,7 +2,7 @@
 
 #include <process.h>
 #include <atomic>
-#include "orangedb.h"
+#include "CDB.h"
 #include "yagent.string.h"
 
 #define IDLE_COMMIT		1
@@ -309,7 +309,14 @@ public:
 					switch( nType ) {
 						case 0:						//	int
 						case SQLITE_INTEGER:		//	int64
-							sqlite3_bind_int64(pStmt, ++nIndex, value.asInt64());
+							if( t.isMember("name") ) {
+								if( t["name"].isString() && !t["name"].asString().compare("[LastBootId]")) {
+									sqlite3_bind_int64(pStmt, ++nIndex, YAgent::GetBootId());
+								}
+							}
+							else {
+								sqlite3_bind_int64(pStmt, ++nIndex, value.asInt64());
+							}
 							break;
 
 						case SQLITE_FLOAT:
@@ -531,7 +538,7 @@ private:
 	{
 		int		nCount	= 0;
 		static	std::atomic<DWORD>	dwCount;
-		__function_lock(m_lock.Get());
+	//	__function_lock(m_lock.Get());
 
 		nCount	= Db()->Commit(__FUNCTION__);
 		Db()->Begin(__FUNCTION__);

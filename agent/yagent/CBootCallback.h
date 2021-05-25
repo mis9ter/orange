@@ -67,13 +67,20 @@ public:
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
 		Log("%s BootId=%d", __FUNCTION__, m_dwBootId);
-		if( Select() )	Update(false);
+		if( Select() )	{
+			Log("12");
+			Update(false);
+			Log("13");
+		}
 		else
 		{
+			Log("14");
 			Insert();
+			Log("15");
 		}
 
 		//	시스템 종료 이벤트 통지
+		/*
 		NotifyCenter()->RegisterNotifyCallback(__FUNCTION__ " PreShutdownCallback", 
 			NOTIFY_TYPE_SYSTEM, NOTIFY_EVENT_PRESHUTDOWN, 
 			this, ShutdownCallback);
@@ -83,6 +90,7 @@ public:
 		NotifyCenter()->RegisterNotifyCallback(__FUNCTION__ " PeriodicCallback", 
 			NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, 
 			this, PeriodicCallback);
+		*/
 	}
 	static	void	ShutdownCallback(
 		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext

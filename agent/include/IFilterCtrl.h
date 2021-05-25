@@ -100,8 +100,16 @@ public:
 	)
 	{
 		Log(__FUNCTION__);
-		if (NULL == m_pInstance)	return false;
-		return m_pInstance->Start(pCommandCallbackPtr, pCommandCallback, pEventCallbackPtr, pEventCallback);
+		if (NULL == m_pInstance)	{
+			Log("%-32s m_pInstance is NULL", __func__);
+			return false;
+		}
+		if( m_pInstance->Start(pCommandCallbackPtr, pCommandCallback, pEventCallbackPtr, pEventCallback) ) {
+			return true;
+		}
+		else {
+			Log("%-32s m_pInstance->Start() returns false", __func__);
+		}
 	}
 	void	Shutdown()
 	{

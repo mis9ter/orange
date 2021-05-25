@@ -128,7 +128,8 @@
     <PostBuildEvent>
       <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
 copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -149,7 +150,8 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     <PostBuildEvent>
       <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
 copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </PostBuildEvent>
     <Lib>
       <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>

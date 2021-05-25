@@ -102,6 +102,8 @@ protected:
 
 		bool	bInsert;
 
+		return true;
+
 		CModuleCallback* pClass = (CModuleCallback*)pCallbackPtr;
 
 		pClass->UUID2String(&p->ProcGuid, szProcGuid, sizeof(szProcGuid));

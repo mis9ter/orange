@@ -45,6 +45,9 @@
     <ClInclude Include="..\include\yagent.define.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\yagent.json.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common.cpp">
@@ -96,6 +99,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Folder.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="FileContent.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

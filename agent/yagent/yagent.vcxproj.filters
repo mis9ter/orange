@@ -60,9 +60,6 @@
     <ClInclude Include="CEventCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\orangedb.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="CProcessCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -117,6 +114,15 @@
     <ClInclude Include="..\include\CPathConvertor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\yagent.string.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\yagent.common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\module\CDB.h">
+      <Filter>module</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">
@@ -158,6 +164,9 @@
     </ClCompile>
     <ClCompile Include="IPC.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\module\CDB.cpp">
+      <Filter>module</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

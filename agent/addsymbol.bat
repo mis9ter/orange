@@ -1,7 +1,7 @@
 @ECHO OFF
 REM https://m.blog.naver.com/PostView.nhn?blogId=neimd&logNo=140141019240&proxyReferer=https%3A%2F%2Fwww.google.com%2F
 REM https://platformengineer.tistory.com/39
-SET SYMBOLS=\\172.29.59.170\SYMBOLS\ORANGE
+SET SYMBOLS=C:\WORK\ORANGE\SYMBOL
 SET NOOP=NoDebugSymbol
 
 @ECHO ON

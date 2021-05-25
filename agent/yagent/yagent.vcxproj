@@ -135,7 +135,7 @@
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
-      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExceptionHandling>Async</ExceptionHandling>
       <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -153,10 +153,11 @@
     </Link>
     <PostBuildEvent>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
-..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
+echo ..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
 copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -171,7 +172,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
-      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExceptionHandling>Async</ExceptionHandling>
       <Optimization>Disabled</Optimization>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -189,10 +190,11 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     </Link>
     <PostBuildEvent>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
-..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
+echo ..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
 copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -205,9 +207,11 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     <ClInclude Include="..\include\IFilterCtrl.h" />
     <ClInclude Include="..\include\IIPc.h" />
     <ClInclude Include="..\include\INotifyCenter.h" />
-    <ClInclude Include="..\include\orangedb.h" />
+    <ClInclude Include="..\include\yagent.common.h" />
     <ClInclude Include="..\include\yagent.define.h" />
     <ClInclude Include="..\include\yagent.h" />
+    <ClInclude Include="..\include\yagent.string.h" />
+    <ClInclude Include="..\module\CDB.h" />
     <ClInclude Include="..\module\CService.h" />
     <ClInclude Include="..\module\IObject.h" />
     <ClInclude Include="..\module\IService.h" />
@@ -228,6 +232,7 @@ copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName)
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\module\CDB.cpp" />
     <ClCompile Include="..\module\CService.cpp" />
     <ClCompile Include="CAgent.cpp" />
     <ClCompile Include="Console.cpp" />

@@ -14,6 +14,8 @@
 #define __utf16(str)		CUTF16(str).Get()
 #define	__mstricmp(a,b)		_mbsicmp((const unsigned char*)(a? a:""), (const unsigned char*)(b? b:""))
 #define	__mstrstr(a,b)		_mbsstr((const unsigned char*)(a? a:""), (const unsigned char*)(b? b:""))
+#define	__wstricmp(a,b)		_wcsicmp((PCWSTR)(a? a:L""), (PCWSTR)(b? b:L""))
+
 #define _t(p)				_T(p)
 
 class CBuffer
