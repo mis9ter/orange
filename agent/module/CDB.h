@@ -4,6 +4,7 @@
 #include "sqlite3.h"
 #include "yagent.common.h"
 #include "yagent.string.h"
+#include "yagent.json.h"
 
 #ifdef _WIN64	//_M_X64
 #pragma comment(lib, "orangedb.x64.lib")
@@ -95,8 +96,15 @@ public:
 		IN PCWSTR	pDestPath
 	);
 private:
-	bool	GetSchemaList(IN CDB & db, OUT Json::Value & doc);
+	bool	GetSchemaList(IN CDB & db, IN bool bTable, OUT Json::Value & doc);
 	bool	GetColumnList(IN CDB & db, IN PCSTR pTableName, OUT Json::Value & doc);
+	DWORD	GetColumnListString(IN const Json::Value & src, IN const Json::Value & dest, OUT std::string &str);
+	DWORD	CheckSchema(
+		IN	CDB					&srcDb,
+		IN	const Json::Value	&srcSchema,
+		IN	CDB					&destDb,
+		IN	const Json::Value	&destSchema
+	);
 };
 class CDB
 	:
@@ -156,8 +164,8 @@ public:
 		}
 		return false;
 	}
-	bool	Execute(OUT int * pAffected, IN bool bShowQuery, IN bool bShowError, 
-				IN const char *pFmt, ...)
+	bool	Execute(IN	std::function<void (int nAffected, PCSTR pQuery, PCSTR pError)> pCallback,
+		IN const char *pFmt, ...)
 	{
 		if (NULL == pFmt || NULL == m_pDb )
 		{
@@ -173,19 +181,12 @@ public:
 		char	*errmsg	= NULL;
 		if (SQLITE_OK == sqlite3_exec(Handle(), szBuf, NULL, NULL, &errmsg))
 		{
-			if( pAffected )
-				*pAffected = sqlite3_changes(Handle());
 			bRet	= true;
-			if( bShowQuery )
-				m_log.Log("%s", szBuf);
+			if( pCallback )	pCallback(sqlite3_changes(Handle()), szBuf, NULL);
 		}
 		else
 		{
-			if( pAffected )	*pAffected	= 0;
-			if( bShowError && errmsg )
-			{
-				m_log.Log("%s\n%s", szBuf, errmsg);
-			}
+			if( pCallback )	pCallback(0, szBuf, errmsg);
 		}
 		return bRet;
 	}

@@ -123,6 +123,9 @@
     <ClInclude Include="..\module\CDB.h">
       <Filter>module</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\yagent.json.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">

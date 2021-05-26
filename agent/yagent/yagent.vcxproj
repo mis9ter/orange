@@ -84,13 +84,13 @@
     <IntDir>$(SolutionDir)$(ConfigurationName)\TEMP\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>true</LinkIncremental>
+    <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <TargetName>orange.service</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>true</LinkIncremental>
+    <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <TargetName>orange.service</TargetName>
@@ -136,7 +136,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <ExceptionHandling>Async</ExceptionHandling>
-      <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module;..\lib\include</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
@@ -171,7 +171,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module;..\lib\include</AdditionalIncludeDirectories>
       <ExceptionHandling>Async</ExceptionHandling>
       <Optimization>Disabled</Optimization>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
@@ -210,6 +210,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="..\include\yagent.common.h" />
     <ClInclude Include="..\include\yagent.define.h" />
     <ClInclude Include="..\include\yagent.h" />
+    <ClInclude Include="..\include\yagent.json.h" />
     <ClInclude Include="..\include\yagent.string.h" />
     <ClInclude Include="..\module\CDB.h" />
     <ClInclude Include="..\module\CService.h" />

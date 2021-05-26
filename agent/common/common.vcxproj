@@ -75,7 +75,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
-    <TargetName>$(ProjectName)</TargetName>
+    <TargetName>$(ProjectName).$(Platform)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
@@ -87,7 +87,7 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
-    <TargetName>$(ProjectName)</TargetName>
+    <TargetName>$(ProjectName).$(Platform)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -99,10 +99,10 @@
       <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib\include</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -113,12 +113,12 @@
     </Link>
     <PostBuildEvent>
       <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
-copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
-cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib\$(TargetName)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).pdb" "..\binary\lib\$(TargetName).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).pdb"</Command>
     </PostBuildEvent>
     <Lib>
-      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -159,10 +159,10 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\lib\include</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -173,12 +173,12 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </Link>
     <PostBuildEvent>
       <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
-copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
-cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib\$(TargetName)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).pdb" "..\binary\lib\$(TargetName).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).pdb"</Command>
     </PostBuildEvent>
     <Lib>
-      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -190,6 +190,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="..\include\yagent.define.h" />
     <ClInclude Include="..\include\yagent.h" />
     <ClInclude Include="..\include\yagent.json.h" />
+    <ClInclude Include="..\lib\include\xxhash.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="stdafx.h" />

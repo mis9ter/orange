@@ -2,7 +2,7 @@
 #define __CIPC_H__
 
 #include "yagent.string.h"
-
+#include "yagent.json.h"
 #pragma warning(disable:4995)
 
 #define __NOT_USE_XCOMMON

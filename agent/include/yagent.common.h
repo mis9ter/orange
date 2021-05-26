@@ -179,5 +179,3 @@ namespace YAgent {
 	LPTSTR		ReplaceString(IN LPTSTR lpSrc, IN DWORD dwSrcSize,
 		IN LPCTSTR lpKey, IN LPCTSTR lpRep);
 };
-
-#include "yagent.json.h"

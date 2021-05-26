@@ -53,7 +53,8 @@ bool	CAgent::Initialize()
 				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szDriverPath);
 				__leave;
 		}
-		if (!PathFileExists(m_config.szEventODBPath)) {
+		{
+			//	[TODO] 파일 쓰기가 실패된 경우 에이전트는 계속 진행을 해야 하나 말아야 하나?
 			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventODBPath) ) {
 				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szEventODBPath);
 				__leave;
@@ -66,6 +67,7 @@ bool	CAgent::Initialize()
 			}
 		}
 		Patch(m_config.szEventODBPath, m_config.szEventCDBPath);
+
 		if (false == CDB::Open(m_config.szEventCDBPath, __func__)) {
 			Log("%s can not open db %ws", __func__, m_config.szEventCDBPath);
 			__leave;

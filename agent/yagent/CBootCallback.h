@@ -61,7 +61,10 @@ public:
 
 			int		nAffected	= 0;
 
-			Db()->Execute(&nAffected, true, true, pUpdate3, m_dwBootId);
+			Db()->Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
+			
+			
+			}, pUpdate3, m_dwBootId);
 		}
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));

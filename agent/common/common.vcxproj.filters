@@ -48,6 +48,9 @@
     <ClInclude Include="..\include\yagent.json.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="..\lib\include\xxhash.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common.cpp">
