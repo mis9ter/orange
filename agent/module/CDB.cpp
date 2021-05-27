@@ -184,6 +184,7 @@ DWORD	CPatchDB::CheckSchema(
 
 								}, src["sql"].asCString()) ) {
 									//	*.bak => *으로 데이터 넣어줌. 
+									destDb.Begin(__func__);
 									if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 										DBLog(destDb, n, pQuery, pErrMsg);
 
@@ -195,7 +196,8 @@ DWORD	CPatchDB::CheckSchema(
 										}, "drop %s [%s_bak]", src["type"].asCString(), t.c_str()) ) {
 
 										}
-									}								
+									}				
+									destDb.Commit(__func__);
 								}
 								else {
 									//	새로운 스키마로 생성 실패
