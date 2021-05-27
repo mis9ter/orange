@@ -150,7 +150,7 @@ DWORD	CPatchDB::CheckSchema(
 							if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 								//	기존 스키마 이름 변경
 								DBLog(destDb, n, pQuery, pErrMsg);
-							}, "drop %s [%s]", t.c_str(), t.c_str()) ) {
+							}, "drop %s [%s]", src["type"].asCString(), t.c_str()) ) {
 								if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 									//	새 스키마 생성
 									DBLog(destDb, n, pQuery, pErrMsg);
