@@ -95,6 +95,14 @@ public:
 		IN PCWSTR	pSrcPath, 
 		IN PCWSTR	pDestPath
 	);
+	bool		DBLog(
+		IN	CDB		&db,
+		IN	INT		nAffected,
+		IN	PCSTR	pQuery,
+		IN	PCSTR	pFormat,
+		...	
+	);
+
 private:
 	bool	GetSchemaList(IN CDB & db, IN bool bTable, OUT Json::Value & doc);
 	bool	GetColumnList(IN CDB & db, IN PCSTR pTableName, OUT Json::Value & doc);

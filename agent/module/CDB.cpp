@@ -9,6 +9,41 @@
 	4. pSrcPath에 없고 pDestPath에는 있는 인덱스는 삭제한다.
 */
 
+bool	CPatchDB::DBLog(
+	IN	CDB		&db,
+	IN	INT		nAffected,
+	IN	PCSTR	pQuery,
+	IN	PCSTR	pFormat,
+	...	
+) {
+	bool		bRet	= false;
+	va_list		argptr;
+	CHAR		szBuf[4096] = "";
+
+	if( pFormat ) {
+		va_start(argptr, pFormat);
+		::StringCbVPrintfA(szBuf, sizeof(szBuf), pFormat, argptr);
+		va_end(argptr);
+	}
+
+	Log("%-32s affected=%d\n%s\n%s", __func__, nAffected, pQuery, szBuf);
+	sqlite3_stmt	*stmt	= db.Stmt("insert into [cdb_log](affected,query,message) values(?,?,?)");
+	if( stmt ) {
+		sqlite3_bind_int(stmt, 1, nAffected);
+		sqlite3_bind_text(stmt, 2, pQuery? pQuery : "",  -1, SQLITE_STATIC);
+		sqlite3_bind_text(stmt, 3, szBuf,  -1, SQLITE_STATIC);
+		if( SQLITE_DONE == sqlite3_step(stmt) ) {
+			bRet	= true;
+		}		
+		db.Free(stmt);
+	}
+	else {
+		Log("%-32s %s", __func__, sqlite3_errmsg(db.Handle()));
+	
+	}
+	return bRet;
+}
+
 DWORD	CPatchDB::Patch(
 	IN PCWSTR	pSrcPath, 
 	IN PCWSTR	pDestPath
@@ -114,17 +149,11 @@ DWORD	CPatchDB::CheckSchema(
 							//	테이블이 아닌 경우 삭제후 생성
 							if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 								//	기존 스키마 이름 변경
-								if( pErrMsg )
-									Log("%d %s\n%s", n, pQuery, pErrMsg);
-								else 
-									Log("%d %s", n, pQuery);
+								DBLog(destDb, n, pQuery, pErrMsg);
 							}, "drop %s [%s]", t.c_str(), t.c_str()) ) {
 								if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 									//	새 스키마 생성
-									if( pErrMsg )
-										Log("%d %s\n%s", n, pQuery, pErrMsg);
-									else 
-										Log("%d %s", n, pQuery);
+									DBLog(destDb, n, pQuery, pErrMsg);
 								}, src["sql"].asCString()) ) {
 
 								}		
@@ -136,11 +165,7 @@ DWORD	CPatchDB::CheckSchema(
 							//	
 							if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 								//	기존 스키마 이름 변경
-								if( pErrMsg )
-									Log("%d %s\n%s", n, pQuery, pErrMsg);
-								else 
-									Log("%d %s", n, pQuery);
-
+									DBLog(destDb, n, pQuery, pErrMsg);
 								}, "drop table if exists [%s_bak]", t.c_str()) ) {
 								//	*.bak이 존재하는 경우 drop 
 							}
@@ -149,35 +174,23 @@ DWORD	CPatchDB::CheckSchema(
 
 							if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 								//	기존 스키마 이름 변경
-								if( pErrMsg )
-									Log("%d %s\n%s", n, pQuery, pErrMsg);
-								else 
-									Log("%d %s", n, pQuery);
+								DBLog(destDb, n, pQuery, pErrMsg);
 
 							}, "alter table [%s] rename to [%s_bak]", t.c_str(), t.c_str()) ) {
 
 								if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 									//	새로운 스키마로 생성
-									if( pErrMsg )
-										Log("%d %s\n%s", n, pQuery, pErrMsg);
-									else 
-										Log("%d %s", n, pQuery);
+									DBLog(destDb, n, pQuery, pErrMsg);
 
 								}, src["sql"].asCString()) ) {
 									//	*.bak => *으로 데이터 넣어줌. 
 									if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
-										if( pErrMsg )
-											Log("%d %s\n%s", n, pQuery, pErrMsg);
-										else 
-											Log("%d %s", n, pQuery);
+										DBLog(destDb, n, pQuery, pErrMsg);
 
 									}, "insert into [%s](%s) select %s from [%s_bak]", t.c_str(), columns.c_str(), 
 										columns.c_str(), t.c_str()) ) {
 										if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
-											if( pErrMsg )
-												Log("%d %s\n%s", n, pQuery, pErrMsg);
-											else 
-												Log("%d %s", n, pQuery);
+											DBLog(destDb, n, pQuery, pErrMsg);
 
 										}, "drop %s [%s_bak]", src["type"].asCString(), t.c_str()) ) {
 
@@ -189,10 +202,7 @@ DWORD	CPatchDB::CheckSchema(
 									//	기존 것을 그대로 살려준다.
 									destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 										//	기존 스키마 이름 변경
-										if( pErrMsg )
-											Log("%d %s\n%s", n, pQuery, pErrMsg);
-										else 
-											Log("%d %s", n, pQuery);
+										DBLog(destDb, n, pQuery, pErrMsg);
 
 									}, "alter table [%s_bak] rename to [%s]", t.c_str(), t.c_str());								
 								}
@@ -207,11 +217,8 @@ DWORD	CPatchDB::CheckSchema(
 			else {
 				Log("%-32s dest.%s is not found.", __func__, t.c_str());
 				int		nAffected	= 0;
-				if( destDb.Execute([&](int nAffected, PCSTR pQuery, PCSTR pErrorMsg) {
-					if( pErrorMsg )
-						Log("%d %s\n%s", nAffected, pQuery, pErrorMsg);
-					else 
-						Log("%d %s", nAffected, pQuery);				
+				if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
+					DBLog(destDb, n, pQuery, pErrMsg);			
 
 				}, src["sql"].asCString()) ) {
 					Log("%-32s dest.%s is created.", __func__, t.c_str());
@@ -238,11 +245,7 @@ DWORD	CPatchDB::CheckSchema(
 				if( dest["type"].asString().compare("table")) {
 					//	테이블이 아닌 경우 (예:인덱스) 삭제한다.
 					if( destDb.Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
-						if( pErrMsg )
-							Log("%d %s\n%s", n, pQuery, pErrMsg);
-						else 
-							Log("%d %s", n, pQuery);
-
+						DBLog(destDb, n, pQuery, pErrMsg);
 					}, "drop %s [%s]", dest["type"].asCString(), t.c_str()) ) {
 
 					}
