@@ -1,53 +1,44 @@
 ﻿#include "yfilter.h"
 
 static	LARGE_INTEGER	g_nCookie;
+static	CRegTable		g_registry;
 
-/*
-typedef struct _REG_DELETE_KEY_INFORMATION {
-	PVOID Object;
-	PVOID CallContext;
-	PVOID ObjectContext;
-	PVOID Reserved;
-} REG_DELETE_KEY_INFORMATION, *PREG_DELETE_KEY_INFORMATION, REG_FLUSH_KEY_INFORMATION, *PREG_FLUSH_KEY_INFORMATION;
-typedef struct _REG_SET_VALUE_KEY_INFORMATION {
-	PVOID           Object;
-	PUNICODE_STRING ValueName;
-	ULONG           TitleIndex;
-	ULONG           Type;
-	PVOID           Data;
-	ULONG           DataSize;
-	PVOID           CallContext;
-	PVOID           ObjectContext;
-	PVOID           Reserved;
-} REG_SET_VALUE_KEY_INFORMATION, *PREG_SET_VALUE_KEY_INFORMATION;
-typedef struct _REG_DELETE_VALUE_KEY_INFORMATION {
-	PVOID           Object;
-	PUNICODE_STRING ValueName;
-	PVOID           CallContext;
-	PVOID           ObjectContext;
-	PVOID           Reserved;
-} REG_DELETE_VALUE_KEY_INFORMATION, *PREG_DELETE_VALUE_KEY_INFORMATION;
-typedef struct _REG_RENAME_KEY_INFORMATION {
-	PVOID           Object;
-	PUNICODE_STRING NewName;
-	PVOID           CallContext;
-	PVOID           ObjectContext;
-	PVOID           Reserved;
-} REG_RENAME_KEY_INFORMATION, *PREG_RENAME_KEY_INFORMATION;
-*/
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(NONPAGE, RegistryTable)
+#endif
+
+CRegTable *	RegistryTable()
+{
+	return &g_registry;
+}
+void			CreateRegistryTable()
+{
+	g_registry.Initialize();
+}
+void			DestroyRegistryTable()
+{
+	g_registry.Destroy();
+}
+
 BOOLEAN	NTAPI	GetRegistryPath
 (
 	IN	PVOID				pObject,
 	OUT	PUNICODE_STRING *	pObjectName
 )
 {
-	bool			bRet = false;
-	NTSTATUS		status = STATUS_SUCCESS;
-	ULONG			nSize = AGENT_PATH_SIZE * sizeof(WCHAR);
-	PUNICODE_STRING	pName = NULL;
+	bool			bRet	= false;
+	NTSTATUS		status	= STATUS_SUCCESS;
+	ULONG			nSize	= AGENT_PATH_SIZE * sizeof(WCHAR);
+	PUNICODE_STRING	pName	= NULL;
+	KIRQL			irql	= KeGetCurrentIrql();
+
 	__try
 	{
 		if (NULL == pObject || NULL == pObjectName)	__leave;
+		if( irql >= DISPATCH_LEVEL ) {
+			__dlog("%-32s irql(%d) is too high", __func__, irql);
+			__leave;		
+		}
 		pName = (PUNICODE_STRING)CMemory::Allocate(PagedPool, nSize + sizeof(UNICODE_STRING), 'GRGP'); 		
 		if (NULL == pName) {
 			__log("%s memory allocation failed. %d bytes", __FUNCTION__, nSize + sizeof(UNICODE_STRING));
@@ -56,26 +47,29 @@ BOOLEAN	NTAPI	GetRegistryPath
 		RtlZeroMemory(pName, nSize);
 		pName->Length = (USHORT)nSize - sizeof(WCHAR);
 		pName->MaximumLength = (USHORT)nSize;
-		/*
-			ObQueryNameString	이 함수의 재미있는 특징
-			pName->Length의 값이 0이면 BSOD
+		if( pName->Length ) {
+			/*
+				ObQueryNameString	이 함수의 재미있는 특징
+				pName->Length의 값이 0이면 BSOD
 
-			MSDN Remarks:
-			If the given object is named and the object name was successfully acquired,
-			the returned string is the name of the given object including as much of the object's full path as possible.
-			In this case, ObQueryNameString sets
-			Name.Buffer to the address of the NULL-terminated name of the specified object.
-			The value of Name.MaximumLength is the length of the object name including the NULL termination.
-			The value of Name.Length is length of the only the object name.
-		*/
-		status = ObQueryNameString(pObject, (POBJECT_NAME_INFORMATION)pName, nSize, &nSize);
-		//status	= STATUS_UNSUCCESSFUL;
-		if (NT_FAILED(status))
-		{
-			__log("ObQueryNameString() failed. status=%08x", status);
-			__leave;
+				MSDN Remarks:
+				If the given object is named and the object name was successfully acquired,
+				the returned string is the name of the given object including as much of the object's full path as possible.
+				In this case, ObQueryNameString sets
+				Name.Buffer to the address of the NULL-terminated name of the specified object.
+				The value of Name.MaximumLength is the length of the object name including the NULL termination.
+				The value of Name.Length is length of the only the object name.
+			*/
+			status = ObQueryNameString(pObject, (POBJECT_NAME_INFORMATION)pName, nSize, &nSize);
+			if (NT_FAILED(status))
+			{
+				__log("ObQueryNameString() failed. status=%08x", status);
+				__leave;
+			}
+			bRet = true;
 		}
-		bRet = true;
+		else 
+			status	= STATUS_UNSUCCESSFUL;
 	}
 	__finally
 	{
@@ -91,81 +85,230 @@ BOOLEAN	NTAPI	GetRegistryPath
 	}
 	return bRet;
 }
-/*
-static	bool		IsAllowedOperation(PVOID pObject)
-{
-	bool			bRet = true;
-	PUNICODE_STRING	pValue = NULL;
+static	CCRC64		g_crc64;
 
-	if (GetRegistryPath(pObject, &pValue)) {
-		if (IsObject(YFilter::Object::Protect, YFilter::Object::Type::Registry, pValue))
-		{
-			CWSTRBuffer	proc;
-			if (NT_SUCCESS(GetProcessImagePathByProcessId(PsGetCurrentProcessId(), (PWSTR)proc, proc.CbSize(), NULL)))
-			{
-				bool	bAllowedProcess		= IsObject(YFilter::Object::Mode::Allow, 
-												YFilter::Object::Type::Process, (PWSTR)proc);
-				bool	bIsInProtectedPath	= IsObject(YFilter::Object::Mode::Protect,
-												YFilter::Object::Type::File, (PWSTR)proc);
-				if (bAllowedProcess || bIsInProtectedPath)
-				{
-					//	해당 프로세스가 허용 목록에 존재하거나 
-					//	해당 프로세스의 실행 경로가 보호 대상에 존재하면 통과
-				}
-				else
-				{
-					bRet = false;
-#ifndef _WIN64
-					__log("denied[%d %d]: %wZ %ws(%d)", bAllowedProcess, bIsInProtectedPath,
-						pName, (PWSTR)proc, (DWORD)(PsGetCurrentProcessId()));
-#endif
-				}
+PROCUID		Path2CRC64(PUNICODE_STRING pValue) {
+	if( NULL == pValue || 0 == pValue->Length )	return 0;
+	return g_crc64.GetCrc64(pValue->Buffer, pValue->Length);
+}
+PROCUID		Path2CRC64(PCWSTR pValue) {
+	if( NULL == pValue )	return 0;
+	return g_crc64.GetCrc64((PVOID)pValue, (DWORD)(wcslen(pValue) * sizeof(WCHAR)));
+}
+typedef struct {
+	PVOID				pArgument2;	
+	HANDLE				PID;
+	PVOID				pArgument;
+	REG_NOTIFY_CLASS	notifyClass;
+	NTSTATUS			status;
+}	REG_CALLBACK_ARG;
+typedef struct _BASE_REG_KEY_INFO
+{
+	PVOID		pObject;
+	PVOID		reserved;
+
+} BASE_REG_KEY_INFO, *PBASE_REG_KEY_INFO;
+
+void		RegistryDeleteValueLog(REG_CALLBACK_ARG * p, PVOID pObject, PUNICODE_STRING pValueName)
+{
+	PUNICODE_STRING	pRegPath = NULL;
+	__try {
+		if (GetRegistryPath(pObject, &pRegPath)) {		
+			REGUID	RegUID	= Path2CRC64(pRegPath);
+
+			bool	bAdd	= RegistryTable()->Add(RegUID, pRegPath, p, 
+				[](PREG_ENTRY pEntry, PVOID pContext) {
+			
+					UNREFERENCED_PARAMETER(pEntry);
+					UNREFERENCED_PARAMETER(pContext);
+			
+			});
+			if( bAdd ) {			
+				__log("ADD %d %I64d %wZ %wZ", p->notifyClass, RegUID, pRegPath, pValueName);			
 			}
+		}		
+		else {
+			__log("%-32s GetRegistryPath() failed.", __func__);
 		}
 	}
-	if (pValue)
-	{
-		CMemory::Free(pValue);
+	__finally {
+		if (pRegPath)
+		{
+			CMemory::Free(pRegPath);
+		}	
 	}
-	return bRet;
-}
-*/
+	/*
+		switch (notifyClass)
+		{
+			case RegNtQueryValueKey:
+				pEntry->registry.value.dwRead++;
+				break;
 
-void		RegistryLog(PCSTR pType, HANDLE PID, PVOID pObject)
+			case RegNtPostSetValueKey:
+				pEntry->registry.value.dwWrite++;
+				break;
+
+			case RegNtPreSetValueKey:		//	레지스트리 값 추가
+											//RegistryLog("RegNtSetValueKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
+				break;
+			case RegNtDeleteValueKey:	//	레지스트리 값 삭제
+			{
+				PREG_DELETE_VALUE_KEY_INFORMATION	pp	= 
+					(PREG_DELETE_VALUE_KEY_INFORMATION)p->pArgument2;
+				RegistryLog("RegNtDeleteValueKey", p->PID, pp->Object, pp->ValueName);
+				pEntry->registry.value.dwDelete++;
+			}
+			break;
+
+			case RegNtRenameKey:
+				//RegistryLog("RegNtRenameKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
+				pEntry->registry.key.dwRename++;
+				break;
+
+			case RegNtPreCreateKey:
+				RegistryLog("RegNtPreCreateKey", p->PID, ((PBASE_REG_KEY_INFO)p->pArgument2)->pObject, NULL);
+				pEntry->registry.key.dwCreate++;
+				break;
+			case RegNtDeleteKey:
+				//RegistryLog("RegNtDeleteKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
+				pEntry->registry.key.dwDelete++;
+				break;
+			case RegNtPreSetKeySecurity:
+
+				break;
+		}
+	*/
+
+}
+void		RegistrySetValueLog(REG_CALLBACK_ARG * p, PREG_SET_VALUE_KEY_INFORMATION pp)
 {
-	PUNICODE_STRING	pValue = NULL;
-	if (GetRegistryPath(pObject, &pValue)) {
-		__log("%-32s %6d %wZ", pType, PID, pValue);
+	UNREFERENCED_PARAMETER(p);
+	PUNICODE_STRING	pRegPath = NULL;
+	__try {
+		if (GetRegistryPath(pp->Object, &pRegPath)) {		
+			REGUID	RegUID	= Path2CRC64(pRegPath);
+			UNREFERENCED_PARAMETER(RegUID);
+
+			/*
+			bool	bAdd	= RegistryTable()->Add(RegUID, pRegPath, p, 
+				[](PREG_ENTRY pEntry, PVOID pContext) {
+
+				UNREFERENCED_PARAMETER(pEntry);
+				UNREFERENCED_PARAMETER(pContext);
+
+			});
+			if( bAdd ) {			
+				__log("ADD %d %I64d %wZ %wZ", p->notifyClass, RegUID, pRegPath, pp->ValueName);			
+			}
+			*/
+			/*
+			PYFILTER_MESSAGE	pMsg = NULL;
+			pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
+			if (pMsg) 
+			{
+				PROCUID		ProcUID;
+				RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
+				RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
+				if( NT_SUCCESS(GetProcGuid(true, hPID, hPPID,
+					pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid, &ProcUID)) ) 
+				{
+					pMsg->data.ProcUID	= ProcUID;
+					PUNICODE_STRING	pParentImageFileName = NULL;
+					if (NT_SUCCESS(GetProcessImagePathByProcessId(hPPID, &pParentImageFileName)))
+					{
+						KERNEL_USER_TIMES	ptimes;
+						PROCUID				PProcUID;
+						if (NT_SUCCESS(GetProcessTimes(hPPID, &ptimes))) {
+							if (NT_SUCCESS(GetProcGuid(true, hPPID, GetParentProcessId(hPPID),
+								pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid, &PProcUID))) {
+								pMsg->data.PProcUID	= PProcUID;
+							}
+							else {
+								__log("%s PProcGuid - failed.", __FUNCTION__);
+								__log("  PPID:%d", hPPID);
+								__log("  GetProcGuid() failed.");
+							}
+						}
+						else {
+							__log("%s PProcGuid - failed.", __FUNCTION__);
+							__log("  PPID:%d", hPPID);
+							__log("  GetProcessTimes() failed.");
+						}
+						CMemory::Free(pParentImageFileName);
+					}
+					else {
+						//	부모 프로세스가 종료된 상태라면 당연히 여기로.
+						//__log("%s PProcGuid - failed.", __FUNCTION__);
+						//__log("  PPID:%d", hPPID);
+						//__log("  GetProcessImagePathByProcessId() failed.");
+					}										
+				}
+				else {
+					//	ProcGuid 생성 실패 -> 저장할 필요 없습니다.
+					__leave;
+				}
+				pMsg->data.times.CreateTime = times.CreateTime;
+				ProcessTable()->Add(true, hPID, hPPID,
+					&pMsg->data.ProcGuid, pMsg->data.ProcUID, pImageFileName, pCmdLine);
+				pMsg->header.mode	= YFilter::Message::Mode::Event;
+				pMsg->header.category = YFilter::Message::Category::Process;
+				pMsg->header.size = sizeof(YFILTER_MESSAGE);
+
+				pMsg->data.subType = YFilter::Message::SubType::ProcessStart2;
+				pMsg->data.bCreationSaved	= true;
+				pMsg->data.PID				= (DWORD)hPID;
+				pMsg->data.PPID				= (DWORD)hPPID;
+				RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
+				RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), pCmdLine);
+				if (MessageThreadPool()->Push(__FUNCTION__,
+					YFilter::Message::Mode::Event,
+					YFilter::Message::Category::Process,
+					pMsg, sizeof(YFILTER_MESSAGE), false))
+				{
+					//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+					MessageThreadPool()->Alert(YFilter::Message::Category::Process);
+					pMsg	= NULL;
+				}
+				else {
+					CMemory::Free(pMsg);
+					pMsg	= NULL;
+				}
+				//	이전 프로세스에 대한 모듈 정보도 올린다.
+				//AddEarlyModule(hPID);
+			}
+			*/
+		}		
+		else {
+			__log("%-32s GetRegistryPath() failed.", __func__);
+		}
 	}
-	else {
-		__log("%-32s %6d GetRegistryPath() failed.", pType, PID);
-	}
-	if (pValue)
-	{
-		CMemory::Free(pValue);
+	__finally {
+		if (pRegPath)
+		{
+			CMemory::Free(pRegPath);
+		}	
 	}
 }
-
-
 NTSTATUS	RegistryCallback
 (
 	IN	PVOID	pCallbackContext,
 	IN	PVOID	pArgument,
 	IN	PVOID	pArgument2
 )
-/*
-NTSTATUS	RegistryCallback
-(
-	IN	PVOID				pCallbackContext,
-	IN REG_NOTIFY_CLASS     notifyClass,
-	IN	PVOID				pArgument2
-)
-*/
 {
-	NTSTATUS			status = STATUS_SUCCESS;
+	PAGED_CODE();
 
 	UNREFERENCED_PARAMETER(pCallbackContext);
 	UNREFERENCED_PARAMETER(pArgument2);
+
+	REG_CALLBACK_ARG	arg;
+
+	arg.pArgument	= pArgument;
+	arg.pArgument2	= pArgument2;
+	arg.status		= STATUS_SUCCESS;
+	arg.notifyClass	= (REG_NOTIFY_CLASS)(ULONG_PTR)pArgument;;
+
+
 
 	//__log("%-32s pArgument2=%p, KeGetCurrentIrql()=%d", __FUNCTION__, pArgument2, KeGetCurrentIrql());
 
@@ -173,45 +316,69 @@ NTSTATUS	RegistryCallback
 		KeGetCurrentIrql() > APC_LEVEL ||
 		PsGetCurrentProcessId() <= (HANDLE)4 ||
 		KernelMode == ExGetPreviousMode()
-	)	return status;
+	)	return arg.status;
 
 	CFltObjectReference	filter(Config()->pFilter);
 	//kvnif (!filter.Reference())	return status;
 
-	REG_NOTIFY_CLASS	notifyClass = (REG_NOTIFY_CLASS)(ULONG_PTR)pArgument;;
-	typedef struct _BASE_REG_KEY_INFO
-	{
-		PVOID		pObject;
-		PVOID		reserved;
+	arg.PID	= PsGetCurrentProcessId();
+	{	
+		REG_CALLBACK_ARG	*p	= (REG_CALLBACK_ARG *)&arg;			
+		switch (p->notifyClass)
+		{
+			case RegNtQueryValueKey:
+				break;
 
-	} BASE_REG_KEY_INFO, *PBASE_REG_KEY_INFO;
+			case RegNtPostSetValueKey:
+				break;
 
-	HANDLE	PID	= PsGetCurrentProcessId();
+			case RegNtPreSetValueKey:		//	레지스트리 값 추가
+			if( true ) {
+				PREG_SET_VALUE_KEY_INFORMATION	pp	= 
+					(PREG_SET_VALUE_KEY_INFORMATION)p->pArgument2;
+				RegistrySetValueLog(p, pp);
+			}
+				break;
+			case RegNtDeleteValueKey:	//	레지스트리 값 삭제
+			if( false ) {
+				PREG_DELETE_VALUE_KEY_INFORMATION	pp	= 
+					(PREG_DELETE_VALUE_KEY_INFORMATION)p->pArgument2;
+				RegistryDeleteValueLog(p, pp->Object, pp->ValueName);
+			}
+			break;
 
-	switch (notifyClass)
-	{
-	case RegNtSetValueKey:
-		//RegistryLog("RegNtSetValueKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
-		break;
-	case RegNtDeleteValueKey:
-		RegistryLog("RegNtDeleteValueKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
-		break;
+			case RegNtRenameKey:
+				break;
 
-	case RegNtRenameKey:
-		RegistryLog("RegNtRenameKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
-		break;
+			case RegNtPreCreateKey:
+				break;
 
-	case RegNtPreCreateKey:
+			case RegNtDeleteKey:
+				break;
+			case RegNtPreSetKeySecurity:
 
-		break;
-	case RegNtDeleteKey:
-		RegistryLog("RegNtDeleteKey", PID, ((PBASE_REG_KEY_INFO)pArgument2)->pObject);
-	break;
-	case RegNtPreSetKeySecurity:
-
-		break;
+				break;
+		}
 	}
-	return status;
+	if( ProcessTable()->IsExisting(arg.PID, &arg, 
+		[](bool bCreationSaved, PPROCESS_ENTRY pEntry, PVOID pContext) {	
+			UNREFERENCED_PARAMETER(bCreationSaved);
+			UNREFERENCED_PARAMETER(pEntry);
+			UNREFERENCED_PARAMETER(pContext);	
+			//__dlog("%-32s irql=%d", __func__, KeGetCurrentIrql());
+		})) {	
+		//__log("known process  :%d", PID);
+	}
+	else {
+		//__log("unknown process:%d notifyClass:%d", arg.PID, arg.notifyClass);
+		//	이 경우는 해당 프로세스가 종료되면서 열어둔 키 값이 닫혀지는 것이다.
+		//	아마도 코드상에서 명확히 레지스트리 키를 닫지 않은 것이다?
+		//	레지스트리 핸들 릭??
+		//	RegNtKeyHandleClose
+		//	RegNtPostKeyHandleClose	
+
+	}
+	return arg.status;
 }
 bool	StartRegistryFilter(IN PDRIVER_OBJECT pDriverObject)
 {

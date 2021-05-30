@@ -89,7 +89,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>..\include;..\reference\processhacker-master\phnt\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;..\module\crcspeed</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>PHNT_MODE=PHNT_MODE_KERNEL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Optimization>Disabled</Optimization>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -123,6 +123,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </Link>
     <ClCompile>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+      <AdditionalIncludeDirectories>..\include;..\module\crcspeed</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -132,15 +133,19 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\crc64.h" />
     <ClInclude Include="..\include\CUnicodeString.h" />
     <ClInclude Include="..\include\driver.checker.h" />
     <ClInclude Include="..\include\driver.common.h" />
     <ClInclude Include="..\include\driver.memory.h" />
     <ClInclude Include="..\include\driver.registry.h" />
     <ClInclude Include="..\include\yagent.define.h" />
+    <ClInclude Include="..\module\crcspeed\crc64speed.h" />
+    <ClInclude Include="..\module\crcspeed\crcspeed.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="CProcessTable.h" />
     <ClInclude Include="CQueue.h" />
+    <ClInclude Include="CRegistryTable.h" />
     <ClInclude Include="CThreadPool.h" />
     <ClInclude Include="md5.h" />
     <ClInclude Include="resource.h" />

@@ -186,6 +186,7 @@ typedef struct CONFIG
 		//	포트별 Connect/Disconnect/Send/Recv 동기화 필요
 		FLT_CLIENT_PORT				command;
 		FLT_CLIENT_PORT				event;
+		ULONG						nConnected;
 	} client;
 
 	DWORD							bootId;

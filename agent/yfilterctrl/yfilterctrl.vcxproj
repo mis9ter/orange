@@ -101,11 +101,13 @@
     <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
+    <TargetName>$(ProjectName).$(Platform)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)build\temp\$(ProjectName)\out\$(ConfigurationName)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\temp\$(ProjectName)\int\$(ConfigurationName)\$(Platform)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
+    <TargetName>$(ProjectName).$(Platform)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -120,16 +122,16 @@
       <AdditionalIncludeDirectories>..\Include;..\lib\include;..\lib\spdlog\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <AdditionalOptions>/kernel %(ClCompile.AdditionalOptions)</AdditionalOptions>
-      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Lib>
-      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Lib>
     <PostBuildEvent>
       <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
-copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
-cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib\$(TargetName)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).pdb" "..\binary\lib\$(TargetName).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -145,16 +147,16 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
       <ExceptionHandling>false</ExceptionHandling>
       <Optimization>Disabled</Optimization>
       <AdditionalOptions>/kernel %(ClCompile.AdditionalOptions)</AdditionalOptions>
-      <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <PostBuildEvent>
       <Command>if not exist "..\binary\lib" mkdir "..\binary\lib"
-copy /v /y "$(OutDir)$(TargetName).$(Platform)$(TargetExt)" "..\binary\lib\$(TargetName).$(Platform)$(TargetExt)"
-copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
-cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
+copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\binary\lib\$(TargetName)$(TargetExt)"
+copy /v /y "$(OutDir)$(TargetName).pdb" "..\binary\lib\$(TargetName).pdb"
+cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).pdb"</Command>
     </PostBuildEvent>
     <Lib>
-      <OutputFile>$(OutDir)$(TargetName).$(Platform)$(TargetExt)</OutputFile>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

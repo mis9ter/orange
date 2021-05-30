@@ -1,4 +1,5 @@
 #pragma once
+//#include <functional>
 
 #define TAG_PROCESS			'corp'
 
@@ -7,11 +8,29 @@ typedef struct PROCESS_ENTRY
 	HANDLE				handle;
 	HANDLE				parent;
 	UUID				uuid;
+	PROCUID				ProcUID;
 	UNICODE_STRING		path;
 	UNICODE_STRING		command;
 	PVOID				key;
 	bool				bFree;		//	해제 대상
 	bool				bCallback;	//	콜백에 의해 수집
+
+	struct {
+		struct {
+			DWORD		dwRead;
+			DWORD		dwWrite;
+			DWORD		dwDelete;
+		} value;
+		struct {
+			DWORD		dwCreate;
+			DWORD		dwDelete;		
+			DWORD		dwRename;
+		} key;
+		struct {
+			DWORD64		dwRead;
+			DWORD64		dwWrite;		
+		} io;	
+	} registry;
 } PROCESS_ENTRY, * PPROCESS_ENTRY;
 
 typedef void (*PProcessTableCallback)(
@@ -19,6 +38,9 @@ typedef void (*PProcessTableCallback)(
 	IN PPROCESS_ENTRY		pEntry,			//	대상 엔트리 
 	IN PVOID				pCallbackPtr
 	);
+
+
+//typedef std::function<void (bool,PPROCESS_ENTRY,PVOID)>	PProcessTableCallback;
 
 class CProcessTable
 {
@@ -69,9 +91,14 @@ public:
 	}
 	*/
 	bool		Add(
-		IN bool		bCallback,		// 1 콜백에 의해 수집 0 직접 수집
-		IN HANDLE PID, IN HANDLE PPID,
-		IN UUID* pUuid, IN PCUNICODE_STRING pPath, IN PCUNICODE_STRING pCommand)
+		IN bool				bCallback,		// 1 콜백에 의해 수집 0 직접 수집
+		IN HANDLE			PID, 
+		IN HANDLE			PPID,
+		IN UUID				*pUuid, 
+		IN PROCUID			ProcUID,
+		IN PCUNICODE_STRING pPath, 
+		IN PCUNICODE_STRING pCommand
+	)
 	{
 		if (false == IsPossible())	return false;
 		BOOLEAN			bRet = false;
@@ -94,6 +121,7 @@ public:
 		entry.bFree = false;
 		entry.bCallback	= bCallback;
 		if (pUuid)		RtlCopyMemory(&entry.uuid, pUuid, sizeof(entry.uuid));
+		entry.ProcUID	= ProcUID;
 		CWSTRBuffer		procPath;
 
 		__try
@@ -146,8 +174,10 @@ public:
 			//	(for example, because the AllocateRoutine fails), RtlInsertElementGenericTable returns NULL.
 			//	if( bRet && pEntry ) PrintProcessEntry(__FUNCTION__, pEntry);
 			if (pEntry)	pEntry->bFree = true;
+			__dlog("%s %d", __func__, pEntry->handle);
 			nCount = RtlNumberGenericTableElements(&m_table);
-			if (true)
+			__dlog("ProcessTable:%d", nCount);
+			if (false)
 			{
 				for (ULONG i = 0; i < RtlNumberGenericTableElements(&m_table); i++)
 				{
@@ -231,11 +261,12 @@ public:
 		PPROCESS_ENTRY	pEntry = (PPROCESS_ENTRY)RtlLookupElementGenericTable(&m_table, &entry);
 		if (pEntry)
 		{
+			__dlog("%s %d", __func__, pEntry->handle);
 			if (pCallback)	pCallback(true, pEntry, pCallbackPtr);
 			FreeEntryData(pEntry);
 			if (RtlDeleteElementGenericTable(&m_table, pEntry))
 			{
-				if (true)
+				if (false)
 				{
 					nCount = RtlNumberGenericTableElements(&m_table);
 					for (ULONG i = 0; i < RtlNumberGenericTableElements(&m_table); i++)

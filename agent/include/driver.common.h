@@ -9,8 +9,8 @@
 //	%wc, %ws와 같은 wchar 관련 포멧을 사용할 땐 PASSIVE_LEVEL에서만 가능하다.
 //	--
 //	디버거가 붙어 있는 경우 IRQL이 예상과 다른 값이 될 수 도 있다. 
-#define	__log(fmt, ...)		if( KeGetCurrentIrql() <= PASSIVE_LEVEL ) { DbgPrintEx(0, 0, fmt, ## __VA_ARGS__); DbgPrintEx(0, 0, "\n"); }
-#define	__dlog(fmt, ...)	if( true ) { DbgPrintEx(0, 0, fmt, ## __VA_ARGS__); DbgPrintEx(0, 0, "\n"); }
+#define	__log(fmt, ...)		{if( KeGetCurrentIrql() <= PASSIVE_LEVEL ) { DbgPrintEx(0, 0, fmt, ## __VA_ARGS__); DbgPrintEx(0, 0, "\n"); }}
+#define	__dlog(fmt, ...)	{if( true ) { DbgPrintEx(0, 0, fmt, ## __VA_ARGS__); DbgPrintEx(0, 0, "\n"); }}
 #define	__function_log		{ char	szIrql[30] = ""; \
 							DbgPrintEx(0, 0, "%s\n",__LINE); \
 							DbgPrintEx(0, 0, "%-20s (%s)\n",	\

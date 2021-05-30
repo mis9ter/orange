@@ -130,11 +130,48 @@ NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID)
 	}
 	return status;
 }
-NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
+NTSTATUS	GetProcUID(
+	IN	bool				bCreate, 
+	IN	HANDLE				hPID,
 	IN	HANDLE				hPPID,
 	IN	PCUNICODE_STRING	pImagePath,
-	IN	LARGE_INTEGER* pCreateTime,
-	OUT	UUID* pGuid)
+	IN	LARGE_INTEGER		*pCreateTime,
+	OUT	PROCUID				*pUID
+)
+{
+	UNREFERENCED_PARAMETER(bCreate);
+	NTSTATUS		status = STATUS_SUCCESS;
+	CWSTRBuffer		proc;
+	/*
+		원래 계획은 부모ID까지 넣는 것인데
+		부모의 ProcGuid를 구하려 보니 조부모의 존재가 불확실하다.
+	*/
+	if( NULL == hPPID )
+		GetParentProcessId(hPID, &hPPID);
+	RtlStringCbPrintfW(proc, proc.CbSize(), L"%wZ.%d.%d.%d.%d.%d.%wZ",
+		&Config()->machineGuid,
+		Config()->bootId, 	//	bootid
+		pCreateTime->HighPart, pCreateTime->LowPart,
+		(DWORD)hPPID,
+		(DWORD)hPID,
+		pImagePath);
+
+	int	nSize = 0;
+	for (PWSTR p = proc; *p; p++) {
+		*p = towlower(*p);
+		nSize++;
+	}
+	if( pUID )	*pUID	= Path2CRC64(proc);
+	return status;
+}
+NTSTATUS	GetProcGuid(IN bool bCreate, 
+	IN HANDLE hPID,
+	IN	HANDLE				hPPID,
+	IN	PCUNICODE_STRING	pImagePath,
+	IN	LARGE_INTEGER		*pCreateTime,
+	OUT	UUID				*pGuid,
+	OUT PROCUID				*pUID
+)
 {
 	UNREFERENCED_PARAMETER(bCreate);
 	NTSTATUS		status = STATUS_SUCCESS;
@@ -160,14 +197,14 @@ NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
 		*p = towlower(*p);
 		nSize++;
 	}
-	md5_state_t state;          /* MD5 state info */
-	md5_byte_t  sum[16];        /* Sum data */
+	if( pGuid ) {	
+		md5_state_t state;          /* MD5 state info */
+		md5_byte_t  sum[16];        /* Sum data */
 
-	md5_init(&state);
-	md5_append(&state, (unsigned char*)(PWSTR)procGuid, nSize * sizeof(WCHAR));
-	md5_finish(&state, sum);
+		md5_init(&state);
+		md5_append(&state, (unsigned char*)(PWSTR)procGuid, nSize * sizeof(WCHAR));
+		md5_finish(&state, sum);
 
-	if (pGuid) {
 		pGuid->Data1 = sum[0] << 24 | sum[1] << 16 | sum[2] << 8 | sum[3];
 		pGuid->Data2 = sum[4] << 8 | sum[5];
 		pGuid->Data3 = sum[6] << 8 | sum[7];
@@ -180,6 +217,7 @@ NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
 		pGuid->Data4[6] = sum[14];
 		pGuid->Data4[7] = sum[15];
 	}
+	if( pUID )	*pUID	= Path2CRC64(procGuid);
 	return status;
 }
 NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)

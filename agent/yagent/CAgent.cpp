@@ -66,7 +66,7 @@ bool	CAgent::Initialize()
 				__leave;
 			}
 		}
-		Patch(m_config.szEventODBPath, m_config.szEventCDBPath);
+		Patch(m_config.szEventODBPath, m_config.szEventCDBPath, NULL);
 
 		if (false == CDB::Open(m_config.szEventCDBPath, __func__)) {
 			Log("%s can not open db %ws", __func__, m_config.szEventCDBPath);

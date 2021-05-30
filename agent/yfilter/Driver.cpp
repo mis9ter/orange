@@ -15,6 +15,16 @@ Environment:
 --*/
 #include "yfilter.h"
 
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(INIT, DriverEntry)
+#pragma alloc_text(PAGE, Unload)
+#pragma alloc_text(PAGE, InstanceQueryTeardown)
+#pragma alloc_text(PAGE, InstanceSetup)
+#pragma alloc_text(PAGE, InstanceTeardownStart)
+#pragma alloc_text(PAGE, InstanceTeardownComplete)
+#endif
+
+
 ULONG_PTR		OperationStatusCtx = 1;
 ULONG			gTraceFlags = 0;
 CThreadPool		g_messageThreadPool;
@@ -42,7 +52,6 @@ NTSTATUS	CreateFilterPort(
 )
 {
 	NTSTATUS		status	= STATUS_UNSUCCESSFUL;
-
 	UNICODE_STRING	portName;
 	CWSTR			portNameStr(pName);
 
@@ -202,6 +211,7 @@ Return Value:
 			__leave;
 		}
 		CreateProcessTable();
+		CreateRegistryTable();
 		//pDriverObject->DriverUnload = LegacyDriverUnload;
 		status	= IoCreateDevice(pDriverObject, 0, &Config()->deviceName,
 			FILE_DEVICE_UNKNOWN, 0, TRUE, &Config()->pDeviceObject);
@@ -324,6 +334,7 @@ Return Value:
 			Config()->pFilter = NULL;
 		}
 		MessageThreadPool()->Destroy();
+		DestroyRegistryTable();
 		DestroyProcessTable();
 		DestroyConfig();
 		if ((FLT_FILTER_UNLOAD_FLAGS)-1 != Flags)

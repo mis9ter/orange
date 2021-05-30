@@ -28,21 +28,21 @@ public:
 		const char	*pIsExisting	= "select count(ProcGuid) from process where ProcGuid=?";
 		const char	*pInsert		= "insert into process"	\
 			"("\
-			"ProcGuid,BootId,ProcPath,ProcName,CmdLine,"\
+			"ProcGuid,ProcUID,BootId,ProcPath,ProcName,CmdLine,"\
 			"PID,PPID,SessionId,PProcGuid,IsSystem,"\
 			"ProcUserId,CreateTime,ExitTime,KernelTime,UserTime"\
 			") "\
 			"values("\
-			"?,?,?,?,?"\
+			"?,?,?,?,?,?"\
 			",?,?,?,?,?"\
 			",?,?,?,?,?"\
 			")";
 		const char	*pUpdate		= "update process "	\
 			"set CreateTime=?, ExitTime=?, KernelTime=?, UserTime=? "\
-			"where ProcGuid=?";
+			"where ProcGuid=? and ProcUID=?";
 		const char	*pSelect		= "select ProcPath,PID "\
 			"from	process "\
-			"where	ProcGuid=?";
+			"where	ProcGuid=? and ProcUID=?";
 		const char*	pProcessList	= "select ProcName, ProcPath, count(*) cnt, sum(KernelTime+UserTime) time, sum(KernelTime) ktime, sum(UserTime) utime "	\
 			"from process "	\
 			"where bootid=? "	\
@@ -168,9 +168,9 @@ protected:
 				pClass->Log("%s %6d %ws", __FUNCTION__, p->PID, p->szPath);
 			if( false == CAppPath::GetFilePath(p->szPath, szPath, sizeof(szPath)) )
 				StringCbCopy(szPath, sizeof(szPath), p->szPath);
-			if (pClass->IsExisting(szProcGuid))
-				pClass->Update(szProcGuid, p);
-			else	pClass->Insert(szProcGuid, szPath, szPProcGuid, p);
+			if (pClass->IsExisting(szProcGuid, p->ProcUID))
+				pClass->Update(szProcGuid, p->ProcUID, p);
+			else	pClass->Insert(szProcGuid, p->ProcUID, szPath, szPProcGuid, p);
 			SYSTEMTIME	stCreate;
 			SYSTEMTIME	stExit;
 			SYSTEMTIME	stKernel;
@@ -215,8 +215,8 @@ protected:
 
 			if (false == CAppPath::GetFilePath(p->szPath, szPath, sizeof(szPath)))
 				StringCbCopy(szPath, sizeof(szPath), p->szPath);
-			if( pClass->IsExisting(szProcGuid) )
-				pClass->Update(szProcGuid, p);
+			if( pClass->IsExisting(szProcGuid, p->ProcUID) )
+				pClass->Update(szProcGuid, p->ProcUID, p);
 			//else 
 			//	pClass->Insert(szProcGuid, szPath, szPProcGuid, p);
 			//pClass->Log("%-20s %6d %ws", "PROCESS_STOP", p->dwProcessId, szPath);
@@ -259,13 +259,15 @@ private:
 	}	m_stmt;
 
 	bool	IsExisting(
-		PCWSTR				pProcGuid
+		PCWSTR				pProcGuid,
+		PROCUID				ProcUID
 	) {
 		int			nCount	= 0;
 		sqlite3_stmt* pStmt = m_stmt.pIsExisting;
 		if (pStmt) {
 			int		nIndex = 0;
 			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, ProcUID);
 			if (SQLITE_ROW == sqlite3_step(pStmt))	{
 				nCount	= sqlite3_column_int(pStmt, 0);
 			}
@@ -275,6 +277,7 @@ private:
 	}
 	bool	Insert(
 		PCWSTR				pProcGuid, 
+		PROCUID				ProcUID,
 		PCWSTR				pProcPath, 
 		PCWSTR				pPProcGuid,
 		PYFILTER_DATA		pData
@@ -287,6 +290,7 @@ private:
 			int		nIndex = 0;
 			PCWSTR	pProcName = wcsrchr(pProcPath, '\\');
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, ProcUID);
 			sqlite3_bind_int(pStmt,		++nIndex, YAgent::GetBootId());
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcPath, -1, SQLITE_STATIC);
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcName ? pProcName + 1 : pProcPath, -1, SQLITE_TRANSIENT);
@@ -332,6 +336,7 @@ private:
 	}
 	bool	Update(
 		PCWSTR				pProcGuid,
+		PROCUID				ProcUID,
 		PYFILTER_DATA		pData
 	) {
 		bool			bRet	= false;
@@ -358,6 +363,7 @@ private:
 			sqlite3_bind_int64(pStmt, ++nIndex, pData->times.KernelTime.QuadPart);
 			sqlite3_bind_int64(pStmt, ++nIndex, pData->times.UserTime.QuadPart);
 			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
 				Log("%s", sqlite3_errmsg(Db()->Handle()));

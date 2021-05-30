@@ -161,6 +161,7 @@ NTSTATUS	EventConnected(
 		FLT_ASSERT(Config()->client.pPort == NULL);
 		Config()->client.event.pPort = ClientPort;
 		Config()->client.event.hProcess = PsGetCurrentProcessId();
+		Config()->client.nConnected;
 		RtlStringCbCopyW(Config()->client.event.szName, sizeof(Config()->client.event.szName),
 			DRIVER_EVENT_PORT);
 #ifndef _WIN64

@@ -85,7 +85,8 @@ class CPatchDB
 	virtual	public	CAppLog
 {
 public:
-	CPatchDB() {
+	CPatchDB() 
+	{
 
 	}
 	~CPatchDB() {
@@ -93,7 +94,8 @@ public:
 	}
 	DWORD		Patch(
 		IN PCWSTR	pSrcPath, 
-		IN PCWSTR	pDestPath
+		IN PCWSTR	pDestPath,
+		IN HANDLE	hBreakEvent
 	);
 	bool		DBLog(
 		IN	CDB		&db,
@@ -104,6 +106,8 @@ public:
 	);
 
 private:
+	HANDLE	m_hBreakEvent;
+
 	bool	GetSchemaList(IN CDB & db, IN bool bTable, OUT Json::Value & doc);
 	bool	GetColumnList(IN CDB & db, IN PCSTR pTableName, OUT Json::Value & doc);
 	DWORD	GetColumnListString(IN const Json::Value & src, IN const Json::Value & dest, OUT std::string &str);

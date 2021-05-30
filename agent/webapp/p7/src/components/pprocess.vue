@@ -185,36 +185,22 @@
         },
         mounted() {
             console.log('mounted()')
-            this.headers.push({ text: "프로세스", value: "ProcName" })
+            this.headers.push({ text: "경로", value: "ProcName" })
             //this.headers.push({ text: "파일경로", value: "ProcPath" })
-            this.headers.push({ text: "실행횟수", value: "cnt" })
-            this.headers.push({ text: "크래시", value: "" })
+            this.headers.push({ text: "실행", value: "cnt" })
+            this.headers.push({ text: "CPU", value: "time" })
+            this.headers.push({ text: "메모리", value: "ktime" })
+            this.headers.push({ text: "디스크", value: "ktime" })
+            this.headers.push({ text: "오류", value: "" })
 
             //  file
-            this.headers.push({ text: "폴더생성", value: "" })
-            this.headers.push({ text: "폴더삭제", value: "" })
-            this.headers.push({ text: "파일생성", value: "" })
-            this.headers.push({ text: "파일삭제", value: "" })
-            this.headers.push({ text: "쓰기", value: "" })
-            this.headers.push({ text: "읽기", value: "" })            
-
-            //  registry
-            this.headers.push({ text: "키생성", value: "" })
-            this.headers.push({ text: "키삭제", value: "" })
-            this.headers.push({ text: "값생성", value: "" })
-            this.headers.push({ text: "값삭제", value: "" })
-            this.headers.push({ text: "쓰기", value: "" })
-            this.headers.push({ text: "읽기", value: "" })            
-
-            //  networking
+            this.headers.push({ text: "프로세스", value: "" })
+            this.headers.push({ text: "파일", value: "" })
+            this.headers.push({ text: "레지스트리", value: "" })
+            this.headers.push({ text: "네트워크", value: "" })
             this.headers.push({ text: "DNS쿼리", value: "" })
-            this.headers.push({ text: "접속IP", value: "" })
-            this.headers.push({ text: "송신", value: "" })
-            this.headers.push({ text: "수신", value: "" })
-            
-            this.headers.push({ text: "CPU시간", value: "time" })
-            this.headers.push({ text: "커널시간", value: "ktime" })
-            this.headers.push({ text: "유저시간", value: "utime" })
+
+          
 
             this.request(this.req)
             //for (var i = 1; i <= 100; i++) {

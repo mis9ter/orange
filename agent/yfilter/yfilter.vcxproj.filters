@@ -17,6 +17,9 @@
       <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
       <Extensions>inf;inv;inx;mof;mc;</Extensions>
     </Filter>
+    <Filter Include="Source Files\crcspeed">
+      <UniqueIdentifier>{0bfae54f-537a-4ac9-a642-9cbe95d9bd75}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.h">
@@ -56,6 +59,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="md5.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\crc64.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\module\crcspeed\crc64speed.h">
+      <Filter>Source Files\crcspeed</Filter>
+    </ClInclude>
+    <ClInclude Include="..\module\crcspeed\crcspeed.h">
+      <Filter>Source Files\crcspeed</Filter>
+    </ClInclude>
+    <ClInclude Include="CRegistryTable.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

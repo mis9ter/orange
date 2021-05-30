@@ -17,11 +17,13 @@
 #include <ntifs.h>
 #include <stdlib.h>
 #include <wdm.h>
+
 #include "yagent.define.h"
 #include "driver.common.h"
 #include "Config.h"
 #include "CThreadPool.h"
 #include "md5.h"
+#include "crc64.h"
 
 #pragma comment(lib, "ntstrsafe.lib")
 #pragma comment(lib, "fltmgr.lib")
@@ -192,8 +194,15 @@ NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID);
 NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
 	IN	HANDLE				hPPID,
 	IN	PCUNICODE_STRING	pImagePath,
-	IN	LARGE_INTEGER* pCreateTime,
-	OUT	UUID* pGuid);
+	IN	LARGE_INTEGER		*pCreateTime,
+	OUT	UUID				*pGuid,
+	OUT	PROCUID				*pUID
+);
+NTSTATUS	GetProcUID(IN bool bCreate, IN HANDLE hPID,
+	IN	HANDLE				hPPID,
+	IN	PCUNICODE_STRING	pImagePath,
+	IN	LARGE_INTEGER		*pCreateTime,
+	OUT	PROCUID				*pUID);
 NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p);
 NTSTATUS	GetProcessImagePathByProcessId
 (
@@ -251,10 +260,11 @@ void			StopThreadFilter();
 /////////////////////////////////////////////////////////////////////////////////////////
 //	레지스트리 모니터링/관리
 /////////////////////////////////////////////////////////////////////////////////////////
-bool	StartRegistryFilter(IN PDRIVER_OBJECT pDriverObject);
-bool	StopRegistryFilter();
+bool			StartRegistryFilter(IN PDRIVER_OBJECT pDriverObject);
+bool			StopRegistryFilter();
 
-
+uint64_t		Path2CRC64(PUNICODE_STRING pValue);
+uint64_t		Path2CRC64(PCWSTR pValue);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 //	도라이버-앱 간 통신
@@ -395,19 +405,11 @@ NTSTATUS	EventMessage
 EXTERN_C_END
 
 #include "CProcessTable.h"
-
+#include "CRegistryTable.h"
 //
 //  Assign text sections for each routine.
 //
 
-#ifdef ALLOC_PRAGMA
-#pragma alloc_text(INIT, DriverEntry)
-#pragma alloc_text(PAGE, Unload)
-#pragma alloc_text(PAGE, InstanceQueryTeardown)
-#pragma alloc_text(PAGE, InstanceSetup)
-#pragma alloc_text(PAGE, InstanceTeardownStart)
-#pragma alloc_text(PAGE, InstanceTeardownComplete)
-#endif
 
 //
 //  operation registration

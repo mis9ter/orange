@@ -46,7 +46,8 @@ bool	CPatchDB::DBLog(
 
 DWORD	CPatchDB::Patch(
 	IN PCWSTR	pSrcPath, 
-	IN PCWSTR	pDestPath
+	IN PCWSTR	pDestPath,
+	IN HANDLE	hBreakEvent
 ) {
 	Log(__func__);
 

@@ -1,9 +1,13 @@
 ﻿#pragma once
 
 #include <guiddef.h>
+#include <stdint.h>
+
 #ifndef UUID
 typedef GUID UUID;
 #endif UUID
+
+typedef	uint64_t				PROCUID;
 
 #define AGENT_SERVICE_NAME		L"orange.service"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
@@ -13,7 +17,6 @@ typedef GUID UUID;
 #define AGENT_SERVICE_PIPE_NAME	L"\\\\.\\pipe\\{523E4858-04BA-4CB1-AE5D-6AD6C9503C16}"
 #define AGENT_WEBAPP_PIPE_NAME	L"\\\\.\\pipe\\{D12BB45C-977B-4FBA-88A2-1A4F6B3D1D75}"
 #define AGENT_DATA_FOLDERNAME	L"\\Orangeworks\\Orange"
-
 
 
 #define	AGENT_PATH_SIZE			1024
@@ -99,6 +102,7 @@ namespace YFilter
 			Thread,
 			Module,
 			Boot,
+			Registry,
 			Count
 		};
 		enum SubType {
@@ -108,6 +112,7 @@ namespace YFilter
 			ThreadStart,
 			ThreadStop,
 			ModuleLoad,
+			ModuleUnload,
 		};
 	};
 	namespace Object
@@ -245,8 +250,10 @@ typedef struct YFILTER_DATA {
 	UUID						ProcGuid;					//	process
 	UUID						PProcGuid;
 #pragma pack(push, 1)
-
 	ULONG_PTR					pImageSize;
+	PROCUID						ProcUID;
+	PROCUID						PProcUID;
+
 	union {
 		ULONG Property;
 		struct {
@@ -262,6 +269,7 @@ typedef struct YFILTER_DATA {
 		} Properties;
 	} ImageProperties;
 } YFILTER_DATA, *PYFILTER_DATA;
+
 typedef struct YFILTER_MESSAGE {
 	YFILTER_HEADER	header;
 	YFILTER_DATA	data;

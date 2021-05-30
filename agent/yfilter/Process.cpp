@@ -25,7 +25,7 @@ bool			IsRegisteredProcess(IN HANDLE h)
 }
 bool			RegisterProcess(IN HANDLE h)
 {
-	return g_process.Add(false, h, NULL, NULL, NULL, NULL);
+	return g_process.Add(false, h, NULL, NULL, NULL, NULL, NULL);
 }
 bool			DeregisterProcess(IN HANDLE h)
 {
@@ -82,195 +82,7 @@ static	bool	IsSkip(
 	}
 	return bRet;
 }
-void			PrintMask(PCSTR pTitle, YFilter::Process::Context context, PACCESS_MASK pMask)
-{
-	if( YFilter::Process::Context::Process == context )
-	{
-		//	A0121410
 
-		if( pTitle )	__dlog("%s", pTitle); __dlog("%s", __LINE);
-		if (*pMask & PROCESS_TERMINATE)						__dlog("  %s", "PROCESS_TERMINATE");
-		if (*pMask & PROCESS_CREATE_THREAD)					__dlog("  %s", "PROCESS_CREATE_THREAD");
-		if (*pMask & PROCESS_SET_SESSIONID)					__dlog("  %s", "PROCESS_SET_SESSIONID");
-		if (*pMask & PROCESS_VM_OPERATION)					__dlog("  %s", "PROCESS_VM_OPERATION");
-		if (*pMask & PROCESS_VM_READ)						__dlog("  %s", "PROCESS_VM_READ");
-		if (*pMask & PROCESS_VM_WRITE)						__dlog("  %s", "PROCESS_VM_WRITE");
-		if (*pMask & PROCESS_DUP_HANDLE)					__dlog("  %s", "PROCESS_DUP_HANDLE");
-		if (*pMask & PROCESS_CREATE_PROCESS)				__dlog("  %s", "PROCESS_CREATE_PROCESS");
-		if (*pMask & PROCESS_SET_QUOTA)						__dlog("  %s", "PROCESS_SET_QUOTA");
-		if (*pMask & PROCESS_SET_INFORMATION)				__dlog("  %s", "PROCESS_SET_INFORMATION");
-		if (*pMask & PROCESS_QUERY_INFORMATION)				__dlog("  %s", "PROCESS_QUERY_INFORMATION");
-		if (*pMask & PROCESS_SUSPEND_RESUME)				__dlog("  %s", "PROCESS_SUSPEND_RESUME");
-		if (*pMask & PROCESS_QUERY_LIMITED_INFORMATION)		__dlog("  %s", "PROCESS_QUERY_LIMITED_INFORMATION");
-		if (*pMask & PROCESS_SET_LIMITED_INFORMATION)		__dlog("  %s", "PROCESS_SET_LIMITED_INFORMATION");
-		if (*pMask & READ_CONTROL)							__dlog("  %s", "READ_CONTROL");
-		if (*pMask & SYNCHRONIZE)							__dlog("  %s", "SYNCHRONIZE");
-		//if (*pMask & PROCESS_ALL_ACCESS)					__dlog("  %s", "PROCESS_ALL_ACCESS");
-	}
-	else
-	{
-		if (*pMask & THREAD_TERMINATE)						__dlog("  %s", "THREAD_TERMINATE");
-		if (*pMask & THREAD_SUSPEND_RESUME)					__dlog("  %s", "THREAD_SUSPEND_RESUME");
-		if (*pMask & THREAD_ALERT)							__dlog("  %s", "THREAD_ALERT");
-		if (*pMask & THREAD_GET_CONTEXT)					__dlog("  %s", "THREAD_GET_CONTEXT");
-		if (*pMask & THREAD_SET_CONTEXT)					__dlog("  %s", "THREAD_SET_CONTEXT");
-		if (*pMask & THREAD_SET_INFORMATION)				__dlog("  %s", "THREAD_SET_INFORMATION");
-		if (*pMask & THREAD_SET_LIMITED_INFORMATION)		__dlog("  %s", "THREAD_SET_LIMITED_INFORMATION");
-		if (*pMask & THREAD_QUERY_LIMITED_INFORMATION)		__dlog("  %s", "THREAD_QUERY_LIMITED_INFORMATION");
-		if (*pMask & THREAD_RESUME)							__dlog("  %s", "THREAD_RESUME");
-	}
-}
-bool			CheckAccessMask(
-	IN PCSTR					pTitle, 
-	IN YFilter::Process::Context	context,
-	IN HANDLE					hCurrentProcessId, 
-	IN HANDLE					hTargetProcessId,
-	PACCESS_MASK 				pDesiredMask = NULL,
-	PACCESS_MASK 				pOriginalDesiredMask = NULL			
-)
-{
-	CWSTRBuffer		currentProcPath, targetProcPath;
-	bool			bSaveMe			= false;					//	내가 위험해질수 있으니 보호해주
-	YFilter::Process::Type	type	= YFilter::Process::Unknown;
-	UNREFERENCED_PARAMETER(pDesiredMask);
-	UNREFERENCED_PARAMETER(pTitle);
-	UNREFERENCED_PARAMETER(context);
-	UNREFERENCED_PARAMETER(hCurrentProcessId);
-	UNREFERENCED_PARAMETER(hTargetProcessId);
-	UNREFERENCED_PARAMETER(pDesiredMask);
-	UNREFERENCED_PARAMETER(pOriginalDesiredMask);	
-
-	__try
-	{
-		if (IsRegisteredProcess(hCurrentProcessId)) {
-			//	현재 프로세스가 등록된 프로세스이면 대상이 무엇이든 보호하지 않는다.
-			//	등록된 프로세스의 의미: 
-			//		프로세스ID로 판단. 종료되면 해당 프로세스ID는 더 이상 허용되지 않는다. 
-			//	허용된 프로세스의 의미:
-			//		실행경로로 판단. 종료후 다시 실행되도 계속 허용된다. 
-			__leave;
-		}
-		if (NT_FAILED(GetProcessImagePathByProcessId(hTargetProcessId, targetProcPath,
-			(ULONG)targetProcPath.CbSize(), NULL))) {
-			//	구하지 못한 경우도 무슨 일이 생길지 모르니 통과
-			__leave;
-		}
-		if (
-			!IsObject(YFilter::Object::Mode::Protect, YFilter::Object::Type::Process, targetProcPath)	&&
-			!IsObject(YFilter::Object::Mode::Protect, YFilter::Object::Type::File, targetProcPath)
-		) {
-			//	대상 프로세스가 보호 대상 프로세스도 아니고
-			//	보호 대상 폴더에 존재하지도 않는다면 통과
-			__leave;
-		}
-		//	여기서부터 대상 프로세스가 보호 대상 or 보호 대상 폴더에 존재하는 경우 
-		//	지켜줘야 한다.
-		//	상황에 따라 허용 여부를 결정한다.
-		if (NT_FAILED(GetProcessImagePathByProcessId(hCurrentProcessId, currentProcPath,
-			(ULONG)currentProcPath.CbSize(), NULL))) {
-			//	실패된 이유는 모르지만 이 경우 그냥 통과시켜 줍니다.
-			//	괜히 붙잡다 망할라.
-			__leave;
-		}
-
-		if (IsObject(YFilter::Object::Mode::White, YFilter::Object::Type::Process, currentProcPath)) {
-			//	현재 프로세스가 깨끗 담백한 놈이라면 허용
-			__leave;
-		}
-		if (IsObject(YFilter::Object::Mode::Protect, YFilter::Object::Type::File, currentProcPath)) {
-			//	현재 프로세스가 보호대상 폴더안에 존재한다면
-			//	같은 식구니까 허용
-			__leave;
-		}
-		if (IsObject(YFilter::Object::Mode::Allow, YFilter::Object::Type::Process, currentProcPath)) {
-			//	현재 프로세스가 허용된 프로세스라면 통과
-			__leave;
-		}
-		bSaveMe	= true;
-		if (IsObject(YFilter::Object::Mode::Gray, YFilter::Object::Type::Process, currentProcPath)) {
-			//	gray는 접근은 되지만 종료, 서스펜드, VM 관련 동작을 막는다. 
-			type	= YFilter::Process::Type::Gray;
-			__leave;
-		}
-		if (IsObject(YFilter::Object::Mode::Black, YFilter::Object::Type::Process, currentProcPath)) {
-			//	블랙이는 사살시킨다. 
-			type = YFilter::Process::Type::Black;
-			__leave;
-		}
-		WCHAR *pName = wcsrchr((PWSTR)currentProcPath, L'\\');
-		if (pName)
-		{
-			pName++;
-			__log(__LINE);
-			__log("%ws", pName);
-			OtList(ObjectTable(YFilter::Object::Mode::Black, YFilter::Object::Type::Process));
-			__log(__LINE);
-			if( IsObject(YFilter::Object::Mode::White, YFilter::Object::Type::Process, pName)) 
-				__leave;
-			if (IsObject(YFilter::Object::Mode::Gray, YFilter::Object::Type::Process, pName)) {
-				type = YFilter::Process::Type::Gray;
-				__leave;
-			}
-			if (IsObject(YFilter::Object::Mode::Black, YFilter::Object::Type::Process, pName)) {
-				type = YFilter::Process::Type::Black;
-				__leave;
-			}
-		}
-	}
-	__finally
-	{
-		if (bSaveMe && YFilter::Process::Process == context)
-		{
-			__log("%s", __LINE);
-			__log("%s(%d)", pTitle, context);
-			__log("current: %ws(%d)", (PWSTR)currentProcPath, type);
-			__log("target : %ws", (PWSTR)targetProcPath);
-		}
-		if (YFilter::Process::Type::Unknown == type)
-		{
-			//	아무 관계가 없어요. 소 닭 보듯.
-		}
-		else if ( YFilter::Process::Type::Black == type )
-		{
-			if ((Config()->version.dwMajorVersion >= 6 && Config()->version.dwMinorVersion >= 3) || 
-				Config()->version.dwMajorVersion >= 10)
-			{
-				//	죽입시다. 안그럼 날 죽일 수도 있는 놈. 정당방위
-				__log("KILLING:%ws", (PCWSTR)currentProcPath);
-				KillProcess(hCurrentProcessId);
-			}
-		}
-		else if (YFilter::Process::Type::Gray == type)
-		{
-			//	날 죽이지도 내 VM을 읽을 수도 없게 한다.
-		}
-		else
-		{
-			if (bSaveMe)
-			{
-				if (YFilter::Process::Context::Process == context)
-				{
-					
-				}
-				else
-				{
-
-				}
-			}
-		}
-	}
-	return bSaveMe;
-}
-void			DeleteAccessMask(PACCESS_MASK pOriginalMask, PACCESS_MASK pDesiredMask, ULONG notDesiredAccess[], WORD wCount)
-{
-	for (auto i = 0; i < wCount; ++i)
-	{
-		if (FlagOn(*pOriginalMask, notDesiredAccess[i]))
-		{
-			*pDesiredMask &= ~notDesiredAccess[i];
-		}
-	}
-}
 OB_PREOP_CALLBACK_STATUS	ProcessObjectPreCallback(
 	PVOID							pRegistrationContext,
 	POB_PRE_OPERATION_INFORMATION	pOperationInformation
@@ -281,7 +93,6 @@ OB_PREOP_CALLBACK_STATUS	ProcessObjectPreCallback(
 	//	Special kernel APCs are not disabled. For more information about APCs
 	UNREFERENCED_PARAMETER(pRegistrationContext);
 	UNREFERENCED_PARAMETER(pOperationInformation);
-	bool					bCheck	= false;
 	__try
 	{
 		HANDLE	currentPID = PsGetCurrentProcessId();
@@ -289,55 +100,41 @@ OB_PREOP_CALLBACK_STATUS	ProcessObjectPreCallback(
 
 		if( IsSkip(currentPID, targetPID, pOperationInformation) )		__leave;
 
-		ULONG	notDesiredAccesses[] = { PROCESS_TERMINATE, /*PROCESS_VM_WRITE*/ };
-		//ULONG	notInject[]	= { PROCESS_VM_READ};
-		for (int i = 0; i < sizeof(notDesiredAccesses) / sizeof(ULONG); ++i)
-		{
-			if (FlagOn(pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess, notDesiredAccesses[i]))
-			{
-				bCheck = true;
-				break;
-			}
-		}
-		if( false == bCheck )	__leave;
-		if (CheckAccessMask(__FUNCTION__, YFilter::Process::Context::Process, currentPID, targetPID,
-			&pOperationInformation->Parameters->CreateHandleInformation.DesiredAccess,
-			&pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess))
-		{
-			__log("pRegistrationContext    %p", pRegistrationContext);
-			__log("pOperationInformation   %p", pOperationInformation);
-			if( pOperationInformation ) {
-				__log("  Operation             %d", pOperationInformation->Operation);
-				__log("  Flags                 %d", pOperationInformation->Flags);
-				__log("    KernelHandle        %d", pOperationInformation->KernelHandle);
-				__log("    Reserved            %d", pOperationInformation->Reserved);
-				__log("  Object                %d", pOperationInformation->Object);
-				__log("  ObjectType            %d", pOperationInformation->ObjectType);
-				__log("  CallContext           %d", pOperationInformation->CallContext);
-				__log("  Parameters            %d", pOperationInformation->Parameters);
-				if (pOperationInformation->Parameters)
-				{
-					__log("    CreateHandleInfor.. %d", pOperationInformation->Parameters->CreateHandleInformation);
-					__log("    DuplicateHandleIn.. %d", pOperationInformation->Parameters->DuplicateHandleInformation);
-				}
-			}
-			PrintMask("OriginalDesiredAccess", YFilter::Process::Context::Process, 
-				&pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess);
-			if (FALSE == pOperationInformation->KernelHandle)
-			{
-				DeleteAccessMask(&pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess, 
-					&pOperationInformation->Parameters->CreateHandleInformation.DesiredAccess, 
-					notDesiredAccesses, _countof(notDesiredAccesses));
-			}
-			PrintMask("DesiredAccess", YFilter::Process::Context::Process, 
-				&pOperationInformation->Parameters->CreateHandleInformation.DesiredAccess);
-		}
+		__dlog("%s CPID=%d TPID=%d", __func__, currentPID, targetPID);
 	}
 	__finally
 	{
 
 	}
 	return OB_PREOP_SUCCESS;
+}
+void	ProcessObjectPostCallback(
+	PVOID							pRegistrationContext,
+	POB_POST_OPERATION_INFORMATION	pOperationInformation
+)
+{
+	//	This routine is called at PASSIVE_LEVEL in an arbitrary thread context 
+	//	with normal kernel APCs disabled. 
+	//	Special kernel APCs are not disabled. For more information about APCs
+	UNREFERENCED_PARAMETER(pRegistrationContext);
+	UNREFERENCED_PARAMETER(pOperationInformation);
+
+	HANDLE	currentPID = PsGetCurrentProcessId();
+	HANDLE	targetPID = PsGetProcessId((PEPROCESS)pOperationInformation->Object);
+
+	__dlog("%s CPID=%d TPID=%d", __func__, currentPID, targetPID);
+
+}
+void	ThreadObjectPostCallback(
+	PVOID							pRegistrationContext,
+	POB_POST_OPERATION_INFORMATION	pOperationInformation
+)
+{
+	//	This routine is called at PASSIVE_LEVEL in an arbitrary thread context 
+	//	with normal kernel APCs disabled. 
+	//	Special kernel APCs are not disabled. For more information about APCs
+	UNREFERENCED_PARAMETER(pRegistrationContext);
+	UNREFERENCED_PARAMETER(pOperationInformation);
 }
 OB_PREOP_CALLBACK_STATUS
 ThreadObjectPreCallback(
@@ -348,34 +145,13 @@ ThreadObjectPreCallback(
 	UNREFERENCED_PARAMETER(pRegistrationContext);
 	UNREFERENCED_PARAMETER(pOperationInformation);
 
-	ULONG					notDesiredAccesses[] = { THREAD_TERMINATE, THREAD_SUSPEND_RESUME };
-	bool					bCheck = false;
 	__try
 	{
 		HANDLE	currentPID = PsGetCurrentProcessId();
 		HANDLE	targetPID = PsGetThreadProcessId((PETHREAD)pOperationInformation->Object);
 		if (IsSkip(currentPID, targetPID, pOperationInformation))	__leave;
 
-		for (int i = 0; i < sizeof(notDesiredAccesses) / sizeof(ULONG); ++i)
-		{
-			if (FlagOn(pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess, notDesiredAccesses[i]))
-			{
-				bCheck = true;
-				break;
-			}
-		}
-		if (false == bCheck)	__leave;
-
-		if( CheckAccessMask(__FUNCTION__, YFilter::Process::Context::Thread, currentPID, targetPID,
-			&pOperationInformation->Parameters->CreateHandleInformation.DesiredAccess,
-			&pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess) )
-		{
-			{
-				DeleteAccessMask(&pOperationInformation->Parameters->CreateHandleInformation.OriginalDesiredAccess,
-					&pOperationInformation->Parameters->CreateHandleInformation.DesiredAccess,
-					notDesiredAccesses, _countof(notDesiredAccesses));
-			}
-		}	
+	
 	}
 	__finally
 	{
@@ -482,21 +258,25 @@ NTSTATUS		AddEarlyProcess(HANDLE hPID)
 			__log("%s %d GetProcessInfo() failed.", __FUNCTION__, hPID);
 			__leave;
 		}
-		pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
+		pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(PagedPool, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
 		if (pMsg) 
 		{
+			PROCUID		ProcUID;
 			RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
 			RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 			if( NT_SUCCESS(GetProcGuid(true, hPID, hPPID,
-				pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid)) ) 
+				pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid, &ProcUID)) ) 
 			{
+				pMsg->data.ProcUID	= ProcUID;
 				PUNICODE_STRING	pParentImageFileName = NULL;
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(hPPID, &pParentImageFileName)))
 				{
 					KERNEL_USER_TIMES	ptimes;
+					PROCUID				PProcUID;
 					if (NT_SUCCESS(GetProcessTimes(hPPID, &ptimes))) {
 						if (NT_SUCCESS(GetProcGuid(true, hPPID, GetParentProcessId(hPPID),
-							pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid))) {
+							pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid, &PProcUID))) {
+							pMsg->data.PProcUID	= PProcUID;
 						}
 						else {
 							__log("%s PProcGuid - failed.", __FUNCTION__);
@@ -524,8 +304,8 @@ NTSTATUS		AddEarlyProcess(HANDLE hPID)
 			}
 			pMsg->data.times.CreateTime = times.CreateTime;
 			ProcessTable()->Add(true, hPID, hPPID,
-				&pMsg->data.ProcGuid, pImageFileName, pCmdLine);
-			pMsg->header.mode = YFilter::Message::Mode::Event;
+				&pMsg->data.ProcGuid, pMsg->data.ProcUID, pImageFileName, pCmdLine);
+			pMsg->header.mode	= YFilter::Message::Mode::Event;
 			pMsg->header.category = YFilter::Message::Category::Process;
 			pMsg->header.size = sizeof(YFILTER_MESSAGE);
 
@@ -591,18 +371,22 @@ NTSTATUS		SendPreCreatedProcess(HANDLE hPID)
 		pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
 		if (pMsg)
 		{
+			PROCUID		ProcUID;
 			RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
 			RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 			if (NT_SUCCESS(GetProcGuid(true, hPID, hPPID,
-				pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid)))
+				pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid, &ProcUID)))
 			{
+				pMsg->data.ProcUID	= ProcUID;
 				PUNICODE_STRING	pParentImageFileName = NULL;
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(hPPID, &pParentImageFileName)))
 				{
 					KERNEL_USER_TIMES	ptimes;
+					PROCUID				PProcUID;
 					if (NT_SUCCESS(GetProcessTimes(hPPID, &ptimes))) {
 						if (NT_SUCCESS(GetProcGuid(true, hPPID, GetParentProcessId(hPPID),
-							pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid))) {
+							pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid, &PProcUID))) {
+							pMsg->data.PProcUID	= PProcUID;
 						}
 						else {
 							__log("%s PProcGuid - failed.", __FUNCTION__);
@@ -630,7 +414,7 @@ NTSTATUS		SendPreCreatedProcess(HANDLE hPID)
 			}
 			pMsg->data.times.CreateTime = times.CreateTime;
 			ProcessTable()->Add(true, hPID, hPPID,
-				&pMsg->data.ProcGuid, pImageFileName, pCmdLine);
+				&pMsg->data.ProcGuid, pMsg->data.ProcUID, pImageFileName, pCmdLine);
 			pMsg->header.mode = YFilter::Message::Mode::Event;
 			pMsg->header.category = YFilter::Message::Category::Process;
 			pMsg->header.size = sizeof(YFILTER_MESSAGE);
@@ -706,20 +490,24 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 					PUNICODE_STRING	pImageFileName = NULL;
 					if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 					{
+						PROCUID		ProcUID;
 						RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 						GetProcGuid(true, ProcessId, GetParentProcessId(ProcessId), 
 							//CreateInfo->ParentProcessId, 
-							pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid);
-
+							pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid, &ProcUID);
+						pMsg->data.ProcUID	= ProcUID;
+						
 						PUNICODE_STRING	pParentImageFileName = NULL;
 						if (NT_SUCCESS(GetProcessImagePathByProcessId(CreateInfo->ParentProcessId, &pParentImageFileName)))
 						{
 							KERNEL_USER_TIMES	ptimes;
+							PROCUID				PProcUID;
 							if (NT_SUCCESS(GetProcessTimes(CreateInfo->ParentProcessId, &ptimes))) {
 								if (NT_SUCCESS(GetProcGuid(true, CreateInfo->ParentProcessId, 
 									GetParentProcessId(CreateInfo->ParentProcessId),
 									pParentImageFileName, &ptimes.CreateTime,
-									&pMsg->data.PProcGuid)) ) {
+									&pMsg->data.PProcGuid, &PProcUID)) ) {
+									pMsg->data.PProcUID	= PProcUID;
 								}
 								else {
 									__log("%s PProcGuid - failed.", __FUNCTION__);
@@ -743,7 +531,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 					}
 					pMsg->data.times.CreateTime	= times.CreateTime;
 					ProcessTable()->Add(true, ProcessId, CreateInfo->ParentProcessId,
-						&pMsg->data.ProcGuid, CreateInfo->ImageFileName, CreateInfo->CommandLine);
+						&pMsg->data.ProcGuid, pMsg->data.ProcUID, CreateInfo->ImageFileName, CreateInfo->CommandLine);
 					pMsg->header.mode = YFilter::Message::Mode::Event;
 					pMsg->header.category = YFilter::Message::Category::Process;
 					pMsg->header.size = sizeof(YFILTER_MESSAGE);
@@ -831,9 +619,11 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 					PUNICODE_STRING	pImageFileName		= NULL;
 					if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 					{
+						PROCUID		ProcUID;
 						RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 						GetProcGuid(false, ProcessId, GetParentProcessId(ProcessId), pImageFileName, &times.CreateTime, 
-							&pMsg->data.ProcGuid);
+							&pMsg->data.ProcGuid, &ProcUID);
+						pMsg->data.ProcUID	= ProcUID;
 						CMemory::Free(pImageFileName);
 					}					
 				}
@@ -953,8 +743,11 @@ bool		StartProcessFilter()
 				pMsg->data.times.ExitTime = times.ExitTime;
 				pMsg->data.times.KernelTime = times.KernelTime;
 				pMsg->data.times.UserTime = times.UserTime;
+
+				PROCUID		ProcUID;
 				GetProcGuid(true, PID, PPID,
-					pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid);
+					pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid, &ProcUID);
+				pMsg->data.ProcUID	= ProcUID;
 				RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 				GetProcessInfo(PID, ProcessCommandLineInformation, &pCmdLine);
 				if (pCmdLine)
@@ -964,11 +757,13 @@ bool		StartProcessFilter()
 				if (PPID && NT_SUCCESS(GetProcessImagePathByProcessId(PPID, &pParentImageFileName)))
 				{
 					KERNEL_USER_TIMES	ptimes;
+					PROCUID				PProcUID;
 					if (NT_SUCCESS(GetProcessTimes(PPID, &ptimes))) {
 						if (NT_SUCCESS(GetProcGuid(true, PPID,
 							GetParentProcessId(PPID),
 							pParentImageFileName, &ptimes.CreateTime,
-							&pMsg->data.PProcGuid))) {
+							&pMsg->data.PProcGuid, &PProcUID))) {
+							pMsg->data.PProcUID	= PProcUID;
 						}
 						else {
 							__log("%s PProcGuid - failed.", __FUNCTION__);
@@ -988,15 +783,15 @@ bool		StartProcessFilter()
 					__log("       %ws", pMsg->data.szCommand);
 				}
 
-				ProcessTable()->Add(false, PID, PPID, &pMsg->data.ProcGuid, pImageFileName, pCmdLine);
-				pMsg->header.mode = YFilter::Message::Mode::Event;
-				pMsg->header.category = YFilter::Message::Category::Process;
-				pMsg->header.size = sizeof(YFILTER_MESSAGE);
+				ProcessTable()->Add(false, PID, PPID, &pMsg->data.ProcGuid, pMsg->data.ProcUID, pImageFileName, pCmdLine);
+				pMsg->header.mode		= YFilter::Message::Mode::Event;
+				pMsg->header.category	= YFilter::Message::Category::Process;
+				pMsg->header.size		= sizeof(YFILTER_MESSAGE);
 
-				pMsg->data.subType = YFilter::Message::SubType::ProcessStart;
+				pMsg->data.subType		= YFilter::Message::SubType::ProcessStart;
 				pMsg->data.bCreationSaved = true;
-				pMsg->data.PID = (DWORD)PID;
-				pMsg->data.PPID = (DWORD)PPID;
+				pMsg->data.PID			= (DWORD)PID;
+				pMsg->data.PPID			= (DWORD)PPID;
 				if (MessageThreadPool()->Push(__FUNCTION__,
 					YFilter::Message::Mode::Event,
 					YFilter::Message::Category::Process,
@@ -1022,10 +817,12 @@ bool		StartProcessFilter()
 		obOpRegs[0].ObjectType = PsProcessType;
 		obOpRegs[0].Operations = OB_OPERATION_HANDLE_CREATE;
 		obOpRegs[0].PreOperation = ProcessObjectPreCallback;
+		obOpRegs[0].PostOperation = ProcessObjectPostCallback;
 
 		obOpRegs[1].ObjectType = PsThreadType;
 		obOpRegs[1].Operations = OB_OPERATION_HANDLE_CREATE;
 		obOpRegs[1].PreOperation = ThreadObjectPreCallback;
+		obOpRegs[1].PostOperation = ThreadObjectPostCallback;
 
 		OB_CALLBACK_REGISTRATION	obCbReg = { 0, };
 		obCbReg.Version = OB_FLT_REGISTRATION_VERSION;

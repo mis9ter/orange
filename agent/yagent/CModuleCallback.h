@@ -27,16 +27,16 @@ public:
 	{
 		const char* pInsert = "insert into module"	\
 			"("\
-			"ProcGuid,PID,FilePath,FileName,FileExt,RProcGuid,BaseAddress,FileSize"\
+			"ProcGuid,ProcUID, PID,FilePath,FileName,FileExt,RProcGuid,BaseAddress,FileSize"\
 			",SignatureLevel,SignatureType) "\
 			"values("\
-			"?,?,?,?,?,?,?,?"\
+			"?,?,?,?,?,?,?,?,?"\
 			",?,?)";
-		const char* pIsExisting = "select count(ProcGuid) from module where ProcGuid=? and FilePath=?";
+		const char* pIsExisting = "select count(ProcUID) from module where ProcGuid=? and ProcUID=? and FilePath=?";
 		const char* pUpdate = "update module "	\
 			"set LoadCount=LoadCount+1, LastTime=datetime('now','localtime'), BaseAddress=? "\
-			"where ProcGuid=? and FilePath=?";
-		const char*	pSelect	= "select p.ProcGuid,p.ProcPath, m.FilePath "\
+			"where ProcGuid=? and ProcUID=? and FilePath=?";
+		const char*	pSelect	= "select p.ProcGuid,p.ProcUID,p.ProcPath, m.FilePath "\
 			"from process p, module m "\
 			"where p.ProcGuid=m.ProcGuid and m.ProcGuid=? and ? between m.BaseAddress and m.BaseAddress+m.FileSize";
 		if (Db()->IsOpened()) {
@@ -102,8 +102,6 @@ protected:
 
 		bool	bInsert;
 
-		return true;
-
 		CModuleCallback* pClass = (CModuleCallback*)pCallbackPtr;
 
 		pClass->UUID2String(&p->ProcGuid, szProcGuid, sizeof(szProcGuid));
@@ -113,16 +111,17 @@ protected:
 				StringCbCopy(szProcPath, sizeof(szProcPath), p->szPath);
 			if (false == CAppPath::GetFilePath(p->szCommand, szModulePath, sizeof(szModulePath)))
 				StringCbCopy(szModulePath, sizeof(szModulePath), p->szCommand);
-			if( pClass->IsExisting(szProcGuid, szModulePath) )
-				pClass->Update(szProcGuid, szModulePath, p), bInsert = false;
+			if( pClass->IsExisting(szProcGuid, p->ProcUID, szModulePath) )
+				pClass->Update(szProcGuid, p->ProcUID, szModulePath, p), bInsert = false;
 			else 
-				pClass->Insert(szProcGuid, szModulePath, p), bInsert = true;
-			//pClass->Log("%-20s %6d %ws %s", "MODULE_LOAD", 
-			//	p->dwProcessId, szProcPath, bInsert? "INSERT":"UPDATE");
-			//pClass->Log("  ProdGuid      %ws", szProcGuid);
-			//pClass->Log("  Path          %ws", szModulePath);
-			//pClass->Log("  address       %p", p->pBaseAddress);
-			//pClass->Log("  Size          %d", (DWORD)p->pImageSize);
+				pClass->Insert(szProcGuid, p->ProcUID, szModulePath, p), bInsert = true;
+			pClass->Log("%-20s %6d %ws %s", "MODULE_LOAD", 
+				p->PID, szProcPath, bInsert? "INSERT":"UPDATE");
+			pClass->Log("  ProdGuid      %ws", szProcGuid);
+			pClass->Log("  ProdUID       %I64d", p->ProcUID);
+			pClass->Log("  Path          %ws", szModulePath);
+			pClass->Log("  address       %p", p->pBaseAddress);
+			pClass->Log("  Size          %d", (DWORD)p->pImageSize);
 		}
 		else
 		{
@@ -141,6 +140,7 @@ private:
 	}	m_stmt;
 	bool	IsExisting(
 		PCWSTR		pProcGuid,
+		PROCUID		ProcUID,
 		PCWSTR		pFilePath
 	) {
 		int			nCount = 0;
@@ -148,6 +148,7 @@ private:
 		if (pStmt) {
 			int		nIndex = 0;
 			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, ProcUID);
 			sqlite3_bind_text16(pStmt, ++nIndex, pFilePath, -1, SQLITE_STATIC);
 			if (SQLITE_ROW == sqlite3_step(pStmt)) {
 				nCount = sqlite3_column_int(pStmt, 0);
@@ -158,6 +159,7 @@ private:
 	}
 	bool	Update(
 		PCWSTR				pProcGuid,
+		PROCUID				ProcUID,
 		PCWSTR				pFilePath,
 		PYFILTER_DATA		pData
 	) {
@@ -169,6 +171,7 @@ private:
 			int		nIndex = 0;
 			sqlite3_bind_int64(pStmt, ++nIndex, pData->pBaseAddress);
 			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, ProcUID);
 			sqlite3_bind_text16(pStmt, ++nIndex, pFilePath, -1, SQLITE_STATIC);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
@@ -183,6 +186,7 @@ private:
 	}
 	bool	Insert(
 		PCWSTR				pProcGuid,
+		PROCUID				ProcUID,
 		PCWSTR				pFilePath,
 		PYFILTER_DATA		pData
 	) {
@@ -195,6 +199,7 @@ private:
 			PCWSTR	pFileName	= wcsrchr(pFilePath, '\\');
 			PCWSTR	pFileExt	= pFileName? wcsrchr(pFileName, L'.') : NULL;
 			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, ProcUID);
 			sqlite3_bind_int(pStmt, ++nIndex, pData->PID);
 			sqlite3_bind_text16(pStmt, ++nIndex, pFilePath, -1, SQLITE_STATIC);
 			if( pFileName )

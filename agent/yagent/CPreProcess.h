@@ -32,7 +32,7 @@ public:
 
 	void			Check2(
 		std::function<void(
-			UUID * pProcGuid, DWORD PID, DWORD PPID, PCWSTR pPath, PCWSTR pCmdLine
+			UUID * pProcGuid, PROCUID * pUID, DWORD PID, DWORD PPID, PCWSTR pPath, PCWSTR pCmdLine
 		)> pCallback = NULL
 	
 	) {
@@ -93,9 +93,10 @@ public:
 							*/
 						}		
 						UUID	ProcGuid;
-						GetProcGuid(PID, PPID, szPath, &ProcGuid);
+						PROCUID	ProcUID;
+						GetProcGuid(PID, PPID, szPath, &ProcGuid, &ProcUID);
 						if( pCallback )
-							pCallback(&ProcGuid, (DWORD)PID, (DWORD)PPID, szPath, szCmdLine);
+							pCallback(&ProcGuid, &ProcUID, (DWORD)PID, (DWORD)PPID, szPath, szCmdLine);
 					}
 				}
 				else {

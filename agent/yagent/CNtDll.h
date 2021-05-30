@@ -3,6 +3,7 @@
 #include <winternl.h>
 #include "MD5/Global.h"
 #include "MD5/MD5.h"
+#include "crc64.h"
 
 #define NT_SUCCESS(Status)				(((NTSTATUS)(Status)) >= 0)
 
@@ -77,6 +78,7 @@ typedef	NTSTATUS	(NTAPI *FN_ZwClose)
 
 class CNtDll
 	:
+	public	CCRC64,
 	virtual	public	CAppLog
 {
 public:
@@ -349,7 +351,9 @@ public:
 		IN	HANDLE			PID,
 		IN	HANDLE			PPID,
 		IN	PCWSTR			pImagePath,
-		OUT	UUID			*pGuid)
+		OUT	UUID			*pGuid,
+		OUT	PROCUID			*pUID
+	)
 	{
 		NTSTATUS		status = STATUS_SUCCESS;
 		WCHAR			procGuid[1024]	= L"";
@@ -375,14 +379,14 @@ public:
 			*p = towlower(*p);
 			nSize++;
 		}
-		MD5_CTX			context;
-		unsigned char	sum[16];        /* Sum data */
-
-		MD5Init(&context);
-		MD5Update(&context, (unsigned char*)(PWSTR)procGuid, nSize * sizeof(WCHAR));
-		MD5Final(sum, &context);
-
 		if (pGuid) {
+			MD5_CTX			context;
+			unsigned char	sum[16];        /* Sum data */
+
+			MD5Init(&context);
+			MD5Update(&context, (unsigned char*)(PWSTR)procGuid, nSize * sizeof(WCHAR));
+			MD5Final(sum, &context);
+
 			pGuid->Data1 = sum[0] << 24 | sum[1] << 16 | sum[2] << 8 | sum[3];
 			pGuid->Data2 = sum[4] << 8 | sum[5];
 			pGuid->Data3 = sum[6] << 8 | sum[7];
@@ -395,6 +399,7 @@ public:
 			pGuid->Data4[6] = sum[14];
 			pGuid->Data4[7] = sum[15];
 		}
+		if( pUID )	*pUID	= GetCrc64((PVOID)(PCWSTR)procGuid, (DWORD)(wcslen(procGuid) * sizeof(WCHAR)));
 		return status;
 	}
 private:

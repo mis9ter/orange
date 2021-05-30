@@ -62,6 +62,7 @@ void LoadImageNotifyRoutine(
 					PYFILTER_MESSAGE	pMsg	= (PYFILTER_MESSAGE)pCallbackPtr;
 					RtlCopyMemory(&pMsg->data.ProcGuid, &pEntry->uuid, sizeof(pMsg->data.ProcGuid));
 					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), &pEntry->path);
+					pMsg->data.ProcUID	= pEntry->ProcUID;
 			})) {
 				//	네 존재합니다. 
 			}
@@ -76,10 +77,12 @@ void LoadImageNotifyRoutine(
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 				{
 					KERNEL_USER_TIMES	times;
+					PROCUID				ProcUID;
 					GetProcessTimes(ProcessId, &times);
 					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 					GetProcGuid(false, ProcessId, NULL, pImageFileName, &times.CreateTime,
-						&pMsg->data.ProcGuid);
+						&pMsg->data.ProcGuid, &ProcUID);
+					pMsg->data.ProcUID	= ProcUID;
 					CMemory::Free(pImageFileName);
 				}
 			}

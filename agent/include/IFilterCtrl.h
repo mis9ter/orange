@@ -110,6 +110,7 @@ public:
 		else {
 			Log("%-32s m_pInstance->Start() returns false", __func__);
 		}
+		return false;
 	}
 	void	Shutdown()
 	{

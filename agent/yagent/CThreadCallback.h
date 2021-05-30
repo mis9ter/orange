@@ -66,18 +66,18 @@ protected:
 	{
 		const char* pInsert = "insert into thread"	\
 			"("\
-			"ProcGuid,PID,PPID,CPID,TID"\
+			"ProcGuid,ProcUID,PID,PPID,CPID,TID"\
 			",CTID,StartAddress,RProcGuid,CreateTime,ExitTime"\
 			",FilePath,FileName,FileExt,KernelTime,UserTime"\
 			") values("\
-			"?,?,?,?,?"\
+			"?,?,?,?,?,?"\
 			",?,?,?,?,?"\
 			",?,?,?,?,?"\
 			")";
-		const char* pIsExisting = "select count(ProcGuid) from thread where ProcGuid=? and TID=?";
+		const char* pIsExisting = "select count(ProcGuid) from thread where ProcGuid=? and ProcUID=? and TID=?";
 		const char* pUpdate = "update thread "	\
 			"set ExitTime=?,KernelTime=?,UserTime=?,CreateCount=CreateCount+1 "\
-			"where ProcGuid=? and TID=?";
+			"where ProcGuid=? and ProcUID=? and TID=?";
 		if (Db()->IsOpened()) {
 
 			if (NULL == (m_stmt.pInsert = Db()->Stmt(pInsert)))
@@ -128,8 +128,6 @@ protected:
 		SYSTEMTIME	stUser;
 
 		char		szTime[40]	= "";
-
-		return true;
 
 		CTime::LargeInteger2SystemTime(&p->times.CreateTime, &stCreate);
 		CTime::LargeInteger2SystemTime(&p->times.ExitTime, &stExit);
@@ -200,6 +198,7 @@ private:
 		if (pStmt) {
 			int		nIndex = 0;
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->TID);
 			if (SQLITE_ROW == sqlite3_step(pStmt)) {
 				nCount = sqlite3_column_int(pStmt, 0);
@@ -224,6 +223,7 @@ private:
 			PCWSTR	pFileName	= pFilePath? wcsrchr(pFilePath, L'\\')	: NULL;
 			PCWSTR	pFileExt	= pFileName? wcsrchr(pFileName, L'.')	: NULL;
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->PID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->PPID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->CPID);
@@ -296,6 +296,7 @@ private:
 			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.KernelTime.QuadPart);
 			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.UserTime.QuadPart);
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->TID);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {

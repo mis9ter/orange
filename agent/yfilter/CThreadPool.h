@@ -175,9 +175,7 @@ private:
 				}
 			}
 			CMemory::Free(pWaitBlock);
-		}
-	
-		//__log("%s %d %d end", __FUNCTION__, PsGetCurrentProcessId(), PsGetCurrentThreadId());
+		}	
 		PsTerminateSystemThread(STATUS_SUCCESS);
 	}
 };
