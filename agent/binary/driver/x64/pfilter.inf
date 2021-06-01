@@ -1,0 +1,92 @@
+;-------------------------------------------------------------------------
+; NDISRD_LWF.INF -- WinpkFilter NDIS LWF driver
+;
+; Copyright (c) NT Kernel Resources.  All rights reserved.
+;-------------------------------------------------------------------------
+[version]
+Signature   	= "$Windows NT$"
+Class     	= NetService
+ClassGUID  	= {4D36E974-E325-11CE-BFC1-08002BE10318}
+Provider    = %Ntkr%
+CatalogFile = ndisrd.cat
+PnpLockdown	= 1
+DriverVer = 04/27/2021,3.2.29.1
+
+[Manufacturer]
+%Ntkr%=Ntkr,NTx86,NTia64,NTamd64,NTARM64
+
+[Ntkr.NTx86]
+%ndisrd_Desc%=Install, nt_ndisrd
+
+[Ntkr.NTia64]
+%ndisrd_Desc%=Install, nt_ndisrd
+
+[Ntkr.NTamd64]
+%ndisrd_Desc%=Install, nt_ndisrd
+
+[Ntkr.NTARM64]
+%ndisrd_Desc%=Install, nt_ndisrd
+
+;-------------------------------------------------------------------------
+; Installation Section
+;-------------------------------------------------------------------------
+[Install]
+AddReg=Inst_Ndi
+Characteristics=0x40000
+NetCfgInstanceId="{CD75C963-E19F-4139-BC3B-14019EF72F19}"
+Copyfiles = ndisrd.copyfiles.sys
+
+[SourceDisksNames]
+1=%ndisrd_Desc%,"",,
+
+[SourceDisksFiles]
+ndisrd.sys=1
+
+[DestinationDirs]
+DefaultDestDir=12
+ndisrd.copyfiles.sys=12
+
+[ndisrd.copyfiles.sys]
+ndisrd.sys,,,2
+
+
+;-------------------------------------------------------------------------
+; Ndi installation support
+;-------------------------------------------------------------------------
+[Inst_Ndi]
+HKR, Ndi,Service,,"ndisrd"
+HKR, Ndi,CoServices,0x00010000,"ndisrd"
+HKR, Ndi,HelpText,,%ndisrd_HelpText%
+HKR, Ndi,FilterClass,, compression
+HKR, Ndi,FilterType,0x00010001,0x00000002
+HKR, Ndi\Interfaces,UpperRange,,"noupper"
+HKR, Ndi\Interfaces,LowerRange,,"nolower"
+HKR, Ndi\Interfaces, FilterMediaTypes,,"ethernet, wan, ppip, bluetooth"
+HKR, Ndi,FilterRunType, 0x00010001, 1 ;this filter must run before any protocol can bind to the below miniport 
+
+;-------------------------------------------------------------------------
+; Service installation support
+;-------------------------------------------------------------------------
+[Install.Services]
+AddService=ndisrd,,ndisrd_Service_Inst
+
+[ndisrd_Service_Inst]
+DisplayName     = %ndisrd_Desc%
+ServiceType     = 1 ;SERVICE_KERNEL_DRIVER
+StartType       = 1 ;SERVICE_SYSTEM_START
+ErrorControl    = 1 ;SERVICE_ERROR_NORMAL
+ServiceBinary   = %12%\ndisrd.sys
+LoadOrderGroup  = NDIS
+Description     = %ndisrd_Desc%
+AddReg          = NdisImPlatformBindingOptions.reg
+
+[Install.Remove.Services]
+DelService=ndisrd,0x200
+
+[NdisImPlatformBindingOptions.reg]
+HKR, Parameters, NdisImPlatformBindingOptions,0x00010001,2
+
+[Strings]
+Ntkr = "NT Kernel Resources"
+ndisrd_Desc = "WinpkFilter LightWeight Filter"
+ndisrd_HelpText = "WinpkFilter NDIS LightWeight Filter"
