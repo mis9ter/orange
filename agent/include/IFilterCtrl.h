@@ -5,7 +5,7 @@
 
 //typedef	std::function<bool (PVOID pCallbackPtr, int nType, int nSubType, PVOID pData, size_t nSize)>	EventCallbackProc;
 //typedef std::function<bool (PVOID pCallbackPtr)>		CommandCallbackProc;
-typedef	bool	(*EventCallbackProc	)(
+typedef	bool	(*EventCallbackProc)(
 	ULONGLONG	nMessageId,
 	PVOID		pCallbackPtr, 
 	int			nType, 
@@ -13,8 +13,14 @@ typedef	bool	(*EventCallbackProc	)(
 	PVOID		pData, 
 	size_t		nSize
 );
-typedef bool	(*CommandCallbackProc)(PVOID pCallbackPtr);
 
+typedef	bool	(*EventCallbackProc2)(
+	PY_HEADER	pMessage, 
+	PVOID		pContext
+);
+
+typedef bool	(*CommandCallbackProc)(PVOID pCallbackPtr);
+typedef bool	(*CommandCallbackProc2)(PVOID pContext);
 __interface IFilterCtrl
 	:
 	public	IModule
@@ -28,6 +34,10 @@ __interface IFilterCtrl
 	)		= NULL;
 	virtual	void	Uninstall()		= NULL;
 	virtual	bool	IsRunning()		= NULL;
+	virtual	bool	Start2(
+		IN	PVOID	pCommandContext,	IN CommandCallbackProc2,
+		IN	PVOID	pEventContext,		IN EventCallbackProc2	
+	)	= NULL;
 	virtual	bool	Start(
 		IN PVOID pCommandCallbackPtr, IN CommandCallbackProc, 
 		IN PVOID pEventCallbackPtr, IN EventCallbackProc)			= NULL;
@@ -111,6 +121,25 @@ public:
 			Log("%-32s m_pInstance->Start() returns false", __func__);
 		}
 		return false;
+	}
+	bool	Start2(
+		IN	PVOID	pCommandContext,	
+		IN	CommandCallbackProc2	pCommandCallback,
+		IN	PVOID	pEventContext,
+		IN	EventCallbackProc2		pEventCallback
+	) {
+		Log(__FUNCTION__);
+		if (NULL == m_pInstance)	{
+			Log("%-32s m_pInstance is NULL", __func__);
+			return false;
+		}
+		if( m_pInstance->Start2(pCommandContext, pCommandCallback, pEventContext, pEventCallback) ) {
+			return true;
+		}
+		else {
+			Log("%-32s m_pInstance->Start() returns false", __func__);
+		}
+		return false;		
 	}
 	void	Shutdown()
 	{

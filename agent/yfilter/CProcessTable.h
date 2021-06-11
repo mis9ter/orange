@@ -3,33 +3,57 @@
 
 #define TAG_PROCESS			'corp'
 
+/*
+	spinlock vs. fastmutex
+
+	https://www.winvistatips.com/threads/spin-lock-vs-fast-mutex.190670/
+
+	Maybe this is a way to categorize the choices:
+
+	a few instructions for special cases
+	- InterlockedXxx or ExInterlockedXxx
+
+	tens of instructions
+	- spin lock
+
+	hundreds of instructions
+	- fast mutex
+
+
+*/
+
+typedef struct _COUNT {
+	volatile ULONG	nCount;
+
+} _COUNT;
+typedef struct COUNT_SIZE 
+	:
+	public _COUNT
+{
+	volatile __int64	nSize;
+} _COUNT_SIZE;
+
 typedef struct PROCESS_ENTRY
 {
-	HANDLE				handle;
-	HANDLE				parent;
-	UUID				uuid;
-	PROCUID				ProcUID;
-	UNICODE_STRING		path;
-	UNICODE_STRING		command;
-	PVOID				key;
-	bool				bFree;		//	해제 대상
-	bool				bCallback;	//	콜백에 의해 수집
+	HANDLE				PID;				//	나의 핸들
+	HANDLE				PPID;				//	부모의 핸들
+	PROCUID				PUID;				//	고유번호
+	PROCUID				PPUID;				//	부모의 고유번호
+	HANDLE				TID;				//	메인 스레드 핸들
+	HANDLE				CPID;				//	나를 생성한 프로세스의 핸들
+											//	나를 생성한 프로세스 != 부모 프로세스
+	ULONG				SID;				//	프로세스 세션 ID
+	UNICODE_STRING		ProcPath;
+	UNICODE_STRING		Command;
+
+	PVOID				key;				//	[TODO]	뭐에 쓰는 물건인가요?
+	bool				bFree;				//	해제 대상
+	bool				bCallback;			//	콜백에 의해 수집
+	//DWORD64				dwTerminate;
 
 	struct {
-		struct {
-			DWORD		dwRead;
-			DWORD		dwWrite;
-			DWORD		dwDelete;
-		} value;
-		struct {
-			DWORD		dwCreate;
-			DWORD		dwDelete;		
-			DWORD		dwRename;
-		} key;
-		struct {
-			DWORD64		dwRead;
-			DWORD64		dwWrite;		
-		} io;	
+		_COUNT_SIZE		SetValue;
+		_COUNT_SIZE		GetValue;
 	} registry;
 } PROCESS_ENTRY, * PPROCESS_ENTRY;
 
@@ -37,11 +61,9 @@ typedef void (*PProcessTableCallback)(
 	IN bool					bCreationSaved,	//	생성이 감지되어 저장된 정보 여부
 	IN PPROCESS_ENTRY		pEntry,			//	대상 엔트리 
 	IN PVOID				pCallbackPtr
-	);
-
+);
 
 //typedef std::function<void (bool,PPROCESS_ENTRY,PVOID)>	PProcessTableCallback;
-
 class CProcessTable
 {
 public:
@@ -90,13 +112,15 @@ public:
 		}
 	}
 	*/
-	bool		Add(
-		IN bool				bCallback,		// 1 콜백에 의해 수집 0 직접 수집
+	bool		Add
+	(
+		IN bool				bByCallback,		// 1 콜백에 의해 수집 0 직접 수집
 		IN HANDLE			PID, 
 		IN HANDLE			PPID,
-		IN UUID				*pUuid, 
-		IN PROCUID			ProcUID,
-		IN PCUNICODE_STRING pPath, 
+		IN HANDLE			CPID,
+		IN PROCUID			PUID,
+		IN PROCUID			PPUID,
+		IN PCUNICODE_STRING pProcPath, 
 		IN PCUNICODE_STRING pCommand
 	)
 	{
@@ -107,28 +131,29 @@ public:
 		ULONG			nCount = 0;
 		KIRQL			irql = KeGetCurrentIrql();
 
-		//__dlog("%s %10d IRQL=%d", __FUNCTION__, h, KeGetCurrentIrql());
 		if (irql >= DISPATCH_LEVEL) {
 			__dlog("%s DISPATCH_LEVEL", __FUNCTION__);
 			return false;
 		}
-		UNREFERENCED_PARAMETER(pPath);
+		UNREFERENCED_PARAMETER(pProcPath);
 		UNREFERENCED_PARAMETER(pCommand);
-		RtlZeroMemory(&entry, sizeof(PROCESS_ENTRY));
-		entry.handle = PID;
-		entry.parent = PPID;
-		entry.key = (PVOID)4;
-		entry.bFree = false;
-		entry.bCallback	= bCallback;
-		if (pUuid)		RtlCopyMemory(&entry.uuid, pUuid, sizeof(entry.uuid));
-		entry.ProcUID	= ProcUID;
-		CWSTRBuffer		procPath;
 
+		RtlZeroMemory(&entry, sizeof(PROCESS_ENTRY));
+		entry.PID		= PID;
+		entry.PPID		= PPID;
+		entry.CPID		= CPID;
+		entry.key		= (PVOID)4;
+		entry.bFree		= false;
+		entry.bCallback	= bByCallback;
+		entry.PUID		= PUID;
+		entry.PPUID		= PPUID;
+		//GetProcessSessionId(PID, &entry.SID);
+		CWSTRBuffer		procPath;
 		__try
 		{
-			if (pPath)
+			if (pProcPath)
 			{
-				if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.path, pPath, 'PDDA')) {
+				if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.ProcPath, pProcPath, 'PDDA')) {
 					__dlog("CMemory::AllocateUnicodeString() failed.");
 					__leave;
 				}
@@ -138,7 +163,7 @@ public:
 				//	PID만 설정하는 경우 있음 - 프로세스 경로가 없으면 직접 구함. 
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(PID, (PWSTR)procPath, procPath.CbSize(), NULL)))
 				{
-					if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.path, procPath)) {
+					if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.ProcPath, procPath)) {
 						__dlog("CMemory::AllocateUnicodeString() failed.");
 						__leave;
 					}
@@ -161,7 +186,7 @@ public:
 
 			if (pCommand)
 			{
-				if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.command, pCommand, 'PDDA')) {
+				if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.Command, pCommand, 'PDDA')) {
 					__dlog("CMemory::AllocateUnicodeString() failed.");
 					__leave;
 				}
@@ -174,9 +199,9 @@ public:
 			//	(for example, because the AllocateRoutine fails), RtlInsertElementGenericTable returns NULL.
 			//	if( bRet && pEntry ) PrintProcessEntry(__FUNCTION__, pEntry);
 			if (pEntry)	pEntry->bFree = true;
-			__dlog("%s %d", __func__, pEntry->handle);
+			//__dlog("%s %d", __func__, pEntry->handle);
 			nCount = RtlNumberGenericTableElements(&m_table);
-			__dlog("ProcessTable:%d", nCount);
+			//__dlog("ProcessTable:%d", nCount);
 			if (false)
 			{
 				for (ULONG i = 0; i < RtlNumberGenericTableElements(&m_table); i++)
@@ -208,7 +233,7 @@ public:
 		return bRet;
 	}
 	bool		IsExisting(
-		IN	HANDLE					h,
+		IN	HANDLE					PID,
 		IN	PVOID					pCallbackPtr = NULL,
 		IN	PProcessTableCallback	pCallback = NULL
 	)
@@ -221,7 +246,8 @@ public:
 		bool			bRet = false;
 		KIRQL			irql;
 		PROCESS_ENTRY	entry;
-		entry.handle = h;
+
+		entry.PID		= PID;
 		Lock(&irql);
 		LPVOID			p = RtlLookupElementGenericTable(&m_table, &entry);
 		if (p)
@@ -237,32 +263,35 @@ public:
 		}
 		else
 		{
-			__log("%s %d not found.", __FUNCTION__, h);
+			__log("%s %d not found.", __FUNCTION__, PID);
 		}
 		Unlock(irql);
 		return bRet;
 	}
-	bool		Remove(IN HANDLE h,
-		IN bool bLock,
-		IN PVOID pCallbackPtr,
-		PProcessTableCallback pCallback)
+	bool		Remove(
+		IN HANDLE				PID,
+		IN bool					bLock,
+		IN PVOID				pContext,
+		PProcessTableCallback	pCallback
+	)
 	{
 		if (false == IsPossible())
 		{
-			__dlog("%s %10d IRQL=%d", __FUNCTION__, h, KeGetCurrentIrql());
+			__dlog("%s %10d IRQL=%d", __FUNCTION__, PID, KeGetCurrentIrql());
 			return false;
 		}
 		bool			bRet = false;
 		PROCESS_ENTRY	entry = { 0, };
 		ULONG			nCount = 0;
 		KIRQL			irql = 0;
-		entry.handle = h;
+
+		entry.PID		= PID;
 		if (bLock)	Lock(&irql);
 		PPROCESS_ENTRY	pEntry = (PPROCESS_ENTRY)RtlLookupElementGenericTable(&m_table, &entry);
 		if (pEntry)
 		{
-			__dlog("%s %d", __func__, pEntry->handle);
-			if (pCallback)	pCallback(true, pEntry, pCallbackPtr);
+			//__dlog("%s %d", __func__, pEntry->handle);
+			if (pCallback)	pCallback(true, pEntry, pContext);
 			FreeEntryData(pEntry);
 			if (RtlDeleteElementGenericTable(&m_table, pEntry))
 			{
@@ -286,7 +315,7 @@ public:
 		else
 		{
 			//__dlog("%10d not existing");
-			if (pCallback) pCallback(false, &entry, pCallbackPtr);
+			if (pCallback) pCallback(false, &entry, pContext);
 		}
 		if (bLock)	Unlock(irql);
 		return bRet;
@@ -297,8 +326,8 @@ public:
 		if (NULL == pEntry)	return;
 		//__log("  %wZ", __FUNCTION__, &pEntry->path);
 		//__log("  %wZ", __FUNCTION__, &pEntry->command);
-		CMemory::FreeUnicodeString(&pEntry->path, bLog);
-		CMemory::FreeUnicodeString(&pEntry->command, bLog);
+		CMemory::FreeUnicodeString(&pEntry->ProcPath, bLog);
+		CMemory::FreeUnicodeString(&pEntry->Command, bLog);
 	}
 	void		Clear()
 	{
@@ -370,7 +399,8 @@ private:
 		}
 		return true;
 	}
-	static	RTL_GENERIC_COMPARE_RESULTS	NTAPI	Compare(
+	static	RTL_GENERIC_COMPARE_RESULTS	NTAPI	Compare
+	(
 		struct _RTL_GENERIC_TABLE* Table,
 		PVOID FirstStruct,
 		PVOID SecondStruct
@@ -382,10 +412,10 @@ private:
 		PPROCESS_ENTRY	pSecond = (PPROCESS_ENTRY)SecondStruct;
 		if (pFirst && pSecond)
 		{
-			if (pFirst->handle > pSecond->handle) {
+			if (pFirst->PID > pSecond->PID) {
 				return GenericGreaterThan;
 			}
-			else if (pFirst->handle < pSecond->handle) {
+			else if (pFirst->PID < pSecond->PID) {
 				return GenericLessThan;
 			}
 		}
@@ -434,3 +464,24 @@ bool			IsRegisteredProcess(IN HANDLE h);
 bool			RegisterProcess(IN HANDLE h);
 bool			DeregisterProcess(IN HANDLE h);
 NTSTATUS		KillProcess(HANDLE pid);
+
+bool			AddProcessToTable(
+	PCSTR			pCause,
+	bool			bDetectByCallback,				//	process notify callback에 의해 실시간 수집 여부
+													//	false	직접 알아낸 것이므로 app으로 전달 안됨.
+	HANDLE			PID, 
+	PUNICODE_STRING	pProcPath	= NULL,
+	PUNICODE_STRING	pCommand	= NULL,
+	bool			bAddParent	= false,
+	PVOID			pContext	= NULL,
+	void			(*pCallback)
+	(
+		PVOID			pContext,
+		HANDLE			PID,
+		PROCUID			PUID,
+		PUNICODE_STRING	pProcPath,
+		PUNICODE_STRING	pCommand,
+		HANDLE			PPID,
+		PROCUID			PPUID
+	)	= NULL
+);

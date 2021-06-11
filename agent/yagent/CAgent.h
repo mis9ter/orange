@@ -7,6 +7,11 @@
 #include <thread>
 #include <memory>
 
+#define	DB_EVENT_NAME		L"event"
+#define DB_SUMMARY_NAME		L"summary"
+#define DB_CONFIG_NAME		L"config"
+
+
 #include "yagent.h"
 #include "yagent.common.h"
 #include "CPathConvertor.h"
@@ -20,6 +25,9 @@
 #include "CService.h"
 #include "CEventCallback.h"
 #include "CProtect.h"
+
+
+
 
 typedef std::function<void(HANDLE hShutdown, void * pCallbackPtr)>	PFUNC_AGENT_RUNLOOP;
 
@@ -299,9 +307,19 @@ protected:
 	);
 };
 
+typedef struct _DB_CONFIG {
+	int				nResourceID;
+	std::wstring	strName;
+	std::wstring	strODB;
+	std::wstring	strCDB;
+	CDB				cdb;
+} DB_CONFIG;
+
+typedef std::shared_ptr<DB_CONFIG>	DbConfigPtr;
+typedef std::map<std::wstring, DbConfigPtr>		DbMap;
+
 class CAgent
 	:
-	public	CDB,
 	public	CFilterCtrl,
 	public	CEventCallback,
 	public	CFilePath,
@@ -328,8 +346,10 @@ public:
 		_result["line"]	= nLine;
 		_result["function"]	= pFunction;
 	}
-	CDB* Db() {
-		return dynamic_cast<CDB*>(this);
+	CDB* Db(PCWSTR pName) {
+		auto t	= m_db.find(pName);
+		if( m_db.end() == t )	return NULL;
+		return &t->second->cdb;
 	}
 	INotifyCenter *	NotifyCenter() {
 		return dynamic_cast<INotifyCenter *>(this);
@@ -347,7 +367,7 @@ public:
 	void			RunLoop(IN DWORD dwMilliSeconds);
 
 	PCWSTR			AppPath() {
-		return m_config.szAppPath;
+		return m_config.path.szApp;
 	}
 	void			SetRunLoop(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 	{
@@ -375,17 +395,19 @@ private:
 		void				*pRunLoopPtr;
 		PFUNC_AGENT_RUNLOOP	pRunLoopFunc;
 
-		WCHAR				szPath[AGENT_PATH_SIZE];
-		WCHAR				szAppPath[AGENT_PATH_SIZE];
-		WCHAR				szDriverPath[AGENT_PATH_SIZE];
-
-		WCHAR				szEventCDBPath[AGENT_PATH_SIZE];
-		WCHAR				szEventODBPath[AGENT_PATH_SIZE];
+		struct {
+			WCHAR			szData[AGENT_PATH_SIZE];
+			WCHAR			szApp[AGENT_PATH_SIZE];
+			WCHAR			szDriver[AGENT_PATH_SIZE];			
+		
+		}	path;		
 	} m_config;
+	DbMap					m_db;
 	CThread					m_main;
 
 	bool			Initialize();
 	void			Destroy();
+	void			AddDbList(int nResourceID, PCWSTR pRootPath, PCWSTR pName, DbMap & table);
 
 	static	void	MainThread(void * ptr, HANDLE hShutdown);
 	static	bool	CALLBACK	IPCRecvCallback(

@@ -3,6 +3,7 @@
 #pragma comment(lib, "Rpcrt4.lib")
 
 #define	GUID_STRLEN	37
+#define USE_PROCESS_LOG		1
 
 class CProcessCallback
 	:
@@ -10,13 +11,17 @@ class CProcessCallback
 	public virtual	CAppLog
 {
 public:
-	CProcessCallback() {
+	CProcessCallback() 
+		:	m_log(L"process.log")
+	
+	{
 		m_name = EVENT_CALLBACK_NAME;
+		m_log.Log(NULL);
 	}
 	~CProcessCallback() {
-
+		m_log.Log("---- end ----");
 	}
-	virtual	DWORD	BootId()	= NULL;
+	virtual	BootUID	GetBootUID()	= NULL;
 	virtual	CDB *	Db()	= NULL;
 	virtual	PCWSTR	UUID2String(IN UUID * p, PWSTR pValue, DWORD dwSize)	= NULL;
 	virtual	bool	SendMessageToWebApp(Json::Value & req, Json::Value & res) = NULL;
@@ -25,50 +30,50 @@ public:
 	}
 	void			Create()
 	{
-		const char	*pIsExisting	= "select count(ProcGuid) from process where ProcGuid=?";
+		const char	*pIsExisting	= "select count(PUID) from process where PUID=?";
 		const char	*pInsert		= "insert into process"	\
 			"("\
-			"ProcGuid,ProcUID,BootId,ProcPath,ProcName,CmdLine,"\
-			"PID,PPID,SessionId,PProcGuid,IsSystem,"\
-			"ProcUserId,CreateTime,ExitTime,KernelTime,UserTime"\
+			"PUID,BootUID,PID,CPID,SID,"	\
+			"PPUID,PPID,DevicePath,ProcPath,ProcName,"	\
+			"IsSystem,CmdLine,UserId,CreateTime,ExitTime,"\
+			"KernelTime,UserTime"\
 			") "\
 			"values("\
-			"?,?,?,?,?,?"\
+			"?,?,?,?,?"\
 			",?,?,?,?,?"\
 			",?,?,?,?,?"\
-			")";
+			",?,?)";
 		const char	*pUpdate		= "update process "	\
 			"set CreateTime=?, ExitTime=?, KernelTime=?, UserTime=? "\
-			"where ProcGuid=? and ProcUID=?";
+			"where PUID=?";
 		const char	*pSelect		= "select ProcPath,PID "\
 			"from	process "\
-			"where	ProcGuid=? and ProcUID=?";
+			"where	PUID=?";
 		const char*	pProcessList	= "select ProcName, ProcPath, count(*) cnt, sum(KernelTime+UserTime) time, sum(KernelTime) ktime, sum(UserTime) utime "	\
 			"from process "	\
-			"where bootid=? "	\
+			"where BootUID=? "	\
 			"group by ProcPath "	\
 			"order by time desc";
 
 		if (Db()->IsOpened()) {
 	
 			Db()->AddStmt("process.list", pProcessList);
-
 			if( NULL == (m_stmt.pIsExisting	= Db()->Stmt(pIsExisting)) )
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if( NULL == (m_stmt.pInsert	= Db()->Stmt(pInsert)) )
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if( NULL == (m_stmt.pUpdate	= Db()->Stmt(pUpdate)) )
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if (NULL == (m_stmt.pSelect = Db()->Stmt(pSelect)))
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if (NULL == (m_stmt.pProcessList = Db()->Stmt(pProcessList)))
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 		}
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
 	}
-	void					Destroy()
+	void		Destroy()
 	{
 		if (Db()->IsOpened()) {
 			if( m_stmt.pIsExisting)		Db()->Free(m_stmt.pIsExisting);
@@ -89,7 +94,7 @@ public:
 		sqlite3_stmt	*pStmt	= m_stmt.pProcessList;
 
 		pStmt	= Db()->GetStmt("process.list");
-		Log("%-32s BootId=%d", __FUNCTION__, BootId());
+		Log("%-32s BootUID=%p", __FUNCTION__, GetBootUID());
 		if (pStmt) {
 			int			nIndex = 0;
 			int			nColumnCount	= sqlite3_column_count(pStmt);
@@ -99,7 +104,7 @@ public:
 				pColumnName	= sqlite3_column_name(pStmt, i);			
 			Log("%d %s", i, pColumnName);
 			}
-			sqlite3_bind_int(pStmt, ++nIndex, BootId());
+			sqlite3_bind_int64(pStmt, ++nIndex, GetBootUID());
 			while ( SQLITE_ROW == sqlite3_step(pStmt)) {
 				wchar_t		*pProcName	= (wchar_t *)sqlite3_column_text16(pStmt, 0);
 				wchar_t		*pProcPath	= (wchar_t *)sqlite3_column_text16(pStmt, 1);
@@ -119,19 +124,19 @@ public:
 		}
 		return dwCount;
 	}
-	bool		GetProcess(PCWSTR pProcGuid, PWSTR pValue, DWORD dwSize)
+	bool		GetProcess(PROCUID PUID, PWSTR pValue, DWORD dwSize)
 	{
 		bool	bRet = false;
 		sqlite3_stmt* pStmt = m_stmt.pSelect;
 		if (pStmt) {
 			int		nIndex = 0;
-			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt, ++nIndex, PUID);
 			if (SQLITE_ROW == sqlite3_step(pStmt)) {
-				PCWSTR	_ProcPath = NULL;
-				DWORD	_PID = 0;
-				_ProcPath = (PCWSTR)sqlite3_column_text16(pStmt, 0);
-				_PID = sqlite3_column_int(pStmt, 1);
-				StringCbCopy(pValue, dwSize, _ProcPath ? _ProcPath : L"");
+				PCWSTR	ProcPath = NULL;
+				DWORD	PID = 0;
+				ProcPath = (PCWSTR)sqlite3_column_text16(pStmt, 0);
+				PID = sqlite3_column_int(pStmt, 1);
+				StringCbCopy(pValue, dwSize, ProcPath ? ProcPath : L"");
 				bRet = true;
 			}
 			sqlite3_reset(pStmt);
@@ -139,12 +144,62 @@ public:
 		return bRet;
 	}
 protected:
+	static	bool			Proc2
+	(
+		PY_HEADER			pMessage,
+		PVOID				pContext
+	) 
+	{
+		PY_PROCESS			p		= (PY_PROCESS)pMessage;
+		CProcessCallback	*pClass = (CProcessCallback *)pContext;
+
+#if defined(USE_PROCESS_LOG) && 1 == USE_PROCESS_LOG 
+		pClass->m_log.Log("  mode     :%d", p->mode);
+		pClass->m_log.Log("  category :%d", p->category);
+		pClass->m_log.Log("  wSize    :%d", p->wSize);
+		pClass->m_log.Log("  wRevision:%d", p->wRevision);
+		pClass->m_log.Log("  subType  :%d", p->subType);
+
+		pClass->m_log.Log("  PID      :%d", p->PID);
+		pClass->m_log.Log("  TID      :%d", p->TID);
+		pClass->m_log.Log("  CTID     :%d", p->CTID);
+		pClass->m_log.Log("  CPID     :%d", p->CPID);
+		pClass->m_log.Log("  PPID     :%p", p->PPID);
+		pClass->m_log.Log("  RPID     :%p", p->PPID);
+
+		pClass->m_log.Log("  PUID     :%p", p->PUID);
+		pClass->m_log.Log("  PPUID    :%p", p->PPUID);
+#endif
+
+		p->DevicePath.pBuf	= (PWSTR)((char *)p + p->DevicePath.wOffset);						
+		p->Command.pBuf		= (PWSTR)((char *)p + p->Command.wOffset);
+
+		WCHAR		szWinPath[AGENT_PATH_SIZE]	= L"";
+
+		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szWinPath, sizeof(szWinPath)) )
+			StringCbCopy(szWinPath, sizeof(szWinPath), p->DevicePath.pBuf);
+
+#if defined(USE_PROCESS_LOG) && 1 == USE_PROCESS_LOG 
+		pClass->m_log.Log("  DevicePat:%ws [%d]", p->DevicePath.pBuf, p->DevicePath.wSize);
+		pClass->m_log.Log("  ProcPath :%ws", szWinPath);
+		pClass->m_log.Log("  Command  :%ws [%d]", p->Command.pBuf, p->Command.wSize);
+		//pClass->m_log.Log("  Size     :%d", p->nDataSize);	
+		pClass->m_log.Log(TEXTLINE);
+#endif
+
+		if (pClass->IsExisting(p))
+			pClass->Update(p);
+		else	pClass->Insert(p, szWinPath);
+		return true;
+	}
+
 	static	bool			Proc(
 		ULONGLONG			nMessageId,
 		PVOID				pCallbackPtr,
 		PYFILTER_DATA		p
 	) 
 	{
+	/*
 		WCHAR	szProcGuid[GUID_STRLEN] = L"";
 		WCHAR	szPProcGuid[GUID_STRLEN] = L"";
 		WCHAR	szPath[AGENT_PATH_SIZE] = L"";
@@ -168,9 +223,9 @@ protected:
 				pClass->Log("%s %6d %ws", __FUNCTION__, p->PID, p->szPath);
 			if( false == CAppPath::GetFilePath(p->szPath, szPath, sizeof(szPath)) )
 				StringCbCopy(szPath, sizeof(szPath), p->szPath);
-			if (pClass->IsExisting(szProcGuid, p->ProcUID))
-				pClass->Update(szProcGuid, p->ProcUID, p);
-			else	pClass->Insert(szProcGuid, p->ProcUID, szPath, szPProcGuid, p);
+			if (pClass->IsExisting(szProcGuid, p->PUID))
+				pClass->Update(szProcGuid, p->PUID, p);
+			else	pClass->Insert(szProcGuid, p->PUID, szPath, szPProcGuid, p);
 			SYSTEMTIME	stCreate;
 			SYSTEMTIME	stExit;
 			SYSTEMTIME	stKernel;
@@ -181,18 +236,22 @@ protected:
 			CTime::LargeInteger2SystemTime(&p->times.KernelTime, &stKernel, false);
 			CTime::LargeInteger2SystemTime(&p->times.UserTime, &stUser, false);
 
-			//pClass->Log("%-20s %6d %ws", "PROCESS_START", p->dwProcessId, szPath);
-			//pClass->Log("  path          %ws", p->szPath);
-			//pClass->Log("  MessageId     %I64d", nMessageId);
-			//pClass->Log("  ProcGuid      %ws", szProcGuid);
-			//pClass->Log("  PID           %d", p->dwProcessId);
-			//pClass->Log("  PPID          %d", p->dwParentProcessId);
-			//pClass->Log("  command       %ws", p->szCommand);
-			//pClass->Log("  create        %s", SystemTime2String(&stCreate, szTime, sizeof(szTime)));
-			//pClass->Log("  kernel        %s", SystemTime2String(&stKernel, szTime, sizeof(szTime), true));
-			//pClass->Log("  user          %s", SystemTime2String(&stUser, szTime, sizeof(szTime), true));
-			//pClass->Log("  PProcGuid     %ws", szPProcGuid);
-			//pClass->Log("%s", TEXTLINE);
+			if( 0 == p->PUID ) {
+				pClass->m_log.Log("%-20s(%d) %6d %ws", "PROCESS_START", p->subType, p->PID, szPath);
+				pClass->m_log.Log("  path          %ws", p->szPath);
+				pClass->m_log.Log("  MessageId     %I64d", nMessageId);
+				pClass->m_log.Log("  ProcGuid      %ws", szProcGuid);
+				pClass->m_log.Log("  PUID          %p",	p->PUID);
+				pClass->m_log.Log("  PPUID         %p",	p->PPUID);
+				pClass->m_log.Log("  PID           %d", p->PID);
+				pClass->m_log.Log("  PPID          %d", p->PPID);
+				pClass->m_log.Log("  command       %ws", p->szCommand);
+				pClass->m_log.Log("  create        %s", SystemTime2String(&stCreate, szTime, sizeof(szTime)));
+				pClass->m_log.Log("  kernel        %s", SystemTime2String(&stKernel, szTime, sizeof(szTime), true));
+				pClass->m_log.Log("  user          %s", SystemTime2String(&stUser, szTime, sizeof(szTime), true));
+				pClass->m_log.Log("  PProcGuid     %ws", szPProcGuid);
+				pClass->m_log.Log("%s", TEXTLINE);
+			}
 		}
 		else if (YFilter::Message::SubType::ProcessStop == p->subType) {
 			if (p->PID)
@@ -215,19 +274,23 @@ protected:
 
 			if (false == CAppPath::GetFilePath(p->szPath, szPath, sizeof(szPath)))
 				StringCbCopy(szPath, sizeof(szPath), p->szPath);
-			if( pClass->IsExisting(szProcGuid, p->ProcUID) )
-				pClass->Update(szProcGuid, p->ProcUID, p);
+			if( pClass->IsExisting(szProcGuid, p->PUID) )
+				pClass->Update(szProcGuid, p->PUID, p);
 			//else 
 			//	pClass->Insert(szProcGuid, szPath, szPProcGuid, p);
-			//pClass->Log("%-20s %6d %ws", "PROCESS_STOP", p->dwProcessId, szPath);
-			//pClass->Log("  path          %ws", p->szPath);
-			//pClass->Log("  ProdGuid      %ws", UUID2StringW(&p->ProcGuid, szProcGuid, sizeof(szProcGuid)));
-			//pClass->Log("  create        %s", SystemTime2String(&stCreate, szTime, sizeof(szTime)));
-			//pClass->Log("  exit          %s", SystemTime2String(&stExit, szTime, sizeof(szTime)));
-			//pClass->Log("  kernel        %s", SystemTime2String(&stKernel, szTime, sizeof(szTime), true));
-			//pClass->Log("  user          %s", SystemTime2String(&stUser, szTime, sizeof(szTime), true));
 
-			/*
+			if( 0 == p->PUID) {
+				pClass->m_log.Log("%-20s %6d %ws", "PROCESS_STOP", p->PID, szPath);
+				pClass->m_log.Log("  path          %ws", p->szPath);
+				pClass->m_log.Log("  ProdGuid      %ws", UUID2StringW(&p->ProcGuid, szProcGuid, sizeof(szProcGuid)));
+				pClass->m_log.Log("  PUID          %p",	p->PUID);
+				pClass->m_log.Log("  PPUID         %p",	p->PPUID);
+				pClass->m_log.Log("  create        %s", SystemTime2String(&stCreate, szTime, sizeof(szTime)));
+				pClass->m_log.Log("  exit          %s", SystemTime2String(&stExit, szTime, sizeof(szTime)));
+				pClass->m_log.Log("  kernel        %s", SystemTime2String(&stKernel, szTime, sizeof(szTime), true));
+				pClass->m_log.Log("  user          %s", SystemTime2String(&stUser, szTime, sizeof(szTime), true));
+				pClass->m_log.Log("%s", TEXTLINE);
+			}
 			pClass->Log("MessageId    :%I64d", nMessageId);
 			pClass->Log("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 				p->uuid.Data1, p->uuid.Data2, p->uuid.Data3,
@@ -236,7 +299,6 @@ protected:
 			pClass->Log("%ws", p->szPath);
 			pClass->Log("%ws", p->szCommand);
 			pClass->Log("%s", TEXTLINE);
-			*/
 		}
 		else
 		{
@@ -244,12 +306,14 @@ protected:
 		}
 
 		Json::Value		res;
-		pClass->SendMessageToWebApp(req, res);
+		//pClass->SendMessageToWebApp(req, res);
+		*/
 		return true;
 	}
 
 private:
 	std::string			m_name;
+	CAppLog				m_log;
 	struct {
 		sqlite3_stmt	*pInsert;
 		sqlite3_stmt	*pUpdate;
@@ -259,114 +323,116 @@ private:
 	}	m_stmt;
 
 	bool	IsExisting(
-		PCWSTR				pProcGuid,
-		PROCUID				ProcUID
+		PY_PROCESS	p
 	) {
 		int			nCount	= 0;
 		sqlite3_stmt* pStmt = m_stmt.pIsExisting;
 		if (pStmt) {
 			int		nIndex = 0;
-			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, ProcUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->PUID);
 			if (SQLITE_ROW == sqlite3_step(pStmt))	{
 				nCount	= sqlite3_column_int(pStmt, 0);
 			}
+			else {
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
+			}
 			sqlite3_reset(pStmt);
 		}
+		m_log.Log("%-32s %d", __func__, nCount);
 		return nCount? true : false;
 	}
+	/*
+			const char	*pInsert		= "insert into process"	\
+			"("\
+			"PUID,BootUID,PID,CPID,SID,"	\
+			"PPUID,PPID,DevicePath,ProcPath,ProcName,"	\
+			"IsSystem,CmdLine,UserId,CreateTime,ExitTime,"\
+			"KernelTime,UserTime"\
+			") "\
+			"values("\
+			"?,?,?,?,?"\
+			",?,?,?,?,?"\
+			",?,?,?,?,?"\
+			",?,?)";
+	*/
 	bool	Insert(
-		PCWSTR				pProcGuid, 
-		PROCUID				ProcUID,
-		PCWSTR				pProcPath, 
-		PCWSTR				pPProcGuid,
-		PYFILTER_DATA		pData
+		PY_PROCESS	p,
+		PCWSTR		pProcPath
 	) {
-		if (NULL == pProcPath)			return false;
-
 		bool			bRet	= false;
 		sqlite3_stmt	*pStmt	= m_stmt.pInsert;
 		if (pStmt) {
 			int		nIndex = 0;
 			PCWSTR	pProcName = wcsrchr(pProcPath, '\\');
-			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, ProcUID);
-			sqlite3_bind_int(pStmt,		++nIndex, YAgent::GetBootId());
+			if( pProcName )	pProcName++ ;
+			else			pProcName	= pProcPath;
+			sqlite3_bind_int64(pStmt,	++nIndex, p->PUID);
+			sqlite3_bind_int64(pStmt,	++nIndex, YAgent::GetBootUID());
+			sqlite3_bind_int(pStmt,		++nIndex, p->PID);
+			sqlite3_bind_int(pStmt,		++nIndex, p->CPID);
+			ProcessIdToSessionId(p->PID, &p->SID);
+			sqlite3_bind_int(pStmt,		++nIndex, p->SID);
+
+			sqlite3_bind_int64(pStmt,	++nIndex, p->PPUID);
+			sqlite3_bind_int(pStmt,		++nIndex, p->PPID);
+			sqlite3_bind_text16(pStmt,	++nIndex, p->DevicePath.pBuf, -1, SQLITE_STATIC);
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcPath, -1, SQLITE_STATIC);
-			sqlite3_bind_text16(pStmt,	++nIndex, pProcName ? pProcName + 1 : pProcPath, -1, SQLITE_TRANSIENT);
-			sqlite3_bind_text16(pStmt,	++nIndex, pData->szCommand, -1, SQLITE_STATIC);
+			sqlite3_bind_text16(pStmt,	++nIndex, pProcName, -1, SQLITE_STATIC);
 
-			sqlite3_bind_int(pStmt,		++nIndex, pData->PID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->PPID);
-			sqlite3_bind_int(pStmt,		++nIndex, 0);
-			if (pPProcGuid && *pPProcGuid)
-				sqlite3_bind_text16(pStmt, ++nIndex, pPProcGuid, -1, SQLITE_STATIC);
-			else
-				sqlite3_bind_null(pStmt, ++nIndex);
-			sqlite3_bind_int(pStmt,		++nIndex, false);
+			sqlite3_bind_int(pStmt,		++nIndex, p->bIsSystem);
+			sqlite3_bind_text16(pStmt,	++nIndex, p->Command.pBuf, -1, SQLITE_STATIC);
+			sqlite3_bind_null(pStmt,	++nIndex);
+			sqlite3_bind_int64(pStmt,	++nIndex, CTime::LargeInteger2UnixTimestamp(&p->times.CreateTime));
+			sqlite3_bind_int64(pStmt,	++nIndex, CTime::LargeInteger2UnixTimestamp(&p->times.ExitTime));
 
-			sqlite3_bind_null(pStmt, ++nIndex);
-			char		szTime[50]	= "";
-			if( pData->times.CreateTime.QuadPart ) {
-				sqlite3_bind_text(pStmt,	++nIndex, 
-					CTime::LaregInteger2LocalTimeString(&pData->times.CreateTime, szTime, sizeof(szTime)), 
-					-1, SQLITE_TRANSIENT);
-			}
-			else {
-				Log("---- CreateTime is null");
-				sqlite3_bind_null(pStmt, ++nIndex);
-			}
-			if( pData->times.ExitTime.QuadPart ) {
-				sqlite3_bind_text(pStmt, ++nIndex,
-					CTime::LaregInteger2LocalTimeString(&pData->times.ExitTime, szTime, sizeof(szTime)),
-					-1, SQLITE_STATIC);
-			}
-			else 
-				sqlite3_bind_null(pStmt, ++nIndex);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->times.KernelTime.QuadPart);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->times.UserTime.QuadPart);
 
-			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.KernelTime.QuadPart);
-			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.UserTime.QuadPart);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		} 
+		m_log.Log("%-32s %d", __func__, bRet);
 		return bRet;
 	}
-	bool	Update(
-		PCWSTR				pProcGuid,
-		PROCUID				ProcUID,
-		PYFILTER_DATA		pData
+	/*
+		const char	*pUpdate		= "update process "	\
+			"set CreateTime=?, ExitTime=?, KernelTime=?, UserTime=? "\
+			"where PUID=?";
+	*/
+	bool	Update
+	(
+		PY_PROCESS		p
 	) {
 		bool			bRet	= false;
 		sqlite3_stmt	*pStmt	= m_stmt.pUpdate;
 		if (pStmt) {
 			int		nIndex = 0;
 			char		szTime[50] = "";
-			if (pData->times.CreateTime.QuadPart) {
+			if (p->times.CreateTime.QuadPart) {
 				sqlite3_bind_text(pStmt, ++nIndex,
-					CTime::LaregInteger2LocalTimeString(&pData->times.CreateTime, szTime, sizeof(szTime)),
+					CTime::LaregInteger2LocalTimeString(&p->times.CreateTime, szTime, sizeof(szTime)),
 					-1, SQLITE_TRANSIENT);
 			}
 			else {
 				Log("---- CreateTime is null");
 				sqlite3_bind_null(pStmt, ++nIndex);
 			}
-			if (pData->times.ExitTime.QuadPart) {
+			if (p->times.ExitTime.QuadPart) {
 				sqlite3_bind_text(pStmt, ++nIndex,
-					CTime::LaregInteger2LocalTimeString(&pData->times.ExitTime, szTime, sizeof(szTime)),
+					CTime::LaregInteger2LocalTimeString(&p->times.ExitTime, szTime, sizeof(szTime)),
 					-1, SQLITE_STATIC);
 			}
 			else
 				sqlite3_bind_null(pStmt, ++nIndex);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->times.KernelTime.QuadPart);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->times.UserTime.QuadPart);
-			sqlite3_bind_text16(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->times.KernelTime.QuadPart);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->times.UserTime.QuadPart);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->PUID);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		}

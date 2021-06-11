@@ -188,8 +188,8 @@ ULONG			OtList(IN POBJECT_TABLE pTable);
 /*************************************************************************
 	Prototypes
 *************************************************************************/
+NTSTATUS	GetProcessSessionId(IN HANDLE PID, OUT PULONG pId);
 NTSTATUS	GetSystemRootPath(PUNICODE_STRING p);
-
 NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID);
 NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
 	IN	HANDLE				hPPID,
@@ -198,7 +198,15 @@ NTSTATUS	GetProcGuid(IN bool bCreate, IN HANDLE hPID,
 	OUT	UUID				*pGuid,
 	OUT	PROCUID				*pUID
 );
-NTSTATUS	GetProcUID(IN bool bCreate, IN HANDLE hPID,
+NTSTATUS	GetPUID(
+	IN	HANDLE				PID,
+	IN	HANDLE				PPID,
+	IN	PCUNICODE_STRING	pImagePath,
+	IN	LARGE_INTEGER		*pCreateTime,
+	OUT	PROCUID				*pUID
+);
+NTSTATUS	GetProcUID(
+	IN	HANDLE				hPID,
 	IN	HANDLE				hPPID,
 	IN	PCUNICODE_STRING	pImagePath,
 	IN	LARGE_INTEGER		*pCreateTime,
@@ -235,6 +243,19 @@ NTSTATUS	GetProcessInfoByProcessId
 	OUT	PUNICODE_STRING	*pImageFileName,
 	OUT PUNICODE_STRING	*pCommandLine			//	지금은 하지마.
 );
+void		CreateProcessMessage(
+	YFilter::Message::SubType	subType,
+	HANDLE						PID,
+	HANDLE						PPID,
+	HANDLE						CPID,
+	PROCUID						*pPUID,
+	PROCUID						*pPPUID,
+	PUNICODE_STRING				pProcPath,
+	PUNICODE_STRING				pCommand,
+	PY_PROCESS					*pOut
+);
+WORD		GetStringDataSize(PUNICODE_STRING pStr);
+void		CopyStringData(PVOID pAddress, WORD wOffset, PY_STRING pDest, PUNICODE_STRING pSrc);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 //	프로세스 모니터링/관리

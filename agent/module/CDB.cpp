@@ -1,6 +1,5 @@
 #include "CDB.h"
 #include <set>
-
 /*
 	db 파일 패치 자동화
 	1. pSrcPath의 db 파일[ODB]과 pDestPath의 db 파일[DB]을 비교.
@@ -8,7 +7,6 @@
 	3. pSrcPath와 다른 테이블, 인덱스 등을 수정, 생성해준다. 
 	4. pSrcPath에 없고 pDestPath에는 있는 인덱스는 삭제한다.
 */
-
 bool	CPatchDB::DBLog(
 	IN	CDB		&db,
 	IN	INT		nAffected,

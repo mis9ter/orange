@@ -60,9 +60,8 @@ void LoadImageNotifyRoutine(
 				) {
 					UNREFERENCED_PARAMETER(bCreationSaved);
 					PYFILTER_MESSAGE	pMsg	= (PYFILTER_MESSAGE)pCallbackPtr;
-					RtlCopyMemory(&pMsg->data.ProcGuid, &pEntry->uuid, sizeof(pMsg->data.ProcGuid));
-					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), &pEntry->path);
-					pMsg->data.ProcUID	= pEntry->ProcUID;
+					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), &pEntry->ProcPath);
+					pMsg->data.PUID	= pEntry->PUID;
 			})) {
 				//	네 존재합니다. 
 			}
@@ -72,23 +71,24 @@ void LoadImageNotifyRoutine(
 				//	이 프로세스는 생성시점 드라이버가 실행 중이지 않아 
 				//	해당 프로세스 정보를 가지고 있지 않다. 
 				//	[TODO]
-				AddEarlyProcess(ProcessId);
+				//AddEarlyProcess(ProcessId);
 				PUNICODE_STRING	pImageFileName = NULL;
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 				{
 					KERNEL_USER_TIMES	times;
-					PROCUID				ProcUID;
+					PROCUID				PUID;
 					GetProcessTimes(ProcessId, &times);
 					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 					GetProcGuid(false, ProcessId, NULL, pImageFileName, &times.CreateTime,
-						&pMsg->data.ProcGuid, &ProcUID);
-					pMsg->data.ProcUID	= ProcUID;
+						&pMsg->data.ProcGuid, &PUID);
+					pMsg->data.PUID	= PUID;
 					CMemory::Free(pImageFileName);
 				}
 			}
 			pMsg->header.mode				= YFilter::Message::Mode::Event;
 			pMsg->header.category			= YFilter::Message::Category::Module;
-			pMsg->header.size				= sizeof(YFILTER_MESSAGE);
+			pMsg->header.wSize				= sizeof(YFILTER_MESSAGE);
+			pMsg->header.wRevision			= 0;
 
 			pMsg->data.subType				= YFilter::Message::SubType::ModuleLoad;
 			pMsg->data.bCreationSaved		= true;

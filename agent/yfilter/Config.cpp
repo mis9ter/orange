@@ -90,6 +90,7 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		RtlZeroMemory(pConfig, sizeof(CONFIG));
 		pConfig->version.dwOSVersionInfoSize	= sizeof(pConfig->version);
 		RtlGetVersion((RTL_OSVERSIONINFOW *)&pConfig->version);
+		pConfig->dwCPU	= KeQueryActiveProcessorCount(NULL);
 
 		KeInitializeSpinLock(&pConfig->lock);
 		KeInitializeSpinLock(&pConfig->client.command.lock);
@@ -98,9 +99,11 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		QueryRegistryString(REG_MACHINEGUID_KEY, REG_MACHINEGUID_VALUE, buf, buf.CbSize());
 		QueryRegistryDW(REG_BOOTID_KEY, REG_BOOTID_VALUE, &pConfig->bootId);
 
-		__log("%-30s %wZ",	"systemRootPath", &pConfig->systemRootPath);
-		__log("%-30s %ws",	"MachineGuid", (PCWSTR)buf);
-		__log("%-30s %d",	"BootId", pConfig->bootId);
+		__log("%-32s %wZ",	"systemRootPath", &pConfig->systemRootPath);
+		__log("%-32s %ws",	"MachineGuid", (PCWSTR)buf);
+		__log("%-32s %d",	"BootId", pConfig->bootId);
+		__log("%-32s %d",	"CPU", pConfig->dwCPU);
+
 		UNICODE_STRING	machineGuid;
 		RtlInitUnicodeString(&machineGuid, buf);
 		CMemory::AllocateUnicodeString(NonPagedPoolNx, &pConfig->machineGuid, &machineGuid);

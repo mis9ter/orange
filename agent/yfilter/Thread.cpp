@@ -335,7 +335,7 @@ void CreateThreadNotifyRoutine(
 		pMsg->header.mode = YFilter::Message::Mode::Event;
 		pMsg->header.category = YFilter::Message::Category::Thread;
 
-		pMsg->header.size			= sizeof(YFILTER_MESSAGE);
+		pMsg->header.wSize			= sizeof(YFILTER_MESSAGE);
 		pMsg->data.PID				= (DWORD)ProcessId;
 		pMsg->data.PPID				= (DWORD)GetParentProcessId(ProcessId);
 		pMsg->data.CPID				= (DWORD)CPID;
@@ -352,28 +352,27 @@ void CreateThreadNotifyRoutine(
 	if (ProcessTable()->IsExisting(ProcessId, pMsg, [](
 		IN bool					bCreationSaved,
 		IN PPROCESS_ENTRY		pEntry,
-		IN PVOID				pCallbackPtr
+		IN PVOID				pContext
 		) {
-		PYFILTER_MESSAGE	pMsg = (PYFILTER_MESSAGE)pCallbackPtr;
+		PYFILTER_MESSAGE	pMsg = (PYFILTER_MESSAGE)pContext;
 		if (bCreationSaved) {
-			RtlCopyMemory(&pMsg->data.ProcGuid, &pEntry->uuid, sizeof(pEntry->uuid));
-			pMsg->data.ProcUID	= pEntry->ProcUID;
+			pMsg->data.PUID	= pEntry->PUID;
 		}
 	})) {
 
 	}
 	else {
-		AddEarlyProcess(ProcessId);
+		//AddEarlyProcess(ProcessId);
 		PUNICODE_STRING	pImageFileName = NULL;
 		if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 		{
 			KERNEL_USER_TIMES	times;
-			PROCUID				ProcUID;
+			PROCUID				PUID;
 			GetProcessTimes(ProcessId, &times);
 			RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 			GetProcGuid(false, ProcessId, NULL, pImageFileName, &times.CreateTime,
-				&pMsg->data.ProcGuid, &ProcUID);
-			pMsg->data.ProcUID	= ProcUID;
+				&pMsg->data.ProcGuid, &PUID);
+			pMsg->data.PUID	= PUID;
 			CMemory::Free(pImageFileName);
 		}
 	}

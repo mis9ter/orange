@@ -1,16 +1,56 @@
 ﻿#include "Framework.h"
 
+
+void	CAgent::AddDbList(int nResourceID, PCWSTR pRootPath, PCWSTR pName, DbMap & table) {
+	Log("%-32s begin", __func__);
+	Log("%-32s %d", "nResourceID", nResourceID);
+	Log("%-32s %ws", "nRootPath", pRootPath);
+	Log("%-32s %ws", "nName", pName);
+
+	try {
+		DbConfigPtr	ptr		=	std::shared_ptr<DB_CONFIG>(new DB_CONFIG);
+
+		ptr->nResourceID	= nResourceID;
+		ptr->strCDB			= (std::wstring)pRootPath + L"\\" + pName + L".cdb";
+		ptr->strODB			= (std::wstring)pRootPath + L"\\" + pName + L".odb";
+
+		Log("%-32s %ws", "ODB", ptr->strODB.c_str());
+		Log("%-32s %ws", "CDB", ptr->strCDB.c_str());
+
+		table[pName]	= ptr;
+	}
+	catch( std::exception & e) {
+		UNREFERENCED_PARAMETER(e);	
+		Log("%-32s %s", __func__, e.what());
+	}
+	Log("%-32s end", __func__);
+}
 CAgent::CAgent()
 	:
 	CFilterCtrl(NULL, NULL)
 {
-	Log(__FUNCTION__);
+	Log("%-32s begin", __func__);
 	ZeroMemory(&m_config, sizeof(m_config));
-	GetModuleFileName(NULL, m_config.szAppPath, sizeof(m_config.szAppPath));
-	GetModuleFileName(NULL, m_config.szPath, sizeof(m_config.szPath));
-	wchar_t* p = wcsrchr(m_config.szPath, L'\\');
-	if (p)		*p = NULL;
+	GetModuleFileName(NULL, m_config.path.szApp, sizeof(m_config.path.szApp));
+
+	PWSTR	pStr;
+	StringCbCopy(m_config.path.szDriver, sizeof(m_config.path.szDriver), m_config.path.szApp);
+	pStr	= _tcsrchr(m_config.path.szDriver, L'\\');
+	if( pStr )	*pStr	= NULL;
+	StringCbPrintf(m_config.path.szDriver + lstrlen(m_config.path.szDriver), 
+		sizeof(m_config.path.szDriver) - lstrlen(m_config.path.szDriver) * sizeof(WCHAR), 
+		L"\\%s", DRIVER_FILE_NAME);
+
+
+	YAgent::GetDataFolder(AGENT_DATA_FOLDERNAME, m_config.path.szData, sizeof(m_config.path.szData));
+	YAgent::MakeDirectory(m_config.path.szData);
+
+	AddDbList(IDR_CONFIG_ODB, m_config.path.szData, L"config",		m_db);
+	AddDbList(IDR_EVENT_ODB, m_config.path.szData, L"event",		m_db);
+	AddDbList(IDR_SUMMARY_ODB, m_config.path.szData, L"summary",	m_db);
+
 	m_config.hShutdown	= CreateEvent(NULL, TRUE, FALSE, NULL);
+	Log("%-32s end", __func__);
 }
 CAgent::~CAgent()
 {
@@ -19,69 +59,71 @@ CAgent::~CAgent()
 }
 bool	CAgent::Install()
 {
-	wchar_t		szPath[AGENT_PATH_SIZE];
-	YAgent::GetModulePath(szPath, sizeof(szPath));
-	StringCbCat(szPath, sizeof(szPath), L"\\");
-	StringCbCat(szPath, sizeof(szPath), DRIVER_FILE_NAME);
-	Log("%-32s %ws", __FUNCTION__, szPath);
-	CFilterCtrl::Install(DRIVER_SERVICE_NAME, szPath, false);
+	Log("%-32s %ws", __FUNCTION__, m_config.path.szDriver);
+	CFilterCtrl::Install(DRIVER_SERVICE_NAME, m_config.path.szDriver, false);
 	return true;
 }
 void	CAgent::Uninstall()
 {
 	CFilterCtrl::Uninstall();
 }
+DWORD	Patch(PCWSTR pODB, PCWSTR pCDB, HANDLE hBreakEvent) {
+	CDB		cdb;
+	return cdb.Patch(pODB, pCDB, hBreakEvent);
+}
 bool	CAgent::Initialize()
 {
 	Log(__FUNCTION__);
-	__try {
+
+	do {
 		ResetEvent(m_config.hShutdown);
-		StringCbPrintf(m_config.szDriverPath, sizeof(m_config.szDriverPath),
-			L"%s\\%s", m_config.szPath, DRIVER_FILE_NAME);
-		StringCbPrintf(m_config.szEventODBPath, sizeof(m_config.szEventODBPath),
-			L"%s\\%s", m_config.szPath, DB_EVENT_ODB);
-		StringCbPrintf(m_config.szEventCDBPath, sizeof(m_config.szEventCDBPath),
-			L"%s\\%s", m_config.szPath, DB_EVENT_CDB);
 
-		Log("%-32s CURPATH:%ws", __func__, m_config.szPath);
-		Log("%-32s DRIVER :%ws", __func__, m_config.szDriverPath);
-		Log("%-32s ODB    :%ws", __func__, m_config.szEventODBPath);
-		Log("%-32s CDB    :%ws", __func__, m_config.szEventCDBPath);
+		Log("%-32s APPPATH:%ws", __func__, m_config.path.szApp);
+		Log("%-32s DATAATH:%ws", __func__, m_config.path.szData);
+		Log("%-32s DRIVER :%ws", __func__, m_config.path.szDriver);
 
-		if (!PathFileExists(m_config.szDriverPath)) {
-			if( false == SetResourceToFile(IDR_KERNEL_DRIVER, m_config.szDriverPath) )
-				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szDriverPath);
-				__leave;
-		}
-		{
-			//	[TODO] 파일 쓰기가 실패된 경우 에이전트는 계속 진행을 해야 하나 말아야 하나?
-			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventODBPath) ) {
-				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szEventODBPath);
-				__leave;
+		if( !PathFileExists(m_config.path.szDriver)) {		
+			if( SetResourceToFile(IDR_ORANGE_DRIVER, m_config.path.szDriver) ) {
+				Log("%s %ws saved.", __func__, m_config.path.szDriver);
+			}
+			else {
+				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.path.szDriver);
 			}
 		}
-		if (!PathFileExists(m_config.szEventCDBPath)) {
-			if( false == SetResourceToFile(IDR_EVENT_ODB, m_config.szEventCDBPath) ) {
-				Log("%s SetReqourceToFile(%ws) failed.", __func__, m_config.szEventCDBPath);
-				__leave;
+		for( auto t : m_db ) {
+			if( false == SetResourceToFile(t.second->nResourceID, t.second->strODB.c_str()) ) {
+				Log("%s SetReqourceToFile(%ws) failed.", __func__, t.second->strCDB.c_str());
+				break;
+			}
+			if( PathFileExists(t.second->strCDB.c_str()) ) {			
+			
+			}
+			else {
+				if( CopyFile(t.second->strODB.c_str(), t.second->strCDB.c_str(), TRUE) ) {				
+				
+				}
+				else {
+					CErrorMessage	err(GetLastError());
+					Log("%-32s %s(%d)", __func__, (PCSTR)err, (DWORD)err);				
+				}			
+			}
+			Patch(t.second->strODB.c_str(), t.second->strCDB.c_str(), NULL);			
+			if ( t.second->cdb.Open(t.second->strCDB.c_str(), __func__) ) {
+
+			}
+			else {
+				Log("%s can not open db %ws", __func__, t.second->strCDB.c_str());
+				break;
 			}
 		}
-		Patch(m_config.szEventODBPath, m_config.szEventCDBPath, NULL);
-
-		if (false == CDB::Open(m_config.szEventCDBPath, __func__)) {
-			Log("%s can not open db %ws", __func__, m_config.szEventCDBPath);
-			__leave;
-		}
-		if( false == CEventCallback::CreateCallback() ) {
-			Log("%s CEventCallback::Initialize() failed.", __func__);
-			__leave;
-		}
-		m_config.bInitialize = true;
 	}
-	__finally {
+	while( false );
 
+	if( false == CEventCallback::CreateCallback() ) {
+		Log("%s CEventCallback::Initialize() failed.", __func__);
+		return false;
 	}
-	return m_config.bInitialize;
+	return (m_config.bInitialize = true);
 }
 void	CAgent::Destroy()
 {
@@ -89,14 +131,24 @@ void	CAgent::Destroy()
 		CEventCallback::DestroyCallback();
 		m_config.bInitialize = false;
 	}
-	if (CDB::IsOpened()) {
-		CDB::Close(__FUNCTION__);
+	for( auto t : m_db ) {
+		if ( t.second->cdb.IsOpened() ) {
+			t.second->cdb.Close(__func__);
+		}
+		else {
+			Log("%s can not open db %ws", __func__, t.second->strCDB.c_str());
+			break;
+		}
 	}
 }
 
 bool	CAgent::Start()
 {
 	Log(__FUNCTION__);
+	Log("YFILTER_HEADER  %d", sizeof(YFILTER_HEADER));
+	Log("Y_HEADER        %d", sizeof(Y_HEADER));
+	Log("YFILTER_DATA    %d", sizeof(YFILTER_DATA));
+
 	do
 	{
 		if( false == Initialize() )	{
@@ -110,13 +162,13 @@ bool	CAgent::Start()
 			Log("%-32s driver is installed.", __func__);
 			if (CFilterCtrl::IsConnected() ) {
 				Log("%-32s driver is connected.", __func__);
-				return true;
+				//break;
 			}
 		}
 		else
 		{
 			Log("%-32s driver is not installed.", __func__);
-			if (CFilterCtrl::Install(DRIVER_SERVICE_NAME, m_config.szDriverPath, false))
+			if (CFilterCtrl::Install(DRIVER_SERVICE_NAME, m_config.path.szDriver, false))
 			{
 				Log("%-32s driver is installed.", __func__);
 			}
@@ -128,10 +180,10 @@ bool	CAgent::Start()
 		}
 		CIPCCommand::AddCommand("sqlite3.query", "unknown", this, Sqllite3QueryUnknown);
 
-		if (false == CFilterCtrl::Start(
+		if (false == CFilterCtrl::Start2(
 				NULL, NULL, 
 				dynamic_cast<CEventCallback *>(this),
-				EventCallbackProc
+				EventCallbackProc2
 			)
 		)
 		{

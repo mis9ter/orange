@@ -18,6 +18,9 @@ public:
 		pDest->dwHighDateTime = pSrc->HighPart;
 		pDest->dwLowDateTime = pSrc->LowPart;
 	}
+	static	int64_t	LargeInteger2UnixTimestamp(LARGE_INTEGER* pSrc) {
+		return ((*pSrc).QuadPart - UNIX_TIME_START) / TICKS_PER_MILISECOND;
+	}
 	static	void	LargeInteger2SystemTime(LARGE_INTEGER* pSrc, SYSTEMTIME* pDest, bool bLocal = true) {
 		FILETIME	ftTime, ftLocalTime;
 
@@ -203,7 +206,7 @@ public:
 	}
 	static	INT64	GetBootTimestamp()
 	{
-		return GetUnixTimestamp() - GetTickCount64();
+		return (GetUnixTimestamp() - GetTickCount64());
 	}
 	static	void	GetBootTime(OUT SYSTEMTIME * p)
 	{

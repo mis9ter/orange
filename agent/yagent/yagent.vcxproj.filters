@@ -173,10 +173,29 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="db\event.odb" />
-    <None Include="..\binary\driver\x64\orange.sys" />
+    <None Include="..\binary\driver\x64\rcdata1.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\binary\driver\x64\rcdata2.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="db\event.odb">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\binary\driver\x64\orange.sys">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\binary\driver\x64\pfilter.sys">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="db\rcdata1.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="db\config.odb" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="opensource.txt" />
+    <Text Include="opensource.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
   </ItemGroup>
 </Project>

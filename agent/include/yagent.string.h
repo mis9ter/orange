@@ -339,9 +339,6 @@ public:
 		m_dwError	= dwError;
 		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, dwError, 0, m_szErrMsg, sizeof(m_szErrMsg), NULL);
 	}
-	~CErrorMessage() {
-
-	}
 	operator	DWORD() {
 		return m_dwError;
 	}

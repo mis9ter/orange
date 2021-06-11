@@ -29,6 +29,7 @@ typedef	uint64_t				PROCUID;
 #define DRIVER_EVENT_PORT		L"\\orange_event"
 #define DRIVER_DISPLAY_NAME		L"by orangeworks"
 #define DRIVER_INSTANCE_NAME	L"orange filter"
+
 #define DRIVER_ALTITUDE			(385200)			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
 #define DRIVER_STRING_ALTITUDE	L"385200"			// 미니필터 고도 (추후 등록시 필요한 경우 수정 필요)
 #define DRIVER_MAX_MESSAGE_SIZE	4096
@@ -48,6 +49,8 @@ typedef	uint64_t				PROCUID;
 #define SAFEBOOT_REG_MINIMAL	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Minimal"
 #define SAFEBOOT_REG_NETWORK	L"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\Network"
 #define TEXTLINE				"--------------------------------------------------------------------------------"
+
+#define Y_MESSAGE_REVISION		1
 
 #ifdef ENABLE_RTL_NUMBER_OF_V2
 #define RTL_NUMBER_OF(A) RTL_NUMBER_OF_V2(A)
@@ -113,6 +116,8 @@ namespace YFilter
 			ThreadStop,
 			ModuleLoad,
 			ModuleUnload,
+			RegistryGetValue,
+			RegistrySetValue,
 		};
 	};
 	namespace Object
@@ -194,11 +199,13 @@ namespace YFilter
 //	도라이버-에이전트 정보 구조체
 /////////////////////////////////////////////////////////////////////////////////////////
 #pragma pack(push, 1)
-#define MESSAGE_MAX_SIZE		(64 * 1024)			//	커널에서 전달 예상되는 최대 크기
+#define MAX_FILTER_MESSAGE_SIZE		(8 * 1024)		//	커널에서 전달 예상되는 최대 크기
+
 typedef struct YFILTER_HEADER {
 	YFilter::Message::Mode		mode;				//
 	YFilter::Message::Category	category;			//	
-	ULONG						size;				//	MESSAGE_HEADER + 알파
+	WORD						wSize;				//	MESSAGE_HEADER + 알파
+	WORD						wRevision;
 } YFILTER_HEADER, *PYFILTER_HEADER;
 /*
 	[TODO]	2020/08/01
@@ -224,6 +231,83 @@ typedef KERNEL_USER_TIMES* PKERNEL_USER_TIMES;
 
 #define YFILTER_COMMAND_START	0x00000001
 #define YFILTER_COMMAND_STOP	0x00000000
+
+typedef struct Y_HEADER {
+	YFilter::Message::Mode		mode;						//
+	YFilter::Message::Category	category;					//	
+	WORD						wSize;
+	WORD						wRevision;
+
+	DWORD						PID;						//	current process id/all
+	DWORD						PPID;						//	parent process id/process
+	DWORD						TID;						//	target thread id/all
+	DWORD						CTID;						//	current thread id
+	DWORD						CPID;						//	creator process id/thread
+	DWORD						RPID;						//	related process id
+
+	PROCUID						PUID;
+} Y_HEADER, *PY_HEADER;
+
+typedef struct Y_STRING
+{
+	WORD						wOffset;
+	WORD						wSize;
+	WCHAR						*pBuf;
+} Y_STRING, *PY_STRING;
+
+typedef UINT64					REGUID;
+typedef WORD					STRING_POS;
+typedef struct Y_REGISTRY
+	:
+	public Y_HEADER
+{
+	YFilter::Message::SubType	subType;
+	REGUID						RegUID;
+	ULONG						nDataSize;
+	Y_STRING					RegPath;
+	Y_STRING					RegValueName;
+} Y_REGISTRY, *PY_REGISTRY;
+
+typedef struct Y_REGISTRY_SIMPLE
+	:
+	public Y_HEADER
+{
+	WORD						wSize;
+	REGUID						RegUID;
+	Y_STRING					wRegValueName;
+	
+} Y_REGISTRY_SIMPLE, *PY_REGISTRY_SIMPLE;
+
+typedef struct Y_PROCESS
+	:
+	public	Y_HEADER 
+{
+	YFilter::Message::SubType	subType;
+	PROCUID						PPUID;
+	ULONG_PTR					pImsageSize;
+	KERNEL_USER_TIMES			times;
+	ULONG						SID;
+
+	union {
+		ULONG Property;
+		struct {
+			ULONG ImageAddressingMode : 8;  // Code addressing mode
+			ULONG SystemModeImage : 1;  // System mode image
+			ULONG ImageMappedToAllPids : 1;  // Image mapped into all processes
+			ULONG ExtendedInfoPresent : 1;  // IMAGE_INFO_EX available
+			ULONG MachineTypeMismatch : 1;  // Architecture type mismatch
+			ULONG ImageSignatureLevel : 4;  // Signature level
+			ULONG ImageSignatureType : 3;  // Signature type
+			ULONG ImagePartialMap : 1;  // Nonzero if entire image is not mapped
+			ULONG Reserved : 12;
+		} Properties;
+	} ImageProperties;
+
+	Y_STRING					DevicePath;
+	Y_STRING					Command;
+	bool						bIsSystem;
+
+} Y_PROCESS, *PY_PROCESS;
 
 typedef struct YFILTER_DATA {
 	YFilter::Message::SubType	subType;
@@ -251,8 +335,8 @@ typedef struct YFILTER_DATA {
 	UUID						PProcGuid;
 #pragma pack(push, 1)
 	ULONG_PTR					pImageSize;
-	PROCUID						ProcUID;
-	PROCUID						PProcUID;
+	PROCUID						PUID;
+	PROCUID						PPUID;
 
 	union {
 		ULONG Property;
@@ -268,6 +352,9 @@ typedef struct YFILTER_DATA {
 			ULONG Reserved : 12;
 		} Properties;
 	} ImageProperties;
+	struct {
+		char					szMsg[32];	
+	} debug;
 } YFILTER_DATA, *PYFILTER_DATA;
 
 typedef struct YFILTER_MESSAGE {
@@ -275,13 +362,13 @@ typedef struct YFILTER_MESSAGE {
 	YFILTER_DATA	data;
 } YFILTER_MESSAGE, *PYFILTER_MESSAGE;
 
-typedef struct YFILTER_COMMAND
+typedef struct Y_COMMAND
 {
-	DWORD					dwCommand;
-} YFILTER_COMMAND, * PYFILTER_COMMAND;
+	DWORD			dwCommand;
+} Y_COMMAND, * PY_COMMAND;
 
-typedef struct YFILTER_REPLY
+typedef struct Y_REPLY
 {
-	bool					bRet;
-} FILTER_REPLY;
+	bool			bRet;
+} Y_REPLY, *PY_REPLY;
 #pragma pack(pop)

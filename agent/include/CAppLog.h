@@ -1,4 +1,6 @@
 ﻿#pragma once
+#include <Shlwapi.h>
+#include <ShlObj.h>
 #include "yagent.h"
 
 class CAppLog
@@ -44,13 +46,9 @@ private:
 	void		MakeLogPath(PCWSTR pFilePath)
 	{
 		WCHAR		szPath[AGENT_PATH_SIZE];
-		WCHAR *		pStr;
 
-		GetModuleFileName(NULL, szPath, sizeof(szPath));
-		pStr = _tcsrchr(szPath, L'\\');
-		if (pStr) *pStr = NULL;
+		GetDataFolder(AGENT_DATA_FOLDERNAME, szPath, sizeof(szPath));
 		StringCbPrintf(m_szLogPath, sizeof(m_szLogPath), L"%s\\%s", szPath, pFilePath);
-		printf("%ws\n", m_szLogPath);
 	}
 	bool		WriteLog(IN const char * pMsg, IN size_t dwSize)
 	{
@@ -67,5 +65,15 @@ private:
 		::WriteFile(hFile, pMsg, (DWORD)dwSize, &dwBytes, NULL);
 		if( INVALID_HANDLE_VALUE != hFile )	::CloseHandle(hFile);
 		return true;
+	}
+	PCWSTR		GetDataFolder(IN PCWSTR pName, OUT PWSTR pValue, IN DWORD dwSize)
+	{
+		WCHAR	szPath[MAX_PATH]	= L"";
+		if( SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, szPath))) {
+			PathAppend(szPath, pName);
+			StringCbCopy(pValue, dwSize, szPath);
+			return pValue;	
+		}
+		return NULL;
 	}
 };

@@ -224,6 +224,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="CNtDll.h" />
     <ClInclude Include="CPreProcess.h" />
     <ClInclude Include="CProcessCallback.h" />
+    <ClInclude Include="CRegisryCallback.h" />
     <ClInclude Include="CThread.h" />
     <ClInclude Include="CThreadCallback.h" />
     <ClInclude Include="framework.h" />
@@ -256,7 +257,12 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\binary\driver\x64\orange.sys" />
+    <None Include="..\binary\driver\x64\pfilter.sys" />
+    <None Include="..\binary\driver\x64\rcdata1.bin" />
+    <None Include="..\binary\driver\x64\rcdata2.bin" />
+    <None Include="db\config.odb" />
     <None Include="db\event.odb" />
+    <None Include="db\rcdata1.bin" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="opensource.txt" />

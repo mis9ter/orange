@@ -1,6 +1,7 @@
 #include "pch.h"
 #include <Shlwapi.h>
 #include <ShlObj.h>
+
 PCWSTR		YAgent::GetDataFolder(IN PCWSTR pName, OUT PWSTR pValue, IN DWORD dwSize)
 {
 

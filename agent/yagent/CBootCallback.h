@@ -6,45 +6,54 @@ class CBootCallback
 	virtual	public	CAppLog
 {
 public:
-	CBootCallback() {
+	CBootCallback() 
+		:
+		m_log(L"boot.log")
+	
+	{
 		m_name		= EVENT_CALLBACK_NAME;
-		m_dwBootId	= YAgent::GetBootId();
+		m_BootUID	= YAgent::GetBootUID();
 		m_bShutdown	= false;
 		ZeroMemory(&m_stmt, sizeof(m_stmt));
+
+		m_log.Log(NULL);
+		m_log.Log(__func__);
+		m_log.Log("BootUID:%p", m_BootUID);
 	}
 	virtual	~CBootCallback() {
 
 	}
-	virtual	DWORD		BootId() {
-		return m_dwBootId;
+	virtual	BootUID		GetBootUID() {
+		
+		return m_BootUID;
 	}
 	virtual	CDB*		Db() = NULL;
 	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	void	Create() {
 		const char* pInsert = "insert into [boot]"	\
 			"("\
-			"[BootId],[UpTime]"\
+			"[BootUID],[BootId],[UpTime]"\
 			") "\
 			"values("\
-			"?,?"\
+			"?,?,?"\
 			")";
 		const char* pIsExisting = 
-			"select count(BootId) from boot where BootId=?";
+			"select count(BootId) from boot where BootUID=?";
 		const char* pUpdate = 
 			"update boot "	\
-			"set LastTime=datetime('now','localtime') "\
-			"where BootId=?";
+			"set LastTime=CURRENT_TIMESTAMP "\
+			"where BootUID=?";
 		const char* pUpdate2 = 
 			"update boot "	\
-			"set DownTime=datetime('now','localtime') "\
-			"where BootId=?";
+			"set DownTime=CURRENT_TIMESTAMP "\
+			"where BootUID=?";
 		const char* pUpdate3 = 
 			"update boot "	\
 			"set DownTime=LastTime "\
-			"where DownTime is null and BootId < '%d'";
+			"where DownTime is null";
 		const char* pSelect = "select BootId,UpTime,LastTime,DownTime "\
 			"from boot "\
-			"where BootId=?";
+			"where BootUID=?";
 
 		if (Db()->IsOpened()) {
 
@@ -64,22 +73,18 @@ public:
 			Db()->Execute([&](int n, PCSTR pQuery, PCSTR pErrMsg) {
 			
 			
-			}, pUpdate3, m_dwBootId);
+			}, pUpdate3);
 		}
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
-		Log("%s BootId=%d", __FUNCTION__, m_dwBootId);
+		Log("%s BootId=%d, BootUID=%I64d", __FUNCTION__, YAgent::GetBootId(), GetBootUID());
 		if( Select() )	{
-			Log("12");
 			Update(false);
-			Log("13");
 		}
 		else
 		{
-			Log("14");
 			Insert();
-			Log("15");
 		}
 
 		//	시스템 종료 이벤트 통지
@@ -129,8 +134,7 @@ public:
 		sqlite3_stmt	*pStmt	= m_stmt.pSelect;
 		if (pStmt) {
 			int		nIndex = 0;
-			//sqlite3_bind_int(pStmt, ++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int(pStmt, ++nIndex, m_dwBootId);
+			sqlite3_bind_int64(pStmt, ++nIndex, GetBootUID());
 			if (SQLITE_ROW == sqlite3_step(pStmt)) {
 				DWORD		dwBootId	= sqlite3_column_int(pStmt, 0);
 				int64_t		nUpTime		= sqlite3_column_int64(pStmt, 1);
@@ -150,9 +154,10 @@ public:
 		CTime::GetBootLocalTime(&st);
 		CTime::SystemTimeToString(&st, szDateTime, sizeof(szDateTime));
 		
-		if (pStmt) {
+		if (pStmt) {			
 			int		nIndex = 0;
-			sqlite3_bind_int(pStmt, ++nIndex, m_dwBootId);
+			sqlite3_bind_int64(pStmt, ++nIndex, GetBootUID());
+			sqlite3_bind_int(pStmt, ++nIndex, YAgent::GetBootId());
 			sqlite3_bind_text(pStmt, ++nIndex, szDateTime,  -1, SQLITE_STATIC);
 			if (SQLITE_DONE == sqlite3_step(pStmt)) {
 				bRet	= true;
@@ -168,7 +173,7 @@ public:
 		//Log("%s bShutdown=%d", __FUNCTION__, m_bShutdown? true : false);
 		if (pStmt) {
 			int		nIndex = 0;
-			sqlite3_bind_int(pStmt, ++nIndex, m_dwBootId);
+			sqlite3_bind_int64(pStmt, ++nIndex, GetBootUID());
 			if (SQLITE_DONE == sqlite3_step(pStmt)) {
 				bRet	= true;
 			}
@@ -178,9 +183,9 @@ public:
 	}
 private:
 	std::string			m_name;
-	DWORD				m_dwBootId;
+	BootUID				m_BootUID;
 	std::atomic<bool>	m_bShutdown;	//	윈도 셧다운 중임다.
-
+	CAppLog				m_log;
 	struct {
 		sqlite3_stmt*	pInsert;
 		sqlite3_stmt*	pUpdate;

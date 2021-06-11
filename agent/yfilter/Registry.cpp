@@ -1,4 +1,7 @@
 ﻿#include "yfilter.h"
+#include <ntstrsafe.h>
+
+#define USE_REGISTRY_EVENT	0
 
 static	LARGE_INTEGER	g_nCookie;
 static	CRegTable		g_registry;
@@ -98,10 +101,13 @@ PROCUID		Path2CRC64(PCWSTR pValue) {
 typedef struct {
 	PVOID				pArgument2;	
 	HANDLE				PID;
+	REGUID				RegUID;
+	PUNICODE_STRING		pRegKeyPath;
 	PVOID				pArgument;
 	REG_NOTIFY_CLASS	notifyClass;
 	NTSTATUS			status;
-}	REG_CALLBACK_ARG;
+	PVOID				pContext;
+}	REG_CALLBACK_ARG, *PREG_CALLBACK_ARG;
 typedef struct _BASE_REG_KEY_INFO
 {
 	PVOID		pObject;
@@ -178,17 +184,236 @@ void		RegistryDeleteValueLog(REG_CALLBACK_ARG * p, PVOID pObject, PUNICODE_STRIN
 				break;
 		}
 	*/
-
 }
-void		RegistrySetValueLog(REG_CALLBACK_ARG * p, PREG_SET_VALUE_KEY_INFORMATION pp)
+void		CreateRegistryContext(
+
+	PROCUID * pPUID, 
+	REGUID * pRegUID, 
+	YFilter::Message::SubType	subType,
+	PUNICODE_STRING pRegPath, 
+	PUNICODE_STRING pRegValueName,
+	PVOID	*pOut
+)
 {
+	WORD				wPacketSize	= sizeof(Y_HEADER);
+
+	wPacketSize		+=	sizeof(Y_REGISTRY);
+	wPacketSize		+=	GetStringDataSize(pRegPath);
+	wPacketSize		+=	GetStringDataSize(pRegValueName);
+
+	PY_REGISTRY			pMsg	= NULL;
+	HANDLE				PID		= PsGetCurrentProcessId();
+	HANDLE				PPID	= GetParentProcessId(PID);
+
+	pMsg = (PY_REGISTRY)CMemory::Allocate(PagedPool, wPacketSize, TAG_PROCESS);
+	if (pMsg) 
+	{
+		//__dlog("%-32s message size:%d", __func__, wPacketSize);
+		//__dlog("  header :%d", sizeof(Y_HEADER));
+		//__dlog(" struct  :%d", sizeof(Y_REGISTRY));
+		//__dlog(" regpath :%d", GetStringDataSize(pRegPath));
+		//__dlog(" value   :%d", GetStringDataSize(pRegValueName));
+
+		pMsg->mode		= YFilter::Message::Mode::Event;
+		pMsg->category	= YFilter::Message::Category::Registry;
+		pMsg->subType	= subType;
+		pMsg->wSize		= wPacketSize;
+		pMsg->wRevision	= 1;
+
+		pMsg->PUID		= *pPUID;
+		pMsg->PID		= (DWORD)PID;
+		pMsg->CPID		= (DWORD)PID;
+		pMsg->RPID		= (DWORD)0;
+		pMsg->PPID		= (DWORD)PPID;
+		pMsg->CTID		= (DWORD)PsGetCurrentThreadId();
+		pMsg->TID		= pMsg->CTID;
+
+		pMsg->RegUID	= *pRegUID;
+
+		WORD		dwStringOffset	= (WORD)(sizeof(Y_HEADER) + sizeof(Y_REGISTRY));
+
+		pMsg->RegPath.wOffset	= dwStringOffset;
+		pMsg->RegPath.wSize		= GetStringDataSize(pRegPath);
+		pMsg->RegPath.pBuf		= (WCHAR *)((char *)pMsg + dwStringOffset);
+		RtlStringCbCopyUnicodeString(pMsg->RegPath.pBuf, pMsg->RegPath.wSize, pRegPath);
+
+		dwStringOffset			+= pMsg->RegPath.wSize;
+		pMsg->RegValueName.wOffset	= dwStringOffset;
+		pMsg->RegValueName.wSize	= GetStringDataSize(pRegValueName);
+		pMsg->RegValueName.pBuf		= (WCHAR *)((char *)pMsg + dwStringOffset);
+		RtlStringCbCopyUnicodeString(pMsg->RegValueName.pBuf, pMsg->RegValueName.wSize, pRegValueName);
+
+		if( pOut ) {
+			*pOut	= pMsg;
+		}
+		else {
+			CMemory::Free(pMsg);
+		}
+	}
+}
+
+void		RegistryPostQueryValueLog(REG_CALLBACK_ARG * p, PREG_POST_OPERATION_INFORMATION  pp)
+{
+	PAGED_CODE();
+	UNREFERENCED_PARAMETER(p);
+	PUNICODE_STRING	pRegPath = NULL;
+
+	if( NT_FAILED(pp->Status) )	return;
+
+	PREG_QUERY_VALUE_KEY_INFORMATION	pPreInfo	= (PREG_QUERY_VALUE_KEY_INFORMATION)pp->PreInformation;
+
+	__try {
+		if (GetRegistryPath(pp->Object, &pRegPath)) {		
+			p->RegUID		= Path2CRC64(pRegPath);
+			p->pRegKeyPath	= pRegPath;
+
+			if( ProcessTable()->IsExisting(p->PID, p, [](
+				bool					bCreationSaved,
+				IN PPROCESS_ENTRY		pEntry,			
+				IN PVOID				pContext
+				) {
+				UNREFERENCED_PARAMETER(bCreationSaved);
+				UNREFERENCED_PARAMETER(pEntry);
+
+				PREG_CALLBACK_ARG					p	= (PREG_CALLBACK_ARG)pContext;
+				PREG_POST_OPERATION_INFORMATION		pp	= 
+					(PREG_POST_OPERATION_INFORMATION)(p->pArgument2);
+				PREG_QUERY_VALUE_KEY_INFORMATION	pPreInfo	= (PREG_QUERY_VALUE_KEY_INFORMATION)pp->PreInformation;
+
+				ULONG	nSize	= 0;
+				if( pPreInfo ) {
+					if( pPreInfo->ResultLength )
+						nSize	= *(pPreInfo->ResultLength);
+					_InterlockedIncrement((LONG *)&pEntry->registry.GetValue.nCount);
+					_InlineInterlockedAdd64(&pEntry->registry.GetValue.nSize, nSize);
+					CreateRegistryContext(&pEntry->PUID, &p->RegUID, 
+						YFilter::Message::SubType::RegistryGetValue,
+						p->pRegKeyPath, pPreInfo->ValueName, &p->pContext);
+				}
+			}
+			) ) {
+				if( p->pContext ) {
+					PY_REGISTRY		pReg	= (PY_REGISTRY)p->pContext;
+					//__log("%ws[%d]", pReg->RegPath.pBuf, pReg->RegPath.wSize);
+					//__log("%ws[%d]", pReg->RegValueName.pBuf, pReg->RegValueName.wSize);
+					if( pPreInfo->ResultLength )
+						pReg->nDataSize	= *(pPreInfo->ResultLength);
+					if (MessageThreadPool()->Push(__FUNCTION__,
+						pReg->mode,
+						pReg->category,
+						pReg, pReg->wSize, false))
+					{
+						//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+						MessageThreadPool()->Alert(YFilter::Message::Category::Registry);
+						p->pContext	= NULL;
+					}
+					else {
+						__log("%-32s Push() failed.", __func__);
+
+					}
+					if( p->pContext ) {
+						CMemory::Free(p->pContext);
+						p->pContext	= NULL;
+					}
+				}
+			}
+			else {
+				__dlog("%-32s PID(%d) is not found.", __func__, p->PID);
+
+			}		
+		}		
+		else {
+			__log("%-32s GetRegistryPath() failed.", __func__);
+		}
+	}
+	__finally {
+		if (pRegPath)
+		{
+			CMemory::Free(pRegPath);
+			p->pRegKeyPath	= NULL;
+		}	
+	}
+}
+void		RegistryGetValueLog(REG_CALLBACK_ARG * p, PREG_QUERY_VALUE_KEY_INFORMATION pp)
+{
+	PAGED_CODE();
 	UNREFERENCED_PARAMETER(p);
 	PUNICODE_STRING	pRegPath = NULL;
 	__try {
 		if (GetRegistryPath(pp->Object, &pRegPath)) {		
-			REGUID	RegUID	= Path2CRC64(pRegPath);
-			UNREFERENCED_PARAMETER(RegUID);
+			p->RegUID		= Path2CRC64(pRegPath);
+			p->pRegKeyPath	= pRegPath;
 
+			if( ProcessTable()->IsExisting(p->PID, p, [](
+				bool					bCreationSaved,
+				IN PPROCESS_ENTRY		pEntry,			
+				IN PVOID				pContext
+				) {
+				UNREFERENCED_PARAMETER(bCreationSaved);
+				UNREFERENCED_PARAMETER(pEntry);
+
+				PREG_CALLBACK_ARG				p	= (PREG_CALLBACK_ARG)pContext;
+				PREG_SET_VALUE_KEY_INFORMATION	pp	= 
+					(PREG_SET_VALUE_KEY_INFORMATION)(p->pArgument2);
+
+				_InterlockedIncrement((LONG *)&pEntry->registry.GetValue.nCount);
+				_InlineInterlockedAdd64(&pEntry->registry.GetValue.nSize, pp->DataSize);
+				CreateRegistryContext(&pEntry->PUID, &p->RegUID, 
+					YFilter::Message::SubType::RegistryGetValue,
+					p->pRegKeyPath, pp->ValueName, &p->pContext);
+			}
+			) ) {
+				if( p->pContext ) {
+					PY_REGISTRY		pReg	= (PY_REGISTRY)p->pContext;
+					//__log("%ws[%d]", pReg->RegPath.pBuf, pReg->RegPath.wSize);
+					//__log("%ws[%d]", pReg->RegValueName.pBuf, pReg->RegValueName.wSize);
+					if( pp->ResultLength )
+						pReg->nDataSize	= *pp->ResultLength;
+					if (MessageThreadPool()->Push(__FUNCTION__,
+						pReg->mode,
+						pReg->category,
+						pReg, pReg->wSize, false))
+					{
+						//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+						MessageThreadPool()->Alert(YFilter::Message::Category::Registry);
+						p->pContext	= NULL;
+					}
+					else {
+						__log("%-32s Push() failed.", __func__);
+
+					}
+					if( p->pContext ) {
+						CMemory::Free(p->pContext);
+						p->pContext	= NULL;
+					}
+				}
+			}
+			else {
+				__dlog("%-32s PID(%d) is not found.", __func__, p->PID);
+
+			}		
+		}		
+		else {
+			__log("%-32s GetRegistryPath() failed.", __func__);
+		}
+	}
+	__finally {
+		if (pRegPath)
+		{
+			CMemory::Free(pRegPath);
+			p->pRegKeyPath	= NULL;
+		}	
+	}
+}
+void		RegistrySetValueLog(REG_CALLBACK_ARG * p, PREG_SET_VALUE_KEY_INFORMATION pp)
+{
+	PAGED_CODE();
+	UNREFERENCED_PARAMETER(p);
+	PUNICODE_STRING	pRegPath = NULL;
+	__try {
+		if (GetRegistryPath(pp->Object, &pRegPath)) {		
+			p->RegUID		= Path2CRC64(pRegPath);
+			p->pRegKeyPath	= pRegPath;
 			/*
 			bool	bAdd	= RegistryTable()->Add(RegUID, pRegPath, p, 
 				[](PREG_ENTRY pEntry, PVOID pContext) {
@@ -201,82 +426,157 @@ void		RegistrySetValueLog(REG_CALLBACK_ARG * p, PREG_SET_VALUE_KEY_INFORMATION p
 				__log("ADD %d %I64d %wZ %wZ", p->notifyClass, RegUID, pRegPath, pp->ValueName);			
 			}
 			*/
-			/*
-			PYFILTER_MESSAGE	pMsg = NULL;
-			pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
-			if (pMsg) 
-			{
-				PROCUID		ProcUID;
-				RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
-				RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
-				if( NT_SUCCESS(GetProcGuid(true, hPID, hPPID,
-					pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid, &ProcUID)) ) 
-				{
-					pMsg->data.ProcUID	= ProcUID;
-					PUNICODE_STRING	pParentImageFileName = NULL;
-					if (NT_SUCCESS(GetProcessImagePathByProcessId(hPPID, &pParentImageFileName)))
+			if( ProcessTable()->IsExisting(p->PID, p, [](
+				bool					bCreationSaved,
+				IN PPROCESS_ENTRY		pEntry,			
+				IN PVOID				pContext
+				) {
+					UNREFERENCED_PARAMETER(bCreationSaved);
+					UNREFERENCED_PARAMETER(pEntry);
+
+					PREG_CALLBACK_ARG				p	= (PREG_CALLBACK_ARG)pContext;
+					PREG_SET_VALUE_KEY_INFORMATION	pp	= 
+						(PREG_SET_VALUE_KEY_INFORMATION)(p->pArgument2);
+
+					_InterlockedIncrement((LONG *)&pEntry->registry.SetValue.nCount);
+					_InlineInterlockedAdd64(&pEntry->registry.SetValue.nSize, pp->DataSize);
+					CreateRegistryContext(&pEntry->PUID, &p->RegUID, 
+						YFilter::Message::SubType::RegistrySetValue,
+						p->pRegKeyPath, pp->ValueName, &p->pContext);
+				}
+			) ) {
+				if( p->pContext ) {
+					PY_REGISTRY		pReg	= (PY_REGISTRY)p->pContext;
+					//__log("%ws[%d]", pReg->RegPath.pBuf, pReg->RegPath.wSize);
+					//__log("%ws[%d]", pReg->RegValueName.pBuf, pReg->RegValueName.wSize);
+
+					//__log("%-32s message size:%d", __func__, pReg->wSize);
+					//__log("  header :%d", sizeof(Y_HEADER));
+					//__log(" struct  :%d", sizeof(Y_REGISTRY));
+					//__log(" regpath :%ws[%d]", pReg->RegPath.pBuf, pReg->RegPath.wSize);
+					//__log(" value   :%ws[%d]", pReg->RegValueName.pBuf, pReg->RegValueName.wSize);
+
+					pReg->nDataSize	= pp->DataSize;
+					if (MessageThreadPool()->Push(__FUNCTION__,
+						pReg->mode,
+						pReg->category,
+						pReg, pReg->wSize, false))
 					{
-						KERNEL_USER_TIMES	ptimes;
-						PROCUID				PProcUID;
-						if (NT_SUCCESS(GetProcessTimes(hPPID, &ptimes))) {
-							if (NT_SUCCESS(GetProcGuid(true, hPPID, GetParentProcessId(hPPID),
-								pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid, &PProcUID))) {
-								pMsg->data.PProcUID	= PProcUID;
+						//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+						MessageThreadPool()->Alert(YFilter::Message::Category::Registry);
+						p->pContext	= NULL;
+					}
+					else {
+						__log("%-32s Push() failed.", __func__);
+					}
+					if( p->pContext ) {
+						CMemory::Free(p->pContext);
+						p->pContext	= NULL;
+					}
+				}
+			}
+			else {
+				__dlog("%-32s PID(%d) is not found.", __func__, p->PID);
+				if( false == AddProcessToTable(__func__, false, p->PID) ) {
+					__log("%-32s AddProcessToTable(%d) failed.", __func__, p->PID);
+				
+				}
+			}		
+
+#if defined(USE_REGISTRY_EVENT) && 1 == USE_REGISTRY_EVENT 
+
+			if( Config()->client.event.nConnected > 0 ) {
+			
+				PYFILTER_MESSAGE	pMsg	= NULL;
+				PUNICODE_STRING		pImageFileName = NULL;
+				HANDLE				PID		= PsGetCurrentProcessId();
+				HANDLE				PPID	= GetParentProcessId(PID);
+				if (NT_SUCCESS(GetProcessImagePathByProcessId(PID, &pImageFileName)))
+				{
+					pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(PagedPool, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
+					if (pMsg) 
+					{
+						PROCUID				PUID;
+						KERNEL_USER_TIMES	times;
+
+						__log("%-32s message size:%d", __func__, sizeof(YFILTER_MESSAGE));
+
+						RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
+						RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pRegPath);
+						if( NT_SUCCESS(GetProcGuid(true, PID, PPID,
+							pImageFileName, &times.CreateTime, &pMsg->data.ProcGuid, &PUID)) ) 
+						{
+							pMsg->data.PUID	= PUID;
+							PUNICODE_STRING	pParentImageFileName = NULL;
+							if (NT_SUCCESS(GetProcessImagePathByProcessId(PPID, &pParentImageFileName)))
+							{
+								KERNEL_USER_TIMES	ptimes;
+								PROCUID				PPUID;
+								if (NT_SUCCESS(GetProcessTimes(PPID, &ptimes))) {
+									if (NT_SUCCESS(GetProcGuid(true, PPID, GetParentProcessId(PPID),
+										pParentImageFileName, &ptimes.CreateTime, &pMsg->data.PProcGuid, &PPUID))) {
+										pMsg->data.PPUID	= PPUID;
+									}
+									else {
+										__log("%s PProcGuid - failed.", __FUNCTION__);
+										__log("  PPID:%d", PPID);
+										__log("  GetProcGuid() failed.");
+									}
+								}
+								else {
+									__log("%s PProcGuid - failed.", __FUNCTION__);
+									__log("  PPID:%d", PPID);
+									__log("  GetProcessTimes() failed.");
+								}
+								CMemory::Free(pParentImageFileName);
+							}	
+						
+							pMsg->data.times.CreateTime = times.CreateTime;
+							pMsg->header.mode			= YFilter::Message::Mode::Event;
+							pMsg->header.category		= YFilter::Message::Category::Registry;
+							pMsg->header.wSize			= sizeof(YFILTER_MESSAGE);
+
+							pMsg->data.subType			= YFilter::Message::SubType::ProcessStart2;
+							pMsg->data.bCreationSaved	= true;
+							pMsg->data.PID				= (DWORD)PID;
+							pMsg->data.PPID				= (DWORD)PPID;
+							RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pRegPath);
+							if (MessageThreadPool()->Push(__FUNCTION__,
+								pMsg->header.mode,
+								pMsg->header.category,
+								pMsg, sizeof(YFILTER_MESSAGE), false))
+							{
+								//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+								MessageThreadPool()->Alert(YFilter::Message::Category::Registry);
+								pMsg	= NULL;
+
+								//__log("%-32s %wZ", __func__, pRegPath);
 							}
 							else {
-								__log("%s PProcGuid - failed.", __FUNCTION__);
-								__log("  PPID:%d", hPPID);
-								__log("  GetProcGuid() failed.");
+								CMemory::Free(pMsg);
+								pMsg	= NULL;
 							}
 						}
 						else {
-							__log("%s PProcGuid - failed.", __FUNCTION__);
-							__log("  PPID:%d", hPPID);
-							__log("  GetProcessTimes() failed.");
+							__log("%-32s GetProcGuid() failed.", __func__);
+					
 						}
-						CMemory::Free(pParentImageFileName);
+						if( pMsg ) {
+							CMemory::Free(pMsg);
+						}
 					}
-					else {
-						//	부모 프로세스가 종료된 상태라면 당연히 여기로.
-						//__log("%s PProcGuid - failed.", __FUNCTION__);
-						//__log("  PPID:%d", hPPID);
-						//__log("  GetProcessImagePathByProcessId() failed.");
-					}										
+					CMemory::Free(pImageFileName);
 				}
 				else {
-					//	ProcGuid 생성 실패 -> 저장할 필요 없습니다.
-					__leave;
+					__log("%-32s GetProcessImagePathByProcessId() failed.", __func__);
+			
 				}
-				pMsg->data.times.CreateTime = times.CreateTime;
-				ProcessTable()->Add(true, hPID, hPPID,
-					&pMsg->data.ProcGuid, pMsg->data.ProcUID, pImageFileName, pCmdLine);
-				pMsg->header.mode	= YFilter::Message::Mode::Event;
-				pMsg->header.category = YFilter::Message::Category::Process;
-				pMsg->header.size = sizeof(YFILTER_MESSAGE);
-
-				pMsg->data.subType = YFilter::Message::SubType::ProcessStart2;
-				pMsg->data.bCreationSaved	= true;
-				pMsg->data.PID				= (DWORD)hPID;
-				pMsg->data.PPID				= (DWORD)hPPID;
-				RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
-				RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), pCmdLine);
-				if (MessageThreadPool()->Push(__FUNCTION__,
-					YFilter::Message::Mode::Event,
-					YFilter::Message::Category::Process,
-					pMsg, sizeof(YFILTER_MESSAGE), false))
-				{
-					//	pMsg는 SendMessage 성공 후 해제될 것이다. 
-					MessageThreadPool()->Alert(YFilter::Message::Category::Process);
-					pMsg	= NULL;
-				}
-				else {
-					CMemory::Free(pMsg);
-					pMsg	= NULL;
-				}
-				//	이전 프로세스에 대한 모듈 정보도 올린다.
-				//AddEarlyModule(hPID);
 			}
-			*/
+			else {
+				//__log("%-32s not connected", __func__);
+			
+			}
+#endif
 		}		
 		else {
 			__log("%-32s GetRegistryPath() failed.", __func__);
@@ -301,22 +601,28 @@ NTSTATUS	RegistryCallback
 	UNREFERENCED_PARAMETER(pCallbackContext);
 	UNREFERENCED_PARAMETER(pArgument2);
 
+	if (NULL == pArgument2 ||
+		KeGetCurrentIrql() > APC_LEVEL ||
+		PsGetCurrentProcessId() <= (HANDLE)4 ||
+		KernelMode == ExGetPreviousMode()
+	)	return STATUS_SUCCESS;
+	if( 0 == Config()->client.event.nConnected )
+		return STATUS_SUCCESS;
+
+
 	REG_CALLBACK_ARG	arg;
 
 	arg.pArgument	= pArgument;
 	arg.pArgument2	= pArgument2;
 	arg.status		= STATUS_SUCCESS;
-	arg.notifyClass	= (REG_NOTIFY_CLASS)(ULONG_PTR)pArgument;;
-
-
+	arg.notifyClass	= (REG_NOTIFY_CLASS)(ULONG_PTR)pArgument;
+	arg.RegUID		= 0;
+	arg.pRegKeyPath	= NULL;
+	arg.pContext	= NULL;
 
 	//__log("%-32s pArgument2=%p, KeGetCurrentIrql()=%d", __FUNCTION__, pArgument2, KeGetCurrentIrql());
 
-	if (NULL == pArgument2 ||
-		KeGetCurrentIrql() > APC_LEVEL ||
-		PsGetCurrentProcessId() <= (HANDLE)4 ||
-		KernelMode == ExGetPreviousMode()
-	)	return arg.status;
+
 
 	CFltObjectReference	filter(Config()->pFilter);
 	//kvnif (!filter.Reference())	return status;
@@ -326,7 +632,20 @@ NTSTATUS	RegistryCallback
 		REG_CALLBACK_ARG	*p	= (REG_CALLBACK_ARG *)&arg;			
 		switch (p->notifyClass)
 		{
-			case RegNtQueryValueKey:
+			case RegNtPreQueryValueKey:
+				if( false ) {
+					PREG_QUERY_VALUE_KEY_INFORMATION	pp	= 
+						(PREG_QUERY_VALUE_KEY_INFORMATION)p->pArgument2;
+					RegistryGetValueLog(p, pp);
+				}
+				break;
+
+			case RegNtPostQueryValueKey:
+				if( true ) {
+					PREG_POST_OPERATION_INFORMATION 	pp	= 
+						(PREG_POST_OPERATION_INFORMATION )p->pArgument2;
+					RegistryPostQueryValueLog(p, pp);
+				}
 				break;
 
 			case RegNtPostSetValueKey:

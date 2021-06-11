@@ -67,7 +67,7 @@ public:
 				__dlog("%s m_bRunning is false.", __FUNCTION__);
 				__leave;
 			}
-			p = (PQUEUE_WORKITEM)CMemory::Allocate(NonPagedPoolNx, sizeof(QUEUE_WORKITEM), TAG_CQUEUE);
+			p = (PQUEUE_WORKITEM)CMemory::Allocate(PagedPool, sizeof(QUEUE_WORKITEM), TAG_CQUEUE);
 			if (NULL == p) {
 				__dlog("%s allocation failed.", __FUNCTION__);
 				__leave;
@@ -80,9 +80,8 @@ public:
 
 			//PYFILTER_MESSAGE	pMsg = (PYFILTER_MESSAGE)pItem;
 			
-			if( bLog )	{
-				__lock_log(__FUNCTION__, "pushing", (YFilter::Message::Category::Process == nCategory)? "process":"thread", pCause);
-			}
+			if( bLog )	__log("%-32s %d %d", __func__, nMode, nCategory);
+			//__dlog("%-32s", __func__);
 			if (ExInterlockedPushEntrySList(&m_head, &p->entry, &m_lock))
 			{
 				//if (bLog)
@@ -101,7 +100,6 @@ public:
 					지금 들어간 것을 반환해주지 않고.
 				*/
 			}
-			if( bLog )	__lock_log(__FUNCTION__, "pushed", (YFilter::Message::Category::Process == nCategory) ? "process" : "thread", pCause);
 			bRet = true;
 		}
 		__finally
@@ -128,6 +126,7 @@ public:
 			p = (PQUEUE_WORKITEM)ExInterlockedPopEntrySList(&m_head, &m_lock);
 			if (p)
 			{
+				//__dlog("%-32s", __func__);
 				if (m_pCallback)		m_pCallback(p, m_pCallbackPtr);
 				if (pCallback)			pCallback(p, pCallbackPtr);
 				if (p->pItem)			CMemory::Free(p->pItem);

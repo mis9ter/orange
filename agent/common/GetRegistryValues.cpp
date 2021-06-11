@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "framework.h"
+#include "crc64.h"
 
 #define	REG_MACHINEGUID_KEY		L"SOFTWARE\\Microsoft\\Cryptography"
 #define REG_MACHINEGUID_VALUE	L"MachineGuid"
@@ -20,6 +21,20 @@ DWORD	GetBootId()
 		//	BootId 값은 실행 중엔 변경되지 않는 값이다.
 	}
 	return dwId;
+}
+
+BootUID	GetBootUID()
+{
+	static	BootUID		UID	= 0;
+	WCHAR				szBuf[100];
+	if( 0 == UID ) {
+		int64_t		t	= CTime::GetBootTimestamp() / 100000 * 100000;
+		StringCbPrintf(szBuf, sizeof(szBuf), L"%d-%I64d", GetBootId(), t);
+
+		CCRC64	crc64;
+		UID	= crc64.GetCrc64(szBuf, (DWORD)(wcslen(szBuf) * sizeof(WCHAR)));	
+	}
+	return UID;
 }
 PCWSTR	GetMachineGuid(IN PWSTR pValue, IN DWORD dwSize)
 {

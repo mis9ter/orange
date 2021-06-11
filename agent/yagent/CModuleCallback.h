@@ -10,7 +10,10 @@ class CModuleCallback
 	public virtual	CAppLog
 {
 public:
-	CModuleCallback() {
+	CModuleCallback() 
+		:
+		m_log(L"module.log")
+	{
 		ZeroMemory(&m_stmt, sizeof(m_stmt));
 		m_name = EVENT_CALLBACK_NAME;
 	}
@@ -19,7 +22,7 @@ public:
 	}
 	virtual	CDB*		Db() = NULL;
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
-	virtual	bool		GetProcess(PCWSTR pProcGuid, PWSTR pValue, IN DWORD dwSize)	= NULL;
+	virtual	bool		GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize)	= NULL;
 	PCSTR				Name() {
 		return m_name.c_str();
 	}
@@ -111,17 +114,18 @@ protected:
 				StringCbCopy(szProcPath, sizeof(szProcPath), p->szPath);
 			if (false == CAppPath::GetFilePath(p->szCommand, szModulePath, sizeof(szModulePath)))
 				StringCbCopy(szModulePath, sizeof(szModulePath), p->szCommand);
-			if( pClass->IsExisting(szProcGuid, p->ProcUID, szModulePath) )
-				pClass->Update(szProcGuid, p->ProcUID, szModulePath, p), bInsert = false;
+			if( pClass->IsExisting(szProcGuid, p->PUID, szModulePath) )
+				pClass->Update(szProcGuid, p->PUID, szModulePath, p), bInsert = false;
 			else 
-				pClass->Insert(szProcGuid, p->ProcUID, szModulePath, p), bInsert = true;
-			pClass->Log("%-20s %6d %ws %s", "MODULE_LOAD", 
+				pClass->Insert(szProcGuid, p->PUID, szModulePath, p), bInsert = true;
+			pClass->m_log.Log("%-20s %6d %ws %s", "MODULE_LOAD", 
 				p->PID, szProcPath, bInsert? "INSERT":"UPDATE");
-			pClass->Log("  ProdGuid      %ws", szProcGuid);
-			pClass->Log("  ProdUID       %I64d", p->ProcUID);
-			pClass->Log("  Path          %ws", szModulePath);
-			pClass->Log("  address       %p", p->pBaseAddress);
-			pClass->Log("  Size          %d", (DWORD)p->pImageSize);
+			pClass->m_log.Log("  ProdGuid      %ws", szProcGuid);
+			pClass->m_log.Log("  PUID          %p", p->PUID);
+			pClass->m_log.Log("  PPUID         %p", p->PPUID);
+			pClass->m_log.Log("  Path          %ws", szModulePath);
+			pClass->m_log.Log("  address       %p", p->pBaseAddress);
+			pClass->m_log.Log("  Size          %d", (DWORD)p->pImageSize);
 		}
 		else
 		{
@@ -131,6 +135,7 @@ protected:
 	}
 private:
 	std::string		m_name;
+	CAppLog			m_log;
 	struct {
 		sqlite3_stmt* pInsert;
 		sqlite3_stmt* pUpdate;

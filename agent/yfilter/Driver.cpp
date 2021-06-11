@@ -123,13 +123,13 @@ NTSTATUS	StartDriver()
 			{
 				__log("process filtering ..");
 			}
-			if (StartThreadFilter()) {
-				__log("thread filtering ..");
-			}
-			if (StartModuleFilter())
-			{
-				__log("module filtering ..");
-			}
+			//if (StartThreadFilter()) {
+			//	__log("thread filtering ..");
+			//}
+			//if (StartModuleFilter())
+			//{
+			//	__log("module filtering ..");
+			//}
 		}
 		status = STATUS_SUCCESS;
 	}
@@ -152,8 +152,8 @@ NTSTATUS	StopDriver()
 		{
 			if (1 == Config()->nRun) {
 				ExInterlockedExchangeUlong(&Config()->nRun, 0, &Config()->lock);
-				StopModuleFilter();
-				StopThreadFilter();
+				//StopModuleFilter();
+				//StopThreadFilter();
 				StopProcessFilter();
 			}
 		}
@@ -204,12 +204,12 @@ Return Value:
 
 	__try
 	{
-		MessageThreadPool()->Create(2);
-		SetMessageThreadCallback(NULL);
 		if (false == CreateConfig(pRegistryPath)) {
 			status = STATUS_FAILED_DRIVER_ENTRY;
 			__leave;
 		}
+		MessageThreadPool()->Create(Config()->dwCPU);
+		SetMessageThreadCallback(NULL);
 		CreateProcessTable();
 		CreateRegistryTable();
 		//pDriverObject->DriverUnload = LegacyDriverUnload;

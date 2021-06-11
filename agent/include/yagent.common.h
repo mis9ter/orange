@@ -124,6 +124,8 @@ private:
 #define	__function_lock(lock)	CFunctionLock(lock, __FUNCTION__)
 #endif
 
+typedef UINT64	BootUID;
+
 namespace YAgent {
 	bool		SetFileContent(IN LPCTSTR lpPath, IN PVOID lpContent, IN DWORD dwSize);
 	PVOID		GetFileContent(IN LPCTSTR lpPath, OUT DWORD * pSize);
@@ -139,6 +141,7 @@ namespace YAgent {
 
 	DWORD		GetCurrentSessionId();
 	DWORD		GetBootId();
+	BootUID		GetBootUID();
 	PCWSTR		GetMachineGuid(IN PWSTR pValue, IN DWORD dwSize);
 	BOOL		CreateDirectory(LPCTSTR lpPath);
 	BOOL		MakeDirectory(LPCTSTR lpPath);

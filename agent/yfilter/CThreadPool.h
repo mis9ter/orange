@@ -21,8 +21,9 @@ class CThreadPool
 public:
 	void		Alert(IN YFilter::Message::Category nCategory)
 	{
-		if( nCategory < _countof(m_hAlert) )
+		if( nCategory < _countof(m_hAlert) ) {
 			KeSetEvent(&m_hAlert[nCategory], 0, FALSE);
+		}
 	}
 	bool		Create(IN DWORD dwThreadCount)
 	{

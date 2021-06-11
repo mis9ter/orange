@@ -198,7 +198,7 @@ private:
 		if (pStmt) {
 			int		nIndex = 0;
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, pData->PUID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->TID);
 			if (SQLITE_ROW == sqlite3_step(pStmt)) {
 				nCount = sqlite3_column_int(pStmt, 0);
@@ -223,7 +223,7 @@ private:
 			PCWSTR	pFileName	= pFilePath? wcsrchr(pFilePath, L'\\')	: NULL;
 			PCWSTR	pFileExt	= pFileName? wcsrchr(pFileName, L'.')	: NULL;
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, pData->PUID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->PID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->PPID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->CPID);
@@ -296,7 +296,7 @@ private:
 			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.KernelTime.QuadPart);
 			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.UserTime.QuadPart);
 			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->ProcUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, pData->PUID);
 			sqlite3_bind_int(pStmt,		++nIndex, pData->TID);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {

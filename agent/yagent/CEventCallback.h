@@ -78,6 +78,7 @@ interface   IEventCallback
 #include "CModuleCallback.h"
 #include "CPreProcess.h"
 #include "CBootCallback.h"
+#include "CRegisryCallback.h"
 
 #define		EVENT_DB_NAME	L"event.db"
 
@@ -125,13 +126,17 @@ class CEventCallback
 	public	CThreadCallback,
 	public	CModuleCallback,
 	public	CPreProcess,
-	public	CBootCallback
+	public	CBootCallback,
+	public	CRegistryCallback
 {
 
 public:
 	CEventCallback() 
+		:
+		m_pDB(NULL),
+		m_log(L"event.log")
 	{
-		Log(__FUNCTION__);
+		m_log.Log(__FUNCTION__);
 
 		m_hWait			= CreateEvent(NULL, TRUE, FALSE, NULL);
 		m_dwBootId		= YAgent::GetBootId();
@@ -143,9 +148,8 @@ public:
 		RegisterEventCallback(dynamic_cast<IEventCallback *>(dynamic_cast<CProcessCallback*>(this)));
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CModuleCallback*>(this)));
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CThreadCallback*>(this)));
-		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CBootCallback*>(this)));
-		
-		
+		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CBootCallback*>(this)));	
+		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CRegistryCallback*>(this)));	
 		/*
 		AddCallback(
 			YFilter::Message::Mode::Event, 
@@ -163,16 +167,19 @@ public:
 	}
 	~CEventCallback() {
 		CloseHandle(m_hWait);
-		Log(__FUNCTION__);
+		m_log.Log(__FUNCTION__);
 	}
 	void	RegisterEventCallback(IN IEventCallback* pCallback) {
 		Log("%s %s", __FUNCTION__, pCallback->Name());
 		m_events[pCallback->Name()] = pCallback;
 	}
-	virtual	DWORD	BootId() {
-		return CBootCallback::BootId();	
+	virtual	BootUID	GetBootUID() {
+		return CBootCallback::GetBootUID();	
 	}
-	virtual	CDB*	Db() = NULL;
+	virtual	CDB*	Db(PCWSTR pName) = NULL;
+	CDB*			Db() {
+		return m_pDB;
+	}
 	virtual	void	SetResult(
 		IN	PCSTR	pFile, PCSTR pFunction, int nLine,
 		IN	Json::Value & res, IN bool bRet, IN int nCode, IN PCSTR pMsg /*utf8*/
@@ -182,8 +189,8 @@ public:
 				PWSTR pValue, DWORD dwSize) {
 		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
 	}
-	bool	GetProcess(PCWSTR pProcGuid, PWSTR pValue, IN DWORD dwSize) {
-		return CProcessCallback::GetProcess(pProcGuid, pValue, dwSize);
+	bool	GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize) {
+		return CProcessCallback::GetProcess(PUID, pValue, dwSize);
 	}
 	static	void	SystemCallback(
 		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
@@ -200,9 +207,16 @@ public:
 	bool		CreateCallback()
 	{	
 		Log(__FUNCTION__);
-		if( Db()->IsOpened() ) {
+
+		CDB		*pDB	= Db(DB_EVENT_NAME);
+		if( NULL == pDB ) {
+		
+			return false;
+		}
+		m_pDB	= pDB;
+		if( pDB->IsOpened() ) {
 #if 1 == IDLE_COMMIT
-			Db()->Begin(__FUNCTION__);
+			pDB->Begin(__FUNCTION__);
 #endif
 			for (auto t : m_events) {
 				t.second->Create();
@@ -249,7 +263,7 @@ public:
 			return true;
 		}
 		else {
-			Log("%s IsOpened() = %d", __FUNCTION__, Db()->IsOpened());
+			Log("%s IsOpened() = %d", __FUNCTION__, pDB->IsOpened());
 		}
 		return false;
 	}
@@ -259,8 +273,12 @@ public:
 			Log("%s %s", __FUNCTION__, t.second->Name());
 			//t.second->Destroy();
 		}
+		CDB		*pDB	= Db(DB_EVENT_NAME);
+		if( NULL == pDB ) {
+			return;
+		}
 #if 1 == IDLE_COMMIT
-		if (Db()->IsOpened())	Db()->Commit(__FUNCTION__);
+		if(pDB->IsOpened())	pDB->Commit(__FUNCTION__);
 #endif
 	}
 	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) {
@@ -291,8 +309,14 @@ public:
 		Json::Value		&resmore	= resdata["more"];
 
 		resmore	= false;
+
+		CDB		*pDB	= Db(DB_EVENT_NAME);
+		if( NULL == pDB ) {
+			return 0;
+		}
+
 		try {
-			pStmt	= Db()->Stmt(query.asCString());
+			pStmt	= pDB->Stmt(query.asCString());
 			if( pStmt ) {
 				int				nIndex = 0;
 				int				nColumnCount	= sqlite3_column_count(pStmt);
@@ -378,12 +402,13 @@ public:
 					resrow.append(row);
 					dwCount++;
 				}
-				Db()->Free(pStmt);
+				pDB->Free(pStmt);
 				SetResult(__FILE__, __func__, __LINE__, res, true, 0, "");
 			}
 			else {
 				//	invalid stmt
-				SetResult(__FILE__, __func__, __LINE__, res, false, sqlite3_errcode(Db()->Handle()), sqlite3_errmsg(Db()->Handle()) );
+				SetResult(__FILE__, __func__, __LINE__, res, false, 
+					sqlite3_errcode(pDB->Handle()), sqlite3_errmsg(pDB->Handle()) );
 			}
 		}
 		catch( std::exception & e) {
@@ -397,6 +422,7 @@ public:
 		std::atomic<DWORD>		dwProcess;
 		std::atomic<DWORD>		dwThread;
 		std::atomic<DWORD>		dwModule;
+		std::atomic<DWORD>		dwRegistry;
 
 	} m_counter;
 protected:
@@ -513,6 +539,11 @@ protected:
 			PYFILTER_DATA	p = (PYFILTER_DATA)pData;
 			bRet	= CModuleCallback::Proc(nMessageId, dynamic_cast<CModuleCallback*>(pClass), p);
 		}
+		else {
+			PYFILTER_DATA	p = (PYFILTER_DATA)pData;
+			//pClass->Log("%d %ws", nCategory, p->szPath);
+		
+		}
 		#if 1 == IDLE_COMMIT
 		DWORD	dwGap	= (DWORD)(GetTickCount64() - dwTicks);
 		if (dwCount >= IDLE_COUNT || (dwCount && dwGap >= IDLE_TICKS) ) {
@@ -523,16 +554,55 @@ protected:
 		#endif
 		return bRet;
 	}
+	static	bool			EventCallbackProc2(
+		PY_HEADER			pMessage,
+		PVOID				pContext
+	) {
+		bool							bRet	= false;
+		CEventCallback					*pClass	= (CEventCallback *)pContext;		
+		static	std::atomic<DWORD>		dwCount	= 0;
+		static	std::atomic<DWORD64>	dwTicks	= 0;
+
+		//pClass->Log("%-32s %p", __func__, YAgent::GetBootUID());
+
+		dwCount++;
+		switch( pMessage->category )
+		{
+			case YFilter::Message::Category::Registry:
+				pClass->m_counter.dwRegistry++;
+				bRet	= CRegistryCallback::Proc2(pMessage, dynamic_cast<CRegistryCallback *>(pClass));
+				break;
+
+			case YFilter::Message::Category::Process:
+				pClass->m_counter.dwProcess++;
+				bRet	= CProcessCallback::Proc2(pMessage, dynamic_cast<CProcessCallback *>(pClass));
+				break;
+
+			default:
+				pClass->m_log.Log("unknown category:%d", pMessage->category);
+				break;
+		}
+#if 1 == IDLE_COMMIT
+		DWORD	dwGap	= (DWORD)(GetTickCount64() - dwTicks);
+		if (dwCount >= IDLE_COUNT || (dwCount && dwGap >= IDLE_TICKS) ) {
+			pClass->CommitAndBegin(dwGap);
+			dwCount	= 0;
+			dwTicks	= GetTickCount64();
+		}
+#endif
+		return bRet;
+	}
 	EventCallbackTable & CallbackTable() {
 		return m_table;
 	}
 private:
+	CAppLog					m_log;
 	DWORD					m_dwBootId;
 	EventCallbackTable		m_table;
 	CLock					m_lock;
 	HANDLE					m_hWait;
 	EventCallbackMap		m_events;
-
+	CDB						*m_pDB;
 
 	void					CommitAndBegin(DWORD dwTicks)
 	{
@@ -540,8 +610,12 @@ private:
 		static	std::atomic<DWORD>	dwCount;
 	//	__function_lock(m_lock.Get());
 
-		nCount	= Db()->Commit(__FUNCTION__);
-		Db()->Begin(__FUNCTION__);
+		CDB		*pDB	= Db(DB_EVENT_NAME);
+		if( NULL == pDB ) {
+			return;
+		}
+		nCount	= pDB->Commit(__FUNCTION__);
+		pDB->Begin(__FUNCTION__);
 
 		//if( 0 == dwCount++ % 10 )
 		//	SetProcessWorkingSetSize(GetCurrentProcess(), 128 * 1024, 1024 * 1024);

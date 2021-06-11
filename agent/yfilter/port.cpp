@@ -112,8 +112,11 @@ Return Value:
 
 	bool	bRet = false;
 
-	if (InputBuffer && sizeof(YFILTER_COMMAND) == InputBufferSize) {
-		PYFILTER_COMMAND	pCommand = (PYFILTER_COMMAND)InputBuffer;
+	__log("%-32s InputBuffer:%p InputBufferSize:%d OutputBuffer:%p OutputBufferSize:%d ReturnOutputBufferLength:%p",
+			__func__, InputBuffer, InputBufferSize, OutputBuffer, OutputBufferSize, ReturnOutputBufferLength);
+
+	if (InputBuffer && sizeof(Y_COMMAND) == InputBufferSize) {
+		PY_COMMAND	pCommand = (PY_COMMAND)InputBuffer;
 		switch (pCommand->dwCommand) {
 			case YFILTER_COMMAND_START:
 				__log("%s YFILTER_COMMAND_START", __FUNCTION__);
@@ -126,11 +129,11 @@ Return Value:
 		}
 	}
 
-	if (OutputBuffer && sizeof(YFILTER_REPLY) == OutputBufferSize) {
+	if (OutputBuffer && sizeof(Y_REPLY) == OutputBufferSize) {
 		__log("%s OutputBuffer=%p, OutputBufferSize=%d", __FUNCTION__, OutputBuffer, OutputBufferSize);
-		((YFILTER_REPLY*)OutputBuffer)->bRet = bRet;
+		((PY_REPLY)OutputBuffer)->bRet = bRet;
 		if (ReturnOutputBufferLength)
-			*ReturnOutputBufferLength = sizeof(YFILTER_REPLY);
+			*ReturnOutputBufferLength = sizeof(Y_REPLY);
 	}
 	return status;
 }
@@ -150,7 +153,6 @@ NTSTATUS	EventConnected(
 	UNREFERENCED_PARAMETER(SizeOfContext);
 	UNREFERENCED_PARAMETER(ConnectionCookie);
 
-	__function_log;
 	{
 		CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.event.lock, true);
 		if (Config()->client.event.pPort)
@@ -161,13 +163,14 @@ NTSTATUS	EventConnected(
 		FLT_ASSERT(Config()->client.pPort == NULL);
 		Config()->client.event.pPort = ClientPort;
 		Config()->client.event.hProcess = PsGetCurrentProcessId();
-		Config()->client.nConnected;
+		Config()->client.event.nConnected++;
 		RtlStringCbCopyW(Config()->client.event.szName, sizeof(Config()->client.event.szName),
 			DRIVER_EVENT_PORT);
 #ifndef _WIN64
 		__log("PsGetCurrentProcessId=%d", (int)(Config()->client.hProcessId));
 #endif
 	}
+	__log("%-32s %d", __func__, Config()->client.event.nConnected);
 	return STATUS_SUCCESS;
 }
 bool	EventIsConnected()
@@ -180,7 +183,6 @@ VOID	EventDisconnected(_In_opt_ PVOID ConnectionCookie)
 	//	PASSIVE_LEVEL
 	PAGED_CODE();
 	UNREFERENCED_PARAMETER(ConnectionCookie);
-	__function_log;
 	//
 	//  Close our handle
 	//
@@ -189,7 +191,9 @@ VOID	EventDisconnected(_In_opt_ PVOID ConnectionCookie)
 		FltCloseClientPort(Config()->pFilter, &Config()->client.event.pPort);
 		Config()->client.event.pPort	= NULL;
 		Config()->client.event.hProcess	= NULL;
+		Config()->client.event.nConnected--;
 	}
+	__log("%-32s %d", __func__, Config()->client.event.nConnected);
 }
 NTSTATUS	EventMessage
 (

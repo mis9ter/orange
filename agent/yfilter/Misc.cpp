@@ -36,6 +36,96 @@ typedef struct _PEB {
 	ULONG                         SessionId;
 } PEB, * PPEB;
 
+bool		AddProcessToTable(
+	PCSTR			pCause,
+	bool			bDetectByCallback,
+	HANDLE			PID, 
+	PUNICODE_STRING	pProcPath,
+	PUNICODE_STRING	pCommand,
+	bool			bAddParent,
+	PVOID			pContext,
+	void			(*pCallback)
+	(
+		PVOID			pContext,
+		HANDLE			PID,
+		PROCUID			PUID,
+		PUNICODE_STRING	pProcPath,
+		PUNICODE_STRING	pCommand,
+		HANDLE			PPID,
+		PROCUID			PPUID
+	)
+) 
+{
+	HANDLE				PPID		= GetParentProcessId(PID);
+	PUNICODE_STRING		_pProcPath	= NULL;
+	PUNICODE_STRING		_pCommand	= NULL;
+	PUNICODE_STRING		pPProcPath	= NULL;
+	KERNEL_USER_TIMES	times;
+
+	GetProcessTimes(PID, &times);
+	PROCUID				PUID		= 0;
+	PROCUID				PPUID		= 0;
+
+	bool				bRet		= false;
+	__try {
+		if( NULL == pProcPath ) {
+			if( NT_SUCCESS(GetProcessImagePathByProcessId(PID, &_pProcPath))) {		
+				pProcPath	= _pProcPath;
+			}
+			else {
+				__log("%-32s GetProcessImagePathByProcessId(%d) failed.", __func__, (DWORD)PID);
+				__leave;
+			}
+		}
+		if( NULL == pCommand ) {
+			if( NT_SUCCESS(GetProcessInfo(PID, ProcessCommandLineInformation, &_pCommand))) {
+				pCommand	= _pCommand;
+			}	
+		}
+		GetProcUID(PID, PPID, pProcPath, &times.CreateTime, &PUID);
+		if( NT_SUCCESS(GetProcessImagePathByProcessId(PPID, &pPProcPath))) {
+			KERNEL_USER_TIMES	ptimes;
+			GetProcessTimes(PPID, &ptimes);
+			GetProcUID(PPID, GetParentProcessId(PPID), pPProcPath, &ptimes.CreateTime, &PPUID);		
+		}			
+		//if( PID <= (HANDLE)4 || PPID <= (HANDLE)4) {
+		//	__log("PID=%6d PPID=%06d %wZ", (DWORD)PID, (DWORD)PPID, pProcPath);
+		//}
+		if( ProcessTable()->Add(bDetectByCallback, PID, PPID, PPID, PUID, PPUID, pProcPath, pCommand) ) {	
+			//	이미 존재하는 PID라면 실패될 수도 있다.
+			//__log("%-32s PID=%06d PPID=%06d", __func__, (DWORD)PID, (DWORD)PPID);
+			if( pCallback )
+				pCallback(pContext, PID, PUID, pProcPath, pCommand, PPID, PPUID);
+			bRet	= true;
+
+			UNREFERENCED_PARAMETER(pCause);
+
+			#ifdef __TEST__
+			__log(TEXTLINE);
+			__log("%s", pCause);
+			__log(TEXTLINE);
+			__log("PID  :%d", (DWORD)PID);
+			__log("PUID :%p", PUID);
+			__log("PATH :%wZ", pProcPath);
+			__log("CMD  :%wZ", pCommand);
+			__log("PPID :%d", (DWORD)PPID);
+			__log("PPUID:%p", PPUID);
+			#endif
+		}			
+		//	PID의 Add 성공 여부와 상관없이 부모가 없다면 부모도 넣어주자.
+		if( bAddParent && false == ProcessTable()->IsExisting(PPID, NULL, NULL)) {
+			//__log("%-32s add PPID %06d", __func__, PPID);
+			AddProcessToTable(__func__, false, PPID, pPProcPath, NULL, true, pContext, pCallback);		
+		}
+	}
+	__finally {
+		if( _pCommand ) 	CMemory::Free(_pCommand);
+		if( _pProcPath )	CMemory::Free(_pProcPath);
+		if( pPProcPath )	CMemory::Free(pPProcPath);
+	}
+	return true;
+}
+
 /*
 NTSTATUS	GetProcessParams(IN HANDLE hProcessId,
 	OUT	HANDLE	* PPID,
@@ -130,30 +220,90 @@ NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID)
 	}
 	return status;
 }
+NTSTATUS	GetProcessSessionId(IN HANDLE PID, OUT PULONG pId)
+{
+	UNREFERENCED_PARAMETER(pId);
+	if( true )	STATUS_UNSUCCESSFUL;
+	
+	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
+
+
+	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
+	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
+
+	NTSTATUS			status = STATUS_UNSUCCESSFUL;
+	HANDLE				hProcess = NULL;
+	OBJECT_ATTRIBUTES	oa = { 0 };
+	CLIENT_ID			cid = { 0 };
+
+	__try
+	{
+		oa.Length = sizeof(OBJECT_ATTRIBUTES);
+		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+		cid.UniqueProcess = PID;
+
+#ifndef PROCESS_QUERY_INFORMATION
+#define PROCESS_QUERY_INFORMATION (0x0400)
+#endif
+		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
+		if (!NT_SUCCESS(status))	__leave;
+
+		PROCESS_BASIC_INFORMATION	info;
+		status = pZwQueryInformationProcess(hProcess, ProcessBasicInformation, &info, sizeof(info), NULL);
+		if (NT_SUCCESS(status)) {
+			//	PEB를 읽으면 BSOD 발생
+			//	PEB는 직접 참조할 수 없고 32비트의 경우 FS 레지스터를 통해 TEB를 얻은 후 
+			//	여기서 오프셋 0x30 즉 PEB 필드에 들어있는 값을 통하여 PEB의 주소를 얻는 방식이 사용된다.
+			//	https://sanseolab.tistory.com/category/%EC%95%85%EC%84%B1%EC%BD%94%EB%93%9C%20%EB%B6%84%EC%84%9D?page=4
+
+			//if( pId && info.PebBaseAddress ) {
+			//	*pId	= info.PebBaseAddress->SessionId;
+			//}
+		}
+	}
+	__finally
+	{
+		if (hProcess)
+		{
+			ZwClose(hProcess);
+			hProcess = NULL;
+		}
+	}
+	return status;
+}
 NTSTATUS	GetProcUID(
-	IN	bool				bCreate, 
-	IN	HANDLE				hPID,
-	IN	HANDLE				hPPID,
-	IN	PCUNICODE_STRING	pImagePath,
+	IN	HANDLE				PID,
+	IN	HANDLE				PPID,
+	IN	PCUNICODE_STRING	pImagePath,		//	\Device\HarddiskVolumeX\와 같은 형태로 구성된 경로
 	IN	LARGE_INTEGER		*pCreateTime,
-	OUT	PROCUID				*pUID
+	OUT	PROCUID				*pPUID
 )
 {
-	UNREFERENCED_PARAMETER(bCreate);
 	NTSTATUS		status = STATUS_SUCCESS;
 	CWSTRBuffer		proc;
 	/*
 		원래 계획은 부모ID까지 넣는 것인데
 		부모의 ProcGuid를 구하려 보니 조부모의 존재가 불확실하다.
 	*/
-	if( NULL == hPPID )
-		GetParentProcessId(hPID, &hPPID);
+	if( NULL == PID )	{
+		if( pPUID )		*pPUID	= 0;
+		return status;
+	}
+	if( NULL == PPID )	GetParentProcessId(PID, &PPID);
+
+	KERNEL_USER_TIMES	times	= {0, };
+	if( NULL == pCreateTime ) {
+		GetProcessTimes(PPID, &times);
+		pCreateTime	= &times.CreateTime;
+	}
 	RtlStringCbPrintfW(proc, proc.CbSize(), L"%wZ.%d.%d.%d.%d.%d.%wZ",
 		&Config()->machineGuid,
 		Config()->bootId, 	//	bootid
-		pCreateTime->HighPart, pCreateTime->LowPart,
-		(DWORD)hPPID,
-		(DWORD)hPID,
+		pCreateTime->HighPart, 
+		pCreateTime->LowPart,
+		(DWORD)PPID,
+		(DWORD)PID,
 		pImagePath);
 
 	int	nSize = 0;
@@ -161,8 +311,40 @@ NTSTATUS	GetProcUID(
 		*p = towlower(*p);
 		nSize++;
 	}
-	if( pUID )	*pUID	= Path2CRC64(proc);
+	if( pPUID )	*pPUID	= Path2CRC64(proc);
 	return status;
+}
+NTSTATUS	GetPUID(
+	IN	HANDLE				PID,
+	IN	HANDLE				PPID,
+	IN	PCUNICODE_STRING	pImagePath,
+	IN	LARGE_INTEGER		*pCreateTime,
+	OUT	PROCUID				*pUID
+) {
+	NTSTATUS		status = STATUS_SUCCESS;
+	CWSTRBuffer		procGuid;
+	/*
+	원래 계획은 부모ID까지 넣는 것인데
+	부모의 ProcGuid를 구하려 보니 조부모의 존재가 불확실하다.
+	*/
+	if( NULL == PPID )
+		GetParentProcessId(PID, &PPID);
+	RtlStringCbPrintfW(procGuid, procGuid.CbSize(), L"%wZ.%d.%d.%d.%d.%d.%wZ",
+		&Config()->machineGuid,
+		Config()->bootId, 	//	bootid
+		pCreateTime->HighPart, pCreateTime->LowPart,
+		(DWORD)PPID,
+		(DWORD)PID,
+		pImagePath);
+
+	int	nSize = 0;
+	for (PWSTR p = procGuid; *p; p++) {
+		*p = towlower(*p);
+		nSize++;
+	}
+	if( pUID )	*pUID	= Path2CRC64(procGuid);
+	return status;
+
 }
 NTSTATUS	GetProcGuid(IN bool bCreate, 
 	IN HANDLE hPID,
@@ -223,7 +405,10 @@ NTSTATUS	GetProcGuid(IN bool bCreate,
 NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
 {
 	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
-
+	if( NULL == hProcessId) {
+		RtlZeroMemory(p, sizeof(KERNEL_USER_TIMES));
+		return STATUS_SUCCESS;	
+	}
 	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
 	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
 	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
@@ -244,7 +429,7 @@ NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
 #endif
 		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
 		if (!NT_SUCCESS(status)) {
-			__log("%s ZwOpenProcess() failed.", __FUNCTION__);
+			__log("%-32s ZwOpenProcess(%d) failed.", __func__, (DWORD)hProcessId);
 			__leave;
 		}
 		status = pZwQueryInformationProcess(hProcess, ProcessTimes, p, sizeof(KERNEL_USER_TIMES), NULL);
@@ -252,7 +437,7 @@ NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
 
 		}
 		else {
-			__log("%s ZwQueryInformationProcess() failed.", __FUNCTION__);
+			__log("%-32s ZwQueryInformationProcess(%d) failed.", __func__, (DWORD)hProcessId);
 		}
 	}
 	__finally
@@ -265,8 +450,6 @@ NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
 	}
 	return status;
 }
-
-
 NTSTATUS	GetProcessInfoByProcessId
 (
 	IN	HANDLE			pProcessId,

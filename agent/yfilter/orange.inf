@@ -19,22 +19,33 @@ MiniFilter.DriverFiles  = 12            ;%windir%\system32\drivers
 ;; Default install sections
 ;;
 
-[DefaultInstall]
+[DefaultInstall.NTAMD64]
 OptionDesc          = %ServiceDescription%
 CopyFiles           = MiniFilter.DriverFiles
 
-[DefaultInstall.Services]
-AddService          = %ServiceName%,,MiniFilter.Service
+[DefaultInstall.NTX86]
+OptionDesc          = %ServiceDescription%
+CopyFiles           = MiniFilter.DriverFiles
+
+;[DefaultInstall.Services]
+;AddService          = %ServiceName%,,MiniFilter.Service
 
 ;;
 ;; Default uninstall sections
 ;;
-
-[DefaultUninstall]
+[DefaultUninstall.NTAMD64]
+LegacyUninstall=1
 DelFiles   = MiniFilter.DriverFiles
 
-[DefaultUninstall.Services]
-DelService = %ServiceName%,0x200      ;Ensure service is stopped before deleting
+[DefaultUninstall.NTX86]
+LegacyUninstall=1
+DelFiles   = MiniFilter.DriverFiles
+
+;[DefaultUninstall]
+;DelFiles   = MiniFilter.DriverFiles
+
+;[DefaultUninstall.Services]
+;DelService = %ServiceName%,0x200      ;Ensure service is stopped before deleting
 
 ;
 ; Services Section

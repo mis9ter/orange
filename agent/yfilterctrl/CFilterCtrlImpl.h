@@ -12,6 +12,17 @@
 #define CFILTER_CTRLIMPL_LOGNAME	"CFilterCtrlImpl.log"
 
 #pragma pack(push, 1)
+
+typedef struct Y_MESSAGE
+	:
+	public	FILTER_MESSAGE_HEADER,
+	public	Y_HEADER
+{
+	char					szData[MAX_FILTER_MESSAGE_SIZE];
+	OVERLAPPED				ov;
+} Y_MESSAGE, *PY_MESSAGE;
+
+
 typedef struct YFILTERCTRL_MESSAGE
 {
 	FILTER_MESSAGE_HEADER	_header;
@@ -19,13 +30,17 @@ typedef struct YFILTERCTRL_MESSAGE
 	YFILTER_DATA			data;
 	OVERLAPPED				ov;
 } YFILTERCTRL_MESSAGE, *PYFILTERCTRL_MESSAGE;
+
 #define MESSAGE_GET_SIZE	(sizeof(FILTER_MESSAGE_HEADER) + sizeof(YFILTER_HEADER) + sizeof(YFILTER_DATA))
+#define Y_MESSAGE_GET_SIZE	(sizeof(Y_MESSAGE))
+
 typedef struct YFILTERCTRL_REPLY
 {
 	FILTER_REPLY_HEADER		_header;
-	YFILTER_REPLY			data;
+	Y_REPLY					data;
 } YFILTERCTRL_REPLY, * PYFILTERCTRL_REPLY;
 #pragma pack(pop)
+
 
 class CFilterCtrlImpl;
 typedef struct {
@@ -37,6 +52,8 @@ typedef struct {
 	DWORD				dwThreadCount;
 	HANDLE *			hThreads;
 	YFILTERCTRL_MESSAGE	message;
+	Y_MESSAGE			ymsg;
+
 	CFilterCtrlImpl		*pClass;
 } PORT_INFO, *PPORT_INFO;
 
@@ -167,9 +184,31 @@ public:
 		Log("%-32s pEventCallback=%p, pEventCallbackPtr=%p", 
 			__FUNCTION__, pEventCallbackPtr, pEventCallback);
 		m_callback.command.pCallback		= pCommandCallback;
-		m_callback.command.pCallbackPtr		= pCommandCallbackPtr;
+		m_callback.command.pCallback2		= NULL;
+		m_callback.command.pContext			= pCommandCallbackPtr;
 		m_callback.event.pCallback			= pEventCallback;
-		m_callback.event.pCallbackPtr		= pEventCallbackPtr;
+		m_callback.event.pCallback2			= NULL;
+		m_callback.event.pContext			= pEventCallbackPtr;
+		if (DriverIsRunning())	{
+			return true;
+		}
+		Log("%-32s driver is not running.", __func__);
+		return DriverStart();
+	}
+	bool	Start2(
+		IN PVOID pCommandContext, 
+		IN CommandCallbackProc2		pCommandCallback,
+		IN PVOID pEventContext, 
+		IN EventCallbackProc2 pEventCallback
+	)
+	{
+		m_callback.command.pCallback		= NULL;
+		m_callback.command.pCallback2		= pCommandCallback;
+		m_callback.command.pContext			= pCommandContext;
+
+		m_callback.event.pCallback			= NULL;
+		m_callback.event.pCallback2			= pEventCallback;
+		m_callback.event.pContext			= pEventContext;
 		if (DriverIsRunning())	{
 			return true;
 		}
@@ -273,10 +312,10 @@ public:
 	}
 	bool	SendCommand(DWORD dwCommand)
 	{
-		Log("%s %08x", __FUNCTION__, dwCommand);
-		YFILTER_COMMAND	command;
-		YFILTER_REPLY		reply;
-		DWORD			dwBytes;
+		Log("%-32s %08x", __FUNCTION__, dwCommand);
+		Y_COMMAND	command;
+		Y_REPLY		reply;
+		DWORD		dwBytes;
 
 		command.dwCommand = dwCommand;
 		if (S_OK == FilterSendMessage(m_driver.command.hPort, &command, sizeof(command), 
@@ -292,6 +331,12 @@ public:
 	bool	Connect()
 	{
 		Log(__FUNCTION__);
+		SYSTEM_INFO		si;
+		GetSystemInfo(&si);
+		DWORD	dwCPU	= max(si.dwNumberOfProcessors, 2);
+
+		
+		Log("-- CPU:%d", dwCPU);
 		__try
 		{
 			if (CreatePortInfo(&m_driver.command, DRIVER_COMMAND_PORT, 1, CommandThread))
@@ -302,7 +347,7 @@ public:
 			{
 				__leave;
 			}
-			if (CreatePortInfo(&m_driver.event, DRIVER_EVENT_PORT, 1, EventThread))
+			if (CreatePortInfo(&m_driver.event, DRIVER_EVENT_PORT, dwCPU, EventThread))
 			{
 
 			}
@@ -348,12 +393,14 @@ private:
 
 	struct {
 		struct {
-			PVOID				pCallbackPtr;
-			CommandCallbackProc	pCallback;
+			PVOID					pContext;
+			CommandCallbackProc		pCallback;
+			CommandCallbackProc2	pCallback2;
 		} command;
 		struct {
-			PVOID				pCallbackPtr;
-			EventCallbackProc	pCallback;
+			PVOID					pContext;
+			EventCallbackProc		pCallback;
+			EventCallbackProc2		pCallback2;
 		} event;
 	} m_callback;
 
@@ -389,6 +436,117 @@ private:
 	}
 	static	unsigned	__stdcall	EventThread(LPVOID ptr)
 	{
+		if (NULL == ptr)	{
+			
+			return (unsigned)-1;
+		}
+		PPORT_INFO		p = (PPORT_INFO)ptr;
+
+		WaitForSingleObject(p->hInit, 30 * 1000);
+		p->pClass->Log("%s begin", __FUNCTION__);
+
+		LPOVERLAPPED		pOv		= NULL;
+		bool				bRet	= true;
+		DWORD				dwBytes;
+		ULONG_PTR			pCompletionKey;
+		DWORD				dwError;
+
+		PY_MESSAGE			pMessage	= &p->ymsg;
+		YFILTERCTRL_REPLY	reply;
+
+		HRESULT	hr;
+		DWORD	dwMessageSize;
+
+		while (true)
+		{
+			ZeroMemory(&p->ymsg.ov, sizeof(OVERLAPPED));
+			dwMessageSize	= FIELD_OFFSET(Y_MESSAGE, ov);
+
+			//p->pClass->Log("%-32s dwMessageSize=%d", __func__, dwMessageSize);
+			hr = FilterGetMessage(
+				p->hPort, 
+				&p->ymsg,
+				dwMessageSize,
+				&p->ymsg.ov);
+			if (HRESULT_FROM_WIN32(ERROR_IO_PENDING) != hr)
+			{
+				//	[TODO] 실패인데.. 이를 어쩌나. 
+				p->pClass->Log("%s FilterGetMessage()=%08x", __FUNCTION__, hr);
+				break;
+			}
+			bRet	= GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, 
+				(LPOVERLAPPED *)&pOv, INFINITE);
+			dwError	= GetLastError();
+			if( (false == bRet && ERROR_INSUFFICIENT_BUFFER != dwError) || 
+				NULL == pCompletionKey )	{
+				p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pMessage=%p, error code=%d",
+					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
+				break;
+			}
+			pMessage	= CONTAINING_RECORD(pOv, Y_MESSAGE, ov);
+			reply.data.bRet			= false;
+			if (YFilter::Message::Mode::Event == pMessage->mode)
+			{
+				if( pMessage->wRevision ) {
+					if (p->pClass->m_callback.event.pCallback2)
+					{
+						reply.data.bRet = 
+							p->pClass->m_callback.event.pCallback2(
+								pMessage,
+								p->pClass->m_callback.event.pContext								
+							);
+					}
+					
+				}
+				else {
+					p->pClass->Log("revision    :%d", pMessage->wRevision);
+					p->pClass->Log("message size:%d", dwMessageSize);
+					p->pClass->Log("iocp bytes  :%d", dwBytes);
+				
+				}
+				reply.data.bRet = true;
+
+			}	
+			else {
+				p->pClass->Log("-- unknown mode:%d", pMessage->mode);
+			}
+			/*		
+			FilterReplyMessage의 데이터 크기 부분 참고.
+			https://docs.microsoft.com/en-us/windows/win32/api/fltuser/nf-fltuser-filterreplymessage
+			Given this structure, 
+			it might seem obvious that the caller of FilterReplyMessage would set the dwReplyBufferSize parameter 
+			to sizeof(REPLY_STRUCT) and the ReplyLength parameter of FltSendMessage to the same value. 
+			However, because of structure padding idiosyncrasies, 
+			sizeof(REPLY_STRUCT) might be larger than sizeof(FILTER_REPLY_HEADER) + sizeof(MY_STRUCT). 
+			If this is the case, FltSendMessage returns STATUS_BUFFER_OVERFLOW.
+
+			Therefore, we recommend that you call FilterReplyMessage and FltSendMessage 
+			(leveraging the above example) by setting dwReplyBufferSize and ReplyLength 
+			both to sizeof(FILTER_REPLY_HEADER) + sizeof(MY_STRUCT) instead of sizeof(REPLY_STRUCT). 
+			This ensures that any extra padding at the end of the REPLY_STRUCT structure is ignored.
+			*/
+			reply._header.Status = ERROR_SUCCESS;
+			reply._header.MessageId = pMessage->MessageId;
+			hr	= FilterReplyMessage(p->hPort, (PFILTER_REPLY_HEADER)&reply,
+				sizeof(reply));
+			if (SUCCEEDED(hr) || ERROR_IO_PENDING == hr || ERROR_FLT_NO_WAITER_FOR_REPLY == hr)
+			{
+				//p->pClass->Log("FilterReplyMessage(SUCCESS)=%08x", hr);
+			}	
+			else
+			{
+				//	E_INVALIDARG
+				//	https://yoshiki.tistory.com/entry/HRESULT-%EC%97%90-%EB%8C%80%ED%95%9C-%EB%82%B4%EC%9A%A9
+				p->pClass->Log("FilterReplyMessage(FAILURE)=%08x, E_INVALIDARG=%08x", 
+					hr, E_INVALIDARG);
+			}
+			ERROR_MORE_DATA;
+		}
+		p->pClass->Log("%s end", __FUNCTION__);
+		return 0;
+	}
+	static	unsigned	__stdcall	EventThread_OLD(LPVOID ptr)
+	{
 		if (NULL == ptr)	return (unsigned)-1;
 		PPORT_INFO		p = (PPORT_INFO)ptr;
 
@@ -411,6 +569,8 @@ private:
 		{
 			ZeroMemory(&p->message.ov, sizeof(OVERLAPPED));
 			dwMessageSize	= FIELD_OFFSET(YFILTERCTRL_MESSAGE, ov);
+
+			p->pClass->Log("%-32s dwMessageSize=%d", __func__, dwMessageSize);
 			hr = FilterGetMessage(p->hPort, 
 				&p->message._header,
 				dwMessageSize,
@@ -434,14 +594,14 @@ private:
 			reply.data.bRet			= false;
 			if (YFilter::Message::Mode::Event == pMessage->header.mode)
 			{
-				if (pMessage->header.size == sizeof(YFILTER_HEADER) + sizeof(YFILTER_DATA))
+				if (pMessage->header.wSize == sizeof(YFILTER_HEADER) + sizeof(YFILTER_DATA))
 				{
 					PYFILTER_DATA	pData = &pMessage->data;
 					if (pData && p->pClass->m_callback.event.pCallback)
 					{
 						reply.data.bRet = p->pClass->m_callback.event.pCallback(
 							pMessage->_header.MessageId,
-							p->pClass->m_callback.event.pCallbackPtr,
+							p->pClass->m_callback.event.pContext,
 							pMessage->header.category,
 							pMessage->data.subType,
 							pData,
@@ -455,7 +615,7 @@ private:
 				}
 				else
 				{
-					p->pClass->Log("size mismatch: %d != %d", pMessage->header.size, sizeof(YFILTERCTRL_MESSAGE));
+					p->pClass->Log("size mismatch: %d != %d", pMessage->header.wSize, sizeof(YFILTERCTRL_MESSAGE));
 				}
 			}	
 			else {

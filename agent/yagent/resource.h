@@ -15,8 +15,12 @@
 #define IDI_ICON1                       129
 #define IDD_CONTROL_DIALOG              130
 #define IDR_ACCELERATOR1                134
-#define IDR_KERNEL_DRIVER               136
-#define IDR_EVENT_ODB                   137
+#define IDR_ORANGE_DRIVER               136
+#define IDR_PACKET_FILTER_DRIVER        137
+#define IDR_EVENT_ODB                   138
+#define IDR_OPENSOURCE_TXT              139
+#define IDR_CONFIG_ODB                  140
+#define IDR_SUMMARY_ODB                 141
 #define IDC_SHUTDOWN                    1000
 #define IDC_BUTTON_INSTALL              1001
 #define IDC_BUTTON_UNINSTALL            1002
@@ -34,7 +38,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        136
+#define _APS_NEXT_RESOURCE_VALUE        142
 #define _APS_NEXT_COMMAND_VALUE         32772
 #define _APS_NEXT_CONTROL_VALUE         1009
 #define _APS_NEXT_SYMED_VALUE           110

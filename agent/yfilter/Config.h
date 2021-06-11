@@ -163,6 +163,7 @@ typedef struct FLT_CLIENT_PORT
 	HANDLE							hProcess;
 	PFLT_PORT						pPort;
 	wchar_t							szName[32];
+	ULONG							nConnected;
 } FLT_CLIENT_PORT, *PFLT_CLIENT_PORT;
 typedef struct FLT_SERVER_PORT {
 	PFLT_PORT						pPort;
@@ -171,6 +172,7 @@ typedef struct FLT_SERVER_PORT {
 typedef struct CONFIG
 {
 	ULONG							nRun;
+	DWORD							dwCPU;
 	KSPIN_LOCK						lock;
 	size_t							dbSize;
 	bool							bInitialized;
@@ -186,7 +188,6 @@ typedef struct CONFIG
 		//	포트별 Connect/Disconnect/Send/Recv 동기화 필요
 		FLT_CLIENT_PORT				command;
 		FLT_CLIENT_PORT				event;
-		ULONG						nConnected;
 	} client;
 
 	DWORD							bootId;
