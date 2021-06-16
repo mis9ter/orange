@@ -50,10 +50,16 @@ typedef struct PROCESS_ENTRY
 	bool				bFree;				//	해제 대상
 	bool				bCallback;			//	콜백에 의해 수집
 	//DWORD64				dwTerminate;
-
+	KERNEL_USER_TIMES	times;
 	struct {
 		_COUNT_SIZE		SetValue;
 		_COUNT_SIZE		GetValue;
+		_COUNT_SIZE		RenameValue;
+		_COUNT_SIZE		DeleteValue;
+		_COUNT_SIZE		CreateKey;
+		_COUNT_SIZE		DeleteKey;
+		_COUNT_SIZE		EnumerateKey;
+		_COUNT_SIZE		RenameKey;
 	} registry;
 } PROCESS_ENTRY, * PPROCESS_ENTRY;
 
@@ -90,28 +96,27 @@ public:
 			m_bInitialize = false;
 		}
 	}
-	/*
-	void		PrintProcessEntry(PCSTR pName, PPROCESS_ENTRY p, bool bLog = false)
+	void	List(
+		IN PVOID				pContext,
+		PProcessTableCallback	pCallback
+	)
 	{
-		UNREFERENCED_PARAMETER(pName);
-		UNREFERENCED_PARAMETER(p);
-		UNREFERENCED_PARAMETER(bLog);
-		if (p && bLog)
+		if (false == IsPossible())
 		{
-			char	szIrql[30] = "";
-			__dlog("%s", __LINE);
-			__dlog("%-20s %s", pName, CDriverCommon::GetCurrentIrqlName(szIrql, sizeof(szIrql)));
-
-			__dlog("PROCESS_ENTRY     %p", p);
-			__dlog("  handle          %d", (int)p->handle);
-			__dlog("  key             %d", (int)p->key);
-			__dlog("  path.Buffer     %p", p->path.Buffer);
-			__dlog("  path.Length     %d", p->path.Length);
-			__dlog("  command.Buffer  %p", p->command.Buffer);
-			__dlog("  command.Length  %d", p->command.Length);
+			__dlog("%-32s IRQL=%d", __FUNCTION__, KeGetCurrentIrql());
+			return;
 		}
+		KIRQL			irql = 0;
+		Lock(&irql);
+		for (ULONG i = 0; i < RtlNumberGenericTableElements(&m_table); i++)
+		{
+			auto	p = (PPROCESS_ENTRY)RtlGetElementGenericTable(&m_table, i);
+			UNREFERENCED_PARAMETER(p);
+			//__dlog("  [%d] %p %10d", i, p, p->handle);
+			if (pCallback) pCallback(true, p, pContext);
+		}
+		Unlock(irql);
 	}
-	*/
 	bool		Add
 	(
 		IN bool				bByCallback,		// 1 콜백에 의해 수집 0 직접 수집
@@ -119,9 +124,10 @@ public:
 		IN HANDLE			PPID,
 		IN HANDLE			CPID,
 		IN PROCUID			PUID,
-		IN PROCUID			PPUID,
-		IN PCUNICODE_STRING pProcPath, 
-		IN PCUNICODE_STRING pCommand
+		IN PROCUID				PPUID,
+		IN PCUNICODE_STRING		pProcPath, 
+		IN PCUNICODE_STRING		pCommand,
+		IN PKERNEL_USER_TIMES	pTimes
 	)
 	{
 		if (false == IsPossible())	return false;
@@ -147,7 +153,8 @@ public:
 		entry.bCallback	= bByCallback;
 		entry.PUID		= PUID;
 		entry.PPUID		= PPUID;
-		//GetProcessSessionId(PID, &entry.SID);
+		if( pTimes )
+			RtlCopyMemory(&entry.times, pTimes, sizeof(entry.times));
 		CWSTRBuffer		procPath;
 		__try
 		{
@@ -465,23 +472,25 @@ bool			RegisterProcess(IN HANDLE h);
 bool			DeregisterProcess(IN HANDLE h);
 NTSTATUS		KillProcess(HANDLE pid);
 
-bool			AddProcessToTable(
-	PCSTR			pCause,
-	bool			bDetectByCallback,				//	process notify callback에 의해 실시간 수집 여부
-													//	false	직접 알아낸 것이므로 app으로 전달 안됨.
-	HANDLE			PID, 
-	PUNICODE_STRING	pProcPath	= NULL,
-	PUNICODE_STRING	pCommand	= NULL,
-	bool			bAddParent	= false,
-	PVOID			pContext	= NULL,
-	void			(*pCallback)
+bool			AddProcessToTable2(
+	PCSTR				pCause,
+	bool				bDetectByCallback,		//	process notify callback에 의해 실시간 수집 여부
+												//	false	직접 알아낸 것이므로 app으로 전달 안됨.
+	HANDLE				PID, 
+	PUNICODE_STRING		pProcPath		= NULL,
+	PUNICODE_STRING		pCommand		= NULL,
+	PKERNEL_USER_TIMES	pTimes			= NULL,
+	bool				bAddParent		= false,
+	PVOID				pContext		= NULL,
+	void				(*pCallback)
 	(
-		PVOID			pContext,
-		HANDLE			PID,
-		PROCUID			PUID,
-		PUNICODE_STRING	pProcPath,
-		PUNICODE_STRING	pCommand,
-		HANDLE			PPID,
-		PROCUID			PPUID
+		PVOID				pContext,
+		HANDLE				PID,
+		PROCUID				PUID,
+		PUNICODE_STRING		pProcPath,
+		PUNICODE_STRING		pCommand,
+		PKERNEL_USER_TIMES	pTimes,
+		HANDLE				PPID,
+		PROCUID				PPUID
 	)	= NULL
 );

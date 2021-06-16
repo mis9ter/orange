@@ -7,14 +7,56 @@ typedef	uint64_t		REGUID;
 
 typedef struct REGISTRY_ENTRY
 {
+	REGUID				RegPUID;
 	REGUID				RegUID;
-
+	HANDLE				PID;
+	PROCUID				PUID;
+	ULONG				nCount;
+	REG_NOTIFY_CLASS	nClass;
+	UNICODE_STRING		RegPath;
+	UNICODE_STRING		RegValueName;
+	LARGE_INTEGER		times[2];
+	DWORD64				dwTicks;
+	DWORD64				dwSize;
+	PVOID				pContext;
 } REG_ENTRY, * PREG_ENTRY;
-
+typedef struct {
+	PVOID				pArgument2;	
+	HANDLE				PID;
+	PROCUID				PUID;
+	REGUID				RegUID;				//	key + value의 조합
+	REGUID				RegPUID;			//	pid + key + value의 조합
+	PUNICODE_STRING		pRegPath;
+	PUNICODE_STRING		pRegValueName;
+	PVOID				pArgument;
+	REG_NOTIFY_CLASS	notifyClass;
+	NTSTATUS			status;
+	ULONG				nSize;
+	YFilter::Message::SubType	subType;
+	PVOID				pContext;
+}	REG_CALLBACK_ARG, *PREG_CALLBACK_ARG;
 typedef void (*PRegTableCallback)(
+
 	IN PREG_ENTRY			pEntry,			//	대상 엔트리 
-	IN PVOID				pCallbackPtr
+	IN PVOID				pContext
 );
+
+void		CreateRegistryContext(
+
+	PROCUID * pPUID, 
+	REGUID *	pRegUID, 
+	REGUID *	pRegPUID,
+	YFilter::Message::SubType	subType,
+	PUNICODE_STRING pRegPath, 
+	PUNICODE_STRING pRegValueName,
+	PVOID	*pOut
+);
+void		CreateRegistryContext(
+	PREG_ENTRY	p,
+	PY_REGISTRY	*pOut
+);
+PROCUID		Path2CRC64(PUNICODE_STRING pValue);
+PROCUID		Path2CRC64(PCWSTR pValue);
 
 class CRegTable
 {
@@ -32,22 +74,130 @@ public:
 		ExInitializeFastMutex(&m_mutex);
 		KeInitializeSpinLock(&m_lock);
 		RtlInitializeGenericTable(&m_table, Compare, Alloc, Free, this);
+
+		m_thread.Create(1, Thread, this);
 		m_bInitialize = true;
+	}
+	static	REGUID		GetRegistryPUID(HANDLE PID, REG_NOTIFY_CLASS nClass, PUNICODE_STRING pRegPath, PUNICODE_STRING pValueName) {
+		CWSTRBuffer	buf;
+
+		if( pRegPath && pValueName )
+			RtlStringCbPrintfW((PWSTR)buf, buf.CbSize(), L"%d.%d.%wZ.%wZ", PID, nClass, pRegPath, pValueName);
+		else if( pRegPath && NULL == pValueName)
+			RtlStringCbPrintfW((PWSTR)buf, buf.CbSize(), L"%d.%d.%wZ", PID, nClass, pRegPath);
+		return Path2CRC64(buf);
+	}
+	static	REGUID		GetRegistryUID(PUNICODE_STRING pRegPath, PUNICODE_STRING pValueName) {
+		CWSTRBuffer	buf;
+
+		if( pRegPath && pValueName )
+			RtlStringCbPrintfW((PWSTR)buf, buf.CbSize(), L"%wZ.%wZ", pRegPath, pValueName);
+		else if( pRegPath && NULL == pValueName)
+			RtlStringCbPrintfW((PWSTR)buf, buf.CbSize(), L"%wZ", pRegPath);
+		return Path2CRC64(buf);
+	}
+	static	YFilter::Message::SubType	RegClass2SubType(REG_NOTIFY_CLASS nClass)
+	{
+		switch( nClass ) {
+		case RegNtPostQueryValueKey:
+		case RegNtPreQueryValueKey:
+			return YFilter::Message::SubType::RegistryGetValue;
+		case RegNtPreSetValueKey:
+		case RegNtPostSetValueKey:
+			return YFilter::Message::SubType::RegistrySetValue;
+		case RegNtDeleteValueKey:
+			return YFilter::Message::SubType::RegistryDeleteValue;
+
+		default:
+			__log("%-32s unknown class:%d", __func__, nClass);
+
+
+		}
+		return YFilter::Message::SubType::RegistryUnknown;
+	}
+	ULONG	Flush(HANDLE PID)
+	{
+		struct FLUSH_INFO
+		{
+			CRegTable	*pClass;
+			HANDLE		PID;
+			ULONG		nTicks;
+			ULONG		nCount;
+		} info;
+
+		info.pClass		= this;
+		info.PID		= PID;
+		KeQueryTickCount(&info.nTicks);
+		info.nCount		= 0;
+
+		Flush(&info, [](PREG_ENTRY pEntry, PVOID pContext, bool *pDelete) {
+			struct FLUSH_INFO	*p	= (struct FLUSH_INFO *)pContext;
+			bool	bDelete	= false;
+
+			if( p->PID ) {
+				if( p->PID == pEntry->PID ) {
+					bDelete	= true;				
+				}			
+			}
+			else {
+				if( ProcessTable()->IsExisting(pEntry->PID, NULL, NULL)) {
+					if( (p->nTicks - pEntry->dwTicks) > 3000 ) {
+						//__dlog("%d %p %d %I64d %d", 
+						//	bDelete, pEntry->RegPUID, pEntry->nCount, pEntry->dwSize, 
+						//	(DWORD)(p->nTicks - pEntry->dwTicks));
+						bDelete	= true;
+					}
+				}
+				else {
+					bDelete	= true;
+				}			
+			}
+			if( bDelete ) {
+				p->nCount++;
+				PY_REGISTRY		pReg	= NULL;
+				CreateRegistryContext(pEntry, &pReg);
+				if( pReg ) {
+					if (MessageThreadPool()->Push(__FUNCTION__,
+						pReg->mode,
+						pReg->category,
+						pReg, pReg->wSize, false))
+					{
+						
+					}
+					else {
+						CMemory::Free(pReg);
+					}
+				}
+			}
+			*pDelete	= bDelete;
+		});
+		if( info.nCount )
+			MessageThreadPool()->Alert(YFilter::Message::Category::Registry);
+		return info.nCount;
+	}
+	static	void	Thread(PVOID pContext) {
+		CRegTable	*pClass	= (CRegTable *)pContext;
+		pClass->Flush(NULL);
 	}
 	void	Destroy()
 	{
 		__log(__FUNCTION__);
 		if (m_bInitialize) {
+			m_thread.Destroy();
 			Clear();
 			m_bInitialize = false;
 		}
 	}
+	void		Update(PREG_ENTRY pEntry, DWORD dwSize) {
+		pEntry->nCount++;
+		KeQueryTickCount(&pEntry->dwTicks);
+		pEntry->dwSize	+= dwSize;
+	
+	}
 	bool		Add
 	(
-		IN	REGUID				RegUID,
-		IN	PUNICODE_STRING		pKey,
-		IN	PVOID				pCallbackPtr = NULL,
-		IN	PRegTableCallback	pCallback = NULL
+		PREG_CALLBACK_ARG		p,
+		OUT ULONG				&nCount
 	)
 	{
 		if (false == IsPossible())	return false;
@@ -61,37 +211,63 @@ public:
 			return false;
 		}
 		RtlZeroMemory(&entry, sizeof(REG_ENTRY));
-		entry.RegUID	= RegUID;
+
+		entry.RegUID	= GetRegistryUID(p->pRegPath, p->pRegValueName);
+		entry.RegPUID	= GetRegistryPUID(p->PID, p->notifyClass, p->pRegPath, p->pRegValueName);
+
+		entry.PID		= p->PID;
+		entry.PUID		= p->PUID;
+		entry.nClass	= p->notifyClass;
+		entry.nCount	= 0;
+		entry.times[0];
+		entry.dwSize	= p->nSize;
+		entry.pContext	= this;
+		
+		KeQuerySystemTime(&entry.times[0]);
+		KeQueryTickCount(&entry.dwTicks);
+		//	TIME_FIELDS
+		//RtlTimeToTimeFields;
 		__try 
 		{
 			Lock(&irql);
-			if( IsExisting(RegUID, false, pCallbackPtr, pCallback) ) {
+			//ULONG	nTableCount = RtlNumberGenericTableElements(&m_table);
+			//__dlog("RegistryTable:%d", nTableCount);
+
+			if( IsExisting(entry.RegPUID, false, &entry, [](PREG_ENTRY pEntry, PVOID pContext) {
+				PREG_ENTRY	p	= (PREG_ENTRY)pContext;
+				CRegTable	*pClass	= (CRegTable *)p->pContext;
+				pClass->Update(pEntry, (DWORD)p->dwSize);
+			
+			})) {
 			
 			
 			}
 			else {
-				if( pKey ) 
+				if (p->pRegPath)
 				{
-					//if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.RegPath, pKey, 'PDDA')) 
-					//{
-					//	__dlog("CMemory::AllocateUnicodeString() failed.");
-					//	__leave;
-					//}			
+					if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.RegPath, p->pRegPath, 'PDDA')) {
+						__dlog("CMemory::AllocateUnicodeString() failed.");
+						__leave;
+					}
 				}
-				pEntry = (PREG_ENTRY)RtlInsertElementGenericTable(&m_table, &entry, sizeof(PREG_ENTRY), &bRet);
+				if (p->pRegValueName)
+				{
+					if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.RegValueName, p->pRegValueName, 'PDDA')) {
+						__dlog("CMemory::AllocateUnicodeString() failed.");
+						__leave;
+					}
+				}
+				pEntry = (PREG_ENTRY)RtlInsertElementGenericTable(&m_table, &entry, sizeof(REG_ENTRY), &bRet);
 				//	RtlInsertElementGenericTable returns a pointer to the newly inserted element's associated data, 
 				//	or it returns a pointer to the existing element's data if a matching element already exists in the generic table.
 				//	If no matching element is found, but the new element cannot be inserted
 				//	(for example, because the AllocateRoutine fails), RtlInsertElementGenericTable returns NULL.
 				//	if( bRet && pEntry ) PrintProcessEntry(__FUNCTION__, pEntry);
-				ULONG	nCount = RtlNumberGenericTableElements(&m_table);
-				__dlog("RegistryTable:%d", nCount);
-				//if (pEntry)	pEntry->bFree = true;
-				if( pEntry ) {
-					if (pCallback)
-						pCallback(pEntry, pCallbackPtr);
+				pEntry->nCount++;
+				if( false == bRet && pEntry ) {
+					Update(pEntry, p->nSize);			
+					nCount	= pEntry->nCount;
 				}
-				bRet	= true;
 			}
 			Unlock(irql);
 		}
@@ -114,8 +290,25 @@ public:
 		}
 		return bRet;
 	}
+
+	ULONG		Count()
+	{
+		if (false == IsPossible())	return 0;
+		KIRQL			irql = KeGetCurrentIrql();
+
+		if (irql >= DISPATCH_LEVEL) {
+			__dlog("%s DISPATCH_LEVEL", __FUNCTION__);
+			return 0;
+		}
+		ULONG	nCount = 0;
+		Lock(&irql);
+		nCount = RtlNumberGenericTableElements(&m_table);
+		Unlock(irql);
+		
+		return nCount;
+	}
 	bool		IsExisting(
-		IN	REGUID					RegUID,
+		IN	REGUID					RegPUID,
 		IN	bool					bLock,
 		IN	PVOID					pCallbackPtr = NULL,
 		IN	PRegTableCallback		pCallback = NULL
@@ -129,7 +322,7 @@ public:
 		bool			bRet	= false;
 		KIRQL			irql	= KeGetCurrentIrql();
 		REG_ENTRY		entry;
-		entry.RegUID	= RegUID;
+		entry.RegPUID	= RegPUID;
 
 		if( bLock )	Lock(&irql);
 		LPVOID			p = RtlLookupElementGenericTable(&m_table, &entry);
@@ -146,13 +339,13 @@ public:
 		}
 		else
 		{
-			__log("%-32s %I64d not found.", __FUNCTION__, RegUID);
+			__log("%-32s %I64d not found.", __FUNCTION__, RegPUID);
 		}
 		if( bLock )	Unlock(irql);
 		return bRet;
 	}
 	bool		Remove(
-		IN REGUID			RegUID,
+		IN REGUID			RegPUID,
 		IN bool				bLock,
 		IN PVOID			pCallbackPtr,
 		PRegTableCallback	pCallback
@@ -166,7 +359,7 @@ public:
 		REG_ENTRY		entry	= { 0, };
 		KIRQL			irql	= KeGetCurrentIrql();
 
-		entry.RegUID	= RegUID;
+		entry.RegPUID	= RegPUID;
 		if (bLock)	Lock(&irql);
 		PREG_ENTRY	pEntry = (PREG_ENTRY)RtlLookupElementGenericTable(&m_table, &entry);
 		if (pEntry)
@@ -194,7 +387,41 @@ public:
 	{
 		if (bLog)	__function_log;
 		if (NULL == pEntry)	return;
-		//CMemory::FreeUnicodeString(&pEntry->RegPath, bLog);
+		if( bLog )	__dlog("%-32s RegPath", __func__);
+		CMemory::FreeUnicodeString(&pEntry->RegPath, bLog);
+		if( bLog )	__dlog("%-32s RegValueName", __func__);
+		CMemory::FreeUnicodeString(&pEntry->RegValueName, bLog);
+	}
+	void		Flush(PVOID pContext, void (*pCallback)(PREG_ENTRY pEntry, PVOID pContext, bool *pDelete))
+	{
+		//__dlog("%s IRQL=%d", __FUNCTION__, KeGetCurrentIrql());
+		if (false == IsPossible() || false == m_bInitialize)
+		{
+			return;
+		}
+		KIRQL		irql;
+		PREG_ENTRY	pEntry = NULL;
+		ULONG		nCount	= 0;
+		Lock(&irql);
+		for (ULONG i = 0; i < RtlNumberGenericTableElements(&m_table); )
+		{
+			pEntry	= (PREG_ENTRY)RtlGetElementGenericTable(&m_table, i);
+			if( NULL == pEntry )	break;
+
+			bool	bDelete;
+			pCallback(pEntry, pContext, &bDelete);
+			if( bDelete ) {
+				FreeEntryData(pEntry, false);
+				RtlDeleteElementGenericTable(&m_table, pEntry);
+				nCount++;
+				//__dlog("%-32s %p deleted", __func__, pEntry->RegPUID);
+			}
+			else {
+				i++;
+			}
+		}
+		__dlog("%-32s T:%d D:%d", __func__, RtlNumberGenericTableElements(&m_table), nCount);
+		Unlock(irql);
 	}
 	void		Clear()
 	{
@@ -214,7 +441,7 @@ public:
 				//__dlog("%s %d", __FUNCTION__, pEntry->handle);
 				//__dlog("  path    %p(%d)", pEntry->path.Buffer, pEntry->path.Length);
 				//__dlog("  command %p(%d)", pEntry->command.Buffer, pEntry->command.Length);
-				FreeEntryData(pEntry);
+				FreeEntryData(pEntry, false);
 				RtlDeleteElementGenericTable(&m_table, pEntry);
 			}
 		}
@@ -251,10 +478,11 @@ private:
 	FAST_MUTEX			m_mutex;
 	KSPIN_LOCK			m_lock;
 	POOL_TYPE			m_pooltype;
+	CThread				m_thread;
 
 	POOL_TYPE	PoolType()
 	{
-		__dlog("%-32s %d", __func__, m_pooltype);
+		//__dlog("%-32s %d", __func__, m_pooltype);
 		return m_pooltype;
 	}
 	bool	IsPossible()
@@ -279,10 +507,10 @@ private:
 		PREG_ENTRY	pSecond = (PREG_ENTRY)SecondStruct;
 		if (pFirst && pSecond)
 		{
-			if (pFirst->RegUID > pSecond->RegUID ) {
+			if (pFirst->RegPUID > pSecond->RegPUID ) {
 				return GenericGreaterThan;
 			}
-			else if (pFirst->RegUID < pSecond->RegUID) {
+			else if (pFirst->RegPUID < pSecond->RegPUID) {
 				return GenericLessThan;
 			}
 		}

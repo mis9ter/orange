@@ -211,7 +211,9 @@ NTSTATUS	GetProcUID(
 	IN	PCUNICODE_STRING	pImagePath,
 	IN	LARGE_INTEGER		*pCreateTime,
 	OUT	PROCUID				*pUID);
-NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p);
+NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p, bool bLog);
+//NTSTATUS	SetProcessTimes(HANDLE PID, PY_PROCESS p);
+
 NTSTATUS	GetProcessImagePathByProcessId
 (
 	HANDLE							pProcessId,
@@ -252,6 +254,7 @@ void		CreateProcessMessage(
 	PROCUID						*pPPUID,
 	PUNICODE_STRING				pProcPath,
 	PUNICODE_STRING				pCommand,
+	PKERNEL_USER_TIMES			pTimes,
 	PY_PROCESS					*pOut
 );
 WORD		GetStringDataSize(PUNICODE_STRING pStr);

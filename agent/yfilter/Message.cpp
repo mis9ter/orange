@@ -22,6 +22,7 @@ void		CreateProcessMessage(
 	PROCUID						*pPPUID,
 	PUNICODE_STRING				pDevicePath,
 	PUNICODE_STRING				pCommand,
+	PKERNEL_USER_TIMES			pTimes,
 	PY_PROCESS					*pOut
 ) {
 	WORD			wSize	= sizeof(Y_HEADER);
@@ -34,14 +35,18 @@ void		CreateProcessMessage(
 
 	pMsg	= (PY_PROCESS)CMemory::Allocate(PagedPool, wSize, TAG_PROCESS);
 	if( pMsg ) {
+		RtlZeroMemory(pMsg, sizeof(PY_PROCESS));
 		pMsg->mode		= YFilter::Message::Mode::Event;
 		pMsg->category	= YFilter::Message::Category::Process;
 		pMsg->subType	= subType;
 		pMsg->wSize		= wSize;
 		pMsg->wRevision	= Y_MESSAGE_REVISION;
-		RtlZeroMemory(&pMsg->times, sizeof(pMsg->times));
-		pMsg->pImsageSize	= 0;
 
+		if( pTimes )
+			pMsg->times	= *pTimes;
+		else 
+			GetProcessTimes(PID, &pMsg->times, false);
+		pMsg->pImsageSize	= 0;
 		pMsg->PUID		= *pPUID;
 		pMsg->PPUID		= pPPUID? *pPPUID : 0;
 		pMsg->PID		= (DWORD)PID;
@@ -142,6 +147,8 @@ NTSTATUS	SendMessage(
 		return status;
 	}
 	//__log("%s %ws %p %d", __FUNCTION__, p->szName, pSendData, nSendDataSize);
+	pRecvData		= NULL;
+	pnRecvDataSize	= NULL;
 	CAutoReleaseSpinLock(__FUNCTION__, &p->lock, bLog);
 	{
 		LARGE_INTEGER	timeout;
@@ -157,6 +164,11 @@ NTSTATUS	SendMessage(
 				&p->pPort,
 				pSendData, nSendDataSize,
 				pRecvData, pnRecvDataSize, NULL);
+
+			STATUS_PORT_DISCONNECTED;
+			if( NT_FAILED(status)) {
+				__dlog("%-32s FltSendMessage(%d):%08x", __func__, nSendDataSize, status);
+			}
 			STATUS_BUFFER_OVERFLOW;
 			STATUS_TIMEOUT;
 			if (STATUS_SUCCESS == status)

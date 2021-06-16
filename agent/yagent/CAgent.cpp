@@ -209,6 +209,8 @@ bool	CAgent::Start()
 		}
 		//	이제부터 비정상 종료시 SCM에 의해 되 살아납니다.
 		Service()->SetServiceRecoveryMode(false);
+
+		CFilterCtrl::SendCommand(Y_COMMAND_GET_PROCESS_LIST);
 		m_config.bRun = true;
 	} while( false );
 	return m_config.bRun;

@@ -19,7 +19,9 @@ typedef struct Y_MESSAGE
 	public	Y_HEADER
 {
 	char					szData[MAX_FILTER_MESSAGE_SIZE];
+	#pragma pack(pop)
 	OVERLAPPED				ov;
+	#pragma pack(push, 1)
 } Y_MESSAGE, *PY_MESSAGE;
 
 
@@ -39,10 +41,25 @@ typedef struct YFILTERCTRL_REPLY
 	FILTER_REPLY_HEADER		_header;
 	Y_REPLY					data;
 } YFILTERCTRL_REPLY, * PYFILTERCTRL_REPLY;
+
+typedef struct Y_MESSAGE_REPLY
+	:
+	public	FILTER_REPLY_HEADER,
+	public	Y_REPLY
+{
+
+} Y_MESSAGE_REPLY, * PY_MESSAGE_REPLY;
+
 #pragma pack(pop)
 
 
-class CFilterCtrlImpl;
+class  CFilterCtrlImpl;
+typedef struct {
+	int					nIdx;
+	Y_MESSAGE			ymsg;
+	PVOID				pContext;
+} THREAD_MESSAGE, *PTHREAD_MESSAGE;
+
 typedef struct {
 	WCHAR				szName[100];
 	HANDLE				hCompletion;
@@ -51,11 +68,13 @@ typedef struct {
 	HANDLE				hPort;
 	DWORD				dwThreadCount;
 	HANDLE *			hThreads;
-	YFILTERCTRL_MESSAGE	message;
-	Y_MESSAGE			ymsg;
+	//YFILTERCTRL_MESSAGE	message;
+	PTHREAD_MESSAGE		pMessage;
 
 	CFilterCtrlImpl		*pClass;
 } PORT_INFO, *PPORT_INFO;
+
+
 
 class CFilterCtrlImpl	
 	:	
@@ -229,11 +248,17 @@ public:
 		Log("%s end", __FUNCTION__);
 	}
 
-	bool	CreatePortInfo(PPORT_INFO p, PCWSTR pPortName, DWORD dwThreadCount,
-		_beginthreadex_proc_type proc)
+	bool	CreatePortInfo(
+			PPORT_INFO p, 
+			PCWSTR pPortName, 
+			DWORD dwThreadCount,
+			_beginthreadex_proc_type proc
+	)
 	{
 		bool	bRet	= false;
 		HRESULT	hResult	= S_FALSE;
+
+		Log("%-32s name:%ws", __func__, pPortName);
 		__try
 		{
 			if( NULL == p )	__leave;
@@ -257,15 +282,23 @@ public:
 				Log("%s error: CreateIoCompletionPort() failed. code=%d", __FUNCTION__, GetLastError());
 				__leave;
 			}
+			Log("%-32s comp:%p", __func__, p->hCompletion);
 			p->hThreads			= (HANDLE *)malloc(sizeof(HANDLE) * dwThreadCount);
 			if (NULL == p->hThreads) {
 				Log("%s error: alloca() failed. code=%d", __FUNCTION__, GetLastError());
 				__leave;
 			}
-			ZeroMemory(p->hThreads, sizeof(HANDLE) * p->dwThreadCount);
+			p->pMessage			= (PTHREAD_MESSAGE)malloc(sizeof(THREAD_MESSAGE) * dwThreadCount);
+			if( NULL == p->pMessage ) {
+				Log("%s error: alloca() failed. code=%d", __FUNCTION__, GetLastError());
+				__leave;			
+			}
+			ZeroMemory(p->pMessage, sizeof(THREAD_MESSAGE) * p->dwThreadCount);
 			for (DWORD i = 0; i < p->dwThreadCount; i++)
 			{
-				p->hThreads[i]	= (HANDLE)_beginthreadex(NULL, 0, proc, p, 0, NULL);
+				p->pMessage[i].nIdx		= i;
+				p->pMessage[i].pContext	= p;
+				p->hThreads[i]	= (HANDLE)_beginthreadex(NULL, 0, proc, &p->pMessage[i], 0, NULL);
 				if (NULL == p->hThreads[i]) {
 					Log("%s thread[%d] failed. code=%d", __FUNCTION__, i, GetLastError());
 					break;
@@ -276,7 +309,10 @@ public:
 		}
 		__finally
 		{
-
+			if( false == bRet ) {
+				if( p && p->hThreads )	free(p->hThreads);
+				if( p && p->pMessage )	free(p->pMessage);
+			}
 		}
 		return bRet;
 	}
@@ -320,11 +356,11 @@ public:
 		command.dwCommand = dwCommand;
 		if (S_OK == FilterSendMessage(m_driver.command.hPort, &command, sizeof(command), 
 					&reply, sizeof(reply), &dwBytes)) {
-			Log("%s reply.bRet=%d, dwBytes=%d", __FUNCTION__, reply.bRet, dwBytes);
+			Log("%-32s reply.bRet=%d, dwBytes=%d", __FUNCTION__, reply.bRet, dwBytes);
 			return true;
 		}
 		else {
-			Log("%s FilterSendMessage() failed.", __FUNCTION__);
+			Log("%-32s FilterSendMessage() failed.", __FUNCTION__);
 		}
 		return true;
 	}
@@ -333,9 +369,7 @@ public:
 		Log(__FUNCTION__);
 		SYSTEM_INFO		si;
 		GetSystemInfo(&si);
-		DWORD	dwCPU	= max(si.dwNumberOfProcessors, 2);
-
-		
+		DWORD	dwCPU	= min(si.dwNumberOfProcessors, 2);		
 		Log("-- CPU:%d", dwCPU);
 		__try
 		{
@@ -347,7 +381,7 @@ public:
 			{
 				__leave;
 			}
-			if (CreatePortInfo(&m_driver.event, DRIVER_EVENT_PORT, dwCPU, EventThread))
+			if (CreatePortInfo(&m_driver.event, DRIVER_EVENT_PORT, dwCPU, EventThread2))
 			{
 
 			}
@@ -356,7 +390,7 @@ public:
 				__leave;
 			}
 			//	
-			m_driver.bConnected = SendCommand(YFILTER_COMMAND_START);
+			m_driver.bConnected = SendCommand(Y_COMMAND_START);
 		}
 		__finally
 		{
@@ -378,7 +412,7 @@ public:
 		Log("%s m_driver.bConnected=%d", __FUNCTION__, bConnected);
 		if( m_driver.bConnected )
 		{
-			SendCommand(YFILTER_COMMAND_STOP);
+			SendCommand(Y_COMMAND_STOP);
 			DestroyPortInfo(&m_driver.command);
 			DestroyPortInfo(&m_driver.event);
 			m_driver.bConnected	= false;
@@ -406,12 +440,13 @@ private:
 
 	static	unsigned	__stdcall	CommandThread(LPVOID ptr)
 	{
-		if (NULL == ptr)	return (unsigned)-1;
-		PPORT_INFO		p = (PPORT_INFO)ptr;
+		PTHREAD_MESSAGE		p		= (PTHREAD_MESSAGE)ptr;
+		PPORT_INFO			pp		= (PPORT_INFO)p->pContext;
+		CFilterCtrlImpl		*pClass	= (CFilterCtrlImpl *)pp->pClass;
 
-		p->pClass->Log("%s begin", __FUNCTION__);
-		WaitForSingleObject(p->hInit, 30 * 1000);
-		bool			bLoop = true;
+		pClass->Log("%s begin", __FUNCTION__);
+		//WaitForSingleObject(p->hInit, 30 * 1000);
+		bool			bLoop = false;
 		while (bLoop)
 		{
 			bool			bRet;
@@ -421,94 +456,146 @@ private:
 
 			__try 
 			{
-				bRet = GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
-				p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pOverlapped=%p",
+				bRet = GetQueuedCompletionStatus(pp->hCompletion, &dwBytes, &pCompletionKey, &pOverlapped, INFINITE);
+				pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pOverlapped=%p",
 					__FUNCTION__, bRet, dwBytes, pCompletionKey, pOverlapped);
 				if (false == bRet || NULL == pCompletionKey)	break;
 			}
 			__except (EXCEPTION_EXECUTE_HANDLER) {
-				p->pClass->Log("%s exception", __FUNCTION__);
+				pClass->Log("%s exception", __FUNCTION__);
 				break;
 			}
 		}
-		p->pClass->Log("%s end", __FUNCTION__);
+		pClass->Log("%s end", __FUNCTION__);
 		return 0;
 	}
+
+	#define USE_SYNC_MESSAGE
+	#ifdef __EVENT_THREAD__
 	static	unsigned	__stdcall	EventThread(LPVOID ptr)
 	{
 		if (NULL == ptr)	{
 			
 			return (unsigned)-1;
 		}
-		PPORT_INFO		p = (PPORT_INFO)ptr;
 
-		WaitForSingleObject(p->hInit, 30 * 1000);
+		PTHREAD_MESSAGE	p	= (PTHREAD_MESSAGE)ptr;
+
+		//WaitForSingleObject(p->hInit, 30 * 1000);
 		p->pClass->Log("%s begin", __FUNCTION__);
 
 		LPOVERLAPPED		pOv		= NULL;
 		bool				bRet	= true;
-		DWORD				dwBytes;
+		DWORD				dwBytes	= 0;
 		ULONG_PTR			pCompletionKey;
 		DWORD				dwError;
 
-		PY_MESSAGE			pMessage	= &p->ymsg;
-		YFILTERCTRL_REPLY	reply;
+		PY_MESSAGE			pMessage	= NULL;
+		Y_MESSAGE_REPLY		reply;
 
-		HRESULT	hr;
-		DWORD	dwMessageSize;
+		HRESULT				hr;
+		DWORD				dwMessageSize;
+
+		pMessage	= p->message
 
 		while (true)
 		{
-			ZeroMemory(&p->ymsg.ov, sizeof(OVERLAPPED));
-			dwMessageSize	= FIELD_OFFSET(Y_MESSAGE, ov);
+			if( bSync ) {
+				pMessage	= &msg;
+				ZeroMemory(pMessage, sizeof(Y_MESSAGE));
+				dwMessageSize	= FIELD_OFFSET(Y_MESSAGE, ov);
 
-			//p->pClass->Log("%-32s dwMessageSize=%d", __func__, dwMessageSize);
-			hr = FilterGetMessage(
-				p->hPort, 
-				&p->ymsg,
-				dwMessageSize,
-				&p->ymsg.ov);
-			if (HRESULT_FROM_WIN32(ERROR_IO_PENDING) != hr)
-			{
-				//	[TODO] 실패인데.. 이를 어쩌나. 
-				p->pClass->Log("%s FilterGetMessage()=%08x", __FUNCTION__, hr);
-				break;
-			}
-			bRet	= GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, 
-				(LPOVERLAPPED *)&pOv, INFINITE);
-			dwError	= GetLastError();
-			if( (false == bRet && ERROR_INSUFFICIENT_BUFFER != dwError) || 
-				NULL == pCompletionKey )	{
-				p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pMessage=%p, error code=%d",
-					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
-				break;
-			}
-			pMessage	= CONTAINING_RECORD(pOv, Y_MESSAGE, ov);
-			reply.data.bRet			= false;
-			if (YFilter::Message::Mode::Event == pMessage->mode)
-			{
-				if( pMessage->wRevision ) {
-					if (p->pClass->m_callback.event.pCallback2)
-					{
-						reply.data.bRet = 
-							p->pClass->m_callback.event.pCallback2(
-								pMessage,
-								p->pClass->m_callback.event.pContext								
-							);
-					}
-					
+				p->pClass->Log("%-32s port:%p", __func__, p->hPort);
+				hr = FilterGetMessage(
+					p->hPort,
+					pMessage,
+					dwMessageSize,
+					NULL);
+				if( S_OK == hr ) {
+
+					p->pClass->Log("%-32s hr:%08x HRESULT_FROM_WIN32(ERROR_IO_PENDING)=%08x", __func__, hr, HRESULT_FROM_WIN32(ERROR_IO_PENDING));
 				}
 				else {
-					p->pClass->Log("revision    :%d", pMessage->wRevision);
-					p->pClass->Log("message size:%d", dwMessageSize);
-					p->pClass->Log("iocp bytes  :%d", dwBytes);
 				
+					p->pClass->Log("%-32s hr:%08x", __func__, hr);
+					break;
 				}
-				reply.data.bRet = true;
-
-			}	
+				pMessage	= NULL;
+			}
 			else {
-				p->pClass->Log("-- unknown mode:%d", pMessage->mode);
+				pMessage	= (PY_MESSAGE)CMemoryOperator::Allocate(sizeof(Y_MESSAGE));
+				if( NULL == pMessage )	break;
+
+				ZeroMemory(pMessage, sizeof(Y_MESSAGE));
+				dwMessageSize	= FIELD_OFFSET(Y_MESSAGE, ov);
+
+				p->pClass->Log("%-32s port:%p", __func__, p->hPort);
+				hr = FilterGetMessage(
+					p->hPort,
+					pMessage,
+					dwMessageSize,
+					&pMessage->ov);
+				p->pClass->Log("%-32s hr:%08x", __func__, hr);
+
+				if (HRESULT_FROM_WIN32(ERROR_IO_PENDING) != hr)
+				{
+					//	[TODO] 실패인데.. 이를 어쩌나. 
+					p->pClass->Log("%s FilterGetMessage()=%08x", __FUNCTION__, hr);
+					break;
+				}
+				pMessage	= NULL;
+				pOv			= NULL;
+				p->pClass->Log("%-32s comp:%p", __func__, p->hCompletion);
+				bRet		= GetQueuedCompletionStatus(p->hCompletion, &dwBytes, &pCompletionKey, 
+									(LPOVERLAPPED *)&pOv, INFINITE);
+				dwError	= GetLastError();
+				p->pClass->Log("%-32s bRet:%d dwBytes:%d, pCompletionKey:%p, pOv:%p, error:%d",
+					__func__, bRet, dwBytes, pCompletionKey, pOv, dwError);
+
+
+
+				if( (false == bRet && ERROR_INSUFFICIENT_BUFFER != dwError) || 
+					0		== dwBytes	||
+					NULL	== pCompletionKey )	{
+					p->pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pMessage=%p, error code=%d",
+						__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
+					break;
+				}
+				pMessage	= CONTAINING_RECORD(pOv, Y_MESSAGE, ov);
+			}
+
+		
+			reply.bRet	= false;
+			if( pMessage ) {
+				if (YFilter::Message::Mode::Event == pMessage->mode)
+				{
+					if( pMessage->wRevision ) {
+						if (p->pClass->m_callback.event.pCallback2)
+						{
+							reply.bRet = 
+								p->pClass->m_callback.event.pCallback2(
+									pMessage,
+									p->pClass->m_callback.event.pContext								
+								);
+						}
+					
+					}
+					else {
+						p->pClass->Log("revision    :%d", pMessage->wRevision);
+						p->pClass->Log("message size:%d", dwMessageSize);
+						p->pClass->Log("iocp bytes  :%d", dwBytes);
+				
+					}
+				}	
+				else {
+					p->pClass->Log("-- mode :%d", pMessage->mode);
+					p->pClass->Log("category:%d", pMessage->category);
+					p->pClass->Log("size    :%d", pMessage->wSize);
+					p->pClass->Log("revision:%d", pMessage->wRevision);
+
+				}
+				if( false == bSync )
+					CMemoryOperator::Free(pMessage);
 			}
 			/*		
 			FilterReplyMessage의 데이터 크기 부분 참고.
@@ -525,13 +612,13 @@ private:
 			both to sizeof(FILTER_REPLY_HEADER) + sizeof(MY_STRUCT) instead of sizeof(REPLY_STRUCT). 
 			This ensures that any extra padding at the end of the REPLY_STRUCT structure is ignored.
 			*/
-			reply._header.Status = ERROR_SUCCESS;
-			reply._header.MessageId = pMessage->MessageId;
-			hr	= FilterReplyMessage(p->hPort, (PFILTER_REPLY_HEADER)&reply,
-				sizeof(reply));
+			reply.Status = ERROR_SUCCESS;
+			reply.MessageId = pMessage->MessageId;
+			/*
+			hr	= FilterReplyMessage(p->hPort, (PFILTER_REPLY_HEADER)&reply, sizeof(reply));
 			if (SUCCEEDED(hr) || ERROR_IO_PENDING == hr || ERROR_FLT_NO_WAITER_FOR_REPLY == hr)
 			{
-				//p->pClass->Log("FilterReplyMessage(SUCCESS)=%08x", hr);
+				p->pClass->Log("FilterReplyMessage(SUCCESS)=%08x", hr);
 			}	
 			else
 			{
@@ -540,11 +627,94 @@ private:
 				p->pClass->Log("FilterReplyMessage(FAILURE)=%08x, E_INVALIDARG=%08x", 
 					hr, E_INVALIDARG);
 			}
+			*/
 			ERROR_MORE_DATA;
 		}
 		p->pClass->Log("%s end", __FUNCTION__);
 		return 0;
 	}
+	#endif
+	static	unsigned	__stdcall	EventThread2(LPVOID ptr)
+	{
+		PTHREAD_MESSAGE		p		= (PTHREAD_MESSAGE)ptr;
+		PPORT_INFO			pp		= (PPORT_INFO)p->pContext;
+		CFilterCtrlImpl		*pClass	= (CFilterCtrlImpl *)pp->pClass;
+
+		//WaitForSingleObject(p->hInit, 30 * 1000);
+		pClass->Log("%s(%d) begin", __FUNCTION__, p->nIdx);
+
+		PY_MESSAGE			pMessage	= &p->ymsg;
+		Y_MESSAGE_REPLY		reply;
+
+		HRESULT				hr;
+		DWORD				dwMessageSize;
+
+		LPOVERLAPPED		pOv		= NULL;
+		bool				bRet	= true;
+		DWORD				dwBytes	= 0;
+		ULONG_PTR			pCompletionKey;
+		DWORD				dwError;
+
+		dwMessageSize	= FIELD_OFFSET(Y_MESSAGE, ov);
+		while (true)
+		{
+			//pClass->Log("%-32s port:%p data:%p size:%d", __func__, pp->hPort, pMessage, dwMessageSize);
+			hr = FilterGetMessage(
+					pp->hPort,
+					pMessage,
+					dwMessageSize,
+					&pMessage->ov);
+			if (HRESULT_FROM_WIN32(ERROR_IO_PENDING) != hr)
+			{
+				//	[TODO] 실패인데.. 이를 어쩌나. 
+				pClass->Log("%s FilterGetMessage()=%08x", __FUNCTION__, hr);
+				break;
+			}	
+
+			//pClass->Log("%-32s comp:%p", __func__, pp->hCompletion);
+			bRet		= GetQueuedCompletionStatus(pp->hCompletion, &dwBytes, &pCompletionKey, 
+							(LPOVERLAPPED *)&pOv, INFINITE);
+			dwError	= GetLastError();
+			//pClass->Log("%-32s bRet:%d dwBytes:%d, pCompletionKey:%p, pOv:%p, error:%d",
+			//	__func__, bRet, dwBytes, pCompletionKey, pOv, dwError);
+
+			if( (false == bRet && ERROR_INSUFFICIENT_BUFFER != dwError) || 
+				0		== dwBytes	||
+				NULL	== pCompletionKey )	{
+				pClass->Log("%s bRet=%d dwBytes=%d, pCompletionKey=%p, pMessage=%p, error code=%d",
+					__FUNCTION__, bRet, dwBytes, pCompletionKey, pMessage, GetLastError());
+				break;
+			}
+			pMessage	= CONTAINING_RECORD(pOv, Y_MESSAGE, ov);
+			reply.bRet	= false;
+			if (YFilter::Message::Mode::Event == pMessage->mode)
+			{
+				if( pMessage->wRevision ) {
+					if (pClass->m_callback.event.pCallback2)
+					{
+						reply.bRet = 
+							pClass->m_callback.event.pCallback2(
+								dynamic_cast<PY_HEADER>(pMessage),
+								pClass->m_callback.event.pContext								
+							);
+					}
+				}
+				else {
+					pClass->Log("revision    :%d", pMessage->wRevision);
+					pClass->Log("message size:%d/%d", pMessage->wSize, dwMessageSize);
+				}
+			}	
+			else {
+				pClass->Log("-- mode :%d", pMessage->mode);
+				pClass->Log("category:%d", pMessage->category);
+				pClass->Log("size    :%d", pMessage->wSize);
+				pClass->Log("revision:%d", pMessage->wRevision);
+			}
+		}
+		pClass->Log("%s(%d) end", __FUNCTION__, p->nIdx);
+		return 0;
+	}
+	#ifdef ____
 	static	unsigned	__stdcall	EventThread_OLD(LPVOID ptr)
 	{
 		if (NULL == ptr)	return (unsigned)-1;
@@ -656,5 +826,6 @@ private:
 		p->pClass->Log("%s end", __FUNCTION__);
 		return 0;
 	}
+	#endif
 };
 #include <fltWinError.h>

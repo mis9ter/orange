@@ -31,17 +31,19 @@ public:
 	}
 	void			Create()
 	{
-		const char	*pIsExisting	= "select count(RegUID) from registry where RegUID=? and SubType=? and RegValueName=?";
+		const char	*pIsExisting	= "select count(RegPUID) from registry where RegPUID=? and SubType=?";
 		const char	*pInsert		= "insert into registry"	\
 			"("\
-			"RegUID,SubType,RegPath,RegValueName,DataSize,Cnt"\
+			"RegPUID,RegUID,PUID,SubType,RegPath,"\
+			"RegValueName,DataSize,Cnt"\
 			") "\
 			"values("\
-			"?,?,?,?,?,1"\
+			"?,?,?,?,?"\
+			",?,?,?"\
 			")";
 		const char	*pUpdate			= "update registry "	\
-			"set DataSize = DataSize + ?, Cnt = Cnt + 1, UpdateTime = CURRENT_TIMESTAMP "
-			"where RegUID=? and SubType=? and RegValueName=?";
+			"set DataSize = DataSize + ?, Cnt = Cnt + ?, UpdateTime = CURRENT_TIMESTAMP "
+			"where RegPUID=? and SubType=?";
 
 		if (Db()->IsOpened()) {
 	
@@ -65,6 +67,22 @@ public:
 		}
 	}
 protected:
+//#define USE_LOG
+	void					Dump(PY_REGISTRY p) {
+		m_log.Log("  mode     :%d", p->mode);
+		m_log.Log("  category :%d", p->category);
+		m_log.Log("  wSize    :%d", p->wSize);
+		m_log.Log("  wRevision:%d", p->wRevision);
+		m_log.Log("  subType  :%d", p->subType);
+		m_log.Log("  RegUID   :%p", p->RegUID);
+		m_log.Log("  RegPUID  :%p", p->RegPUID);
+		m_log.Log("  PID      :%d", p->PID);
+		m_log.Log("  PUID     :%p", p->PUID);
+		m_log.Log("  RegPath  :%ws [%d]", p->RegPath.pBuf, p->RegPath.wSize);
+		m_log.Log("  RegValue :%ws [%d]", p->RegValueName.pBuf, p->RegValueName.wSize);
+		m_log.Log("  count    :%d", p->nCount);
+		m_log.Log("  Size     :%I64d", p->nDataSize);
+	}
 	static	bool			Proc2
 	(
 		PY_HEADER			pMessage,
@@ -74,19 +92,29 @@ protected:
 		PY_REGISTRY			p	= (PY_REGISTRY)pMessage;
 		CRegistryCallback	*pClass = (CRegistryCallback *)pContext;
 		
-		//pClass->m_log.Log("  mode     :%d", p->mode);
-		//pClass->m_log.Log("  category :%d", p->category);
-		//pClass->m_log.Log("  wSize    :%d", p->wSize);
-		//pClass->m_log.Log("  wRevision:%d", p->wRevision);
-		//pClass->m_log.Log("  subType  :%d", p->subType);
-		//pClass->m_log.Log("  RegUID   :%p", p->RegUID);
+		#ifdef USE_LOG
+		pClass->m_log.Log("  mode     :%d", p->mode);
+		pClass->m_log.Log("  category :%d", p->category);
+		pClass->m_log.Log("  wSize    :%d", p->wSize);
+		pClass->m_log.Log("  wRevision:%d", p->wRevision);
+		pClass->m_log.Log("  subType  :%d", p->subType);
+		pClass->m_log.Log("  RegUID   :%p", p->RegUID);
+		pClass->m_log.Log("  RegPUID  :%p", p->RegPUID);
+		pClass->m_log.Log("  PID      :%d", p->PID);
+		pClass->m_log.Log("  PUID     :%p", p->PUID);
+		#endif
 
 		p->RegPath.pBuf	= (PWSTR)((char *)p + p->RegPath.wOffset);						
 		p->RegValueName.pBuf	= (PWSTR)((char *)p + p->RegValueName.wOffset);
 
-		//pClass->m_log.Log("  RegPath  :%ws [%d]", p->RegPath.pBuf, p->RegPath.wSize);
-		//pClass->m_log.Log("  RegValue :%ws [%d]", p->RegValueName.pBuf, p->RegValueName.wSize);
-		//pClass->m_log.Log("  Size     :%d", p->nDataSize);	
+		#ifdef USE_LOG
+		pClass->m_log.Log("  RegPath  :%ws [%d]", p->RegPath.pBuf, p->RegPath.wSize);
+		pClass->m_log.Log("  RegValue :%ws [%d]", p->RegValueName.pBuf, p->RegValueName.wSize);
+		pClass->m_log.Log("  count    :%d", p->nCount);
+		pClass->m_log.Log("  Size     :%I64d", p->nDataSize);
+
+		pClass->m_log.Log(TEXTLINE);
+		#endif
 
 		if( pClass->IsExisting(p) )
 			pClass->Update(p);
@@ -123,10 +151,8 @@ private:
 		sqlite3_stmt* pStmt = m_stmt.pIsExisting;
 		if (pStmt) {
 			int		nIndex = 0;
-			sqlite3_bind_int64(pStmt, ++nIndex, p->RegUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->RegPUID);
 			sqlite3_bind_int(pStmt, ++nIndex, p->subType);
-			sqlite3_bind_text16(pStmt, ++nIndex, p->RegValueName.pBuf, -1, SQLITE_STATIC);
-			
 			if (SQLITE_ROW == sqlite3_step(pStmt))	{
 				nCount	= sqlite3_column_int(pStmt, 0);
 			}
@@ -145,14 +171,18 @@ private:
 		if (pStmt) {
 			int		nIndex = 0;
 
+			sqlite3_bind_int64(pStmt,	++nIndex, p->RegPUID);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->RegUID);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->PUID);
 			sqlite3_bind_int(pStmt,		++nIndex, p->subType);
 			sqlite3_bind_text16(pStmt,	++nIndex, p->RegPath.pBuf, -1, SQLITE_STATIC);
 			sqlite3_bind_text16(pStmt,	++nIndex, p->RegValueName.pBuf, -1, SQLITE_STATIC);
 			sqlite3_bind_int64(pStmt, ++nIndex, p->nDataSize);
+			sqlite3_bind_int(pStmt, ++nIndex, p->nCount);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
 				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
+				Dump(p);
 			}
 			sqlite3_reset(pStmt);
 		} 
@@ -165,12 +195,10 @@ private:
 		sqlite3_stmt	*pStmt	= m_stmt.pUpdate;
 		if (pStmt) {
 			int			nIndex = 0;
-
 			sqlite3_bind_int64(pStmt, ++nIndex, p->nDataSize);
-			sqlite3_bind_int64(pStmt,	++nIndex, p->RegUID);
-			sqlite3_bind_int(pStmt,		++nIndex, p->subType);
-			sqlite3_bind_text16(pStmt,	++nIndex, p->RegValueName.pBuf, -1, SQLITE_STATIC);
-
+			sqlite3_bind_int(pStmt, ++nIndex, p->nCount);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->RegPUID);
+			sqlite3_bind_int(pStmt, ++nIndex, p->subType);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
 				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));

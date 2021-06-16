@@ -45,6 +45,7 @@ __interface IFilterCtrl
 	virtual	bool	Connect()		= NULL;
 	virtual bool	IsConnected()	= NULL;
 	virtual void	Disconnect()	= NULL;
+	virtual	bool	SendCommand(DWORD dwCommand)	= NULL;
 };
 IFilterCtrl *	__stdcall CreateInstance_CFilterCtrlImpl(IN LPVOID p1, LPVOID p2);
 
@@ -160,6 +161,10 @@ public:
 	{
 		if (NULL == m_pInstance)	return;
 		m_pInstance->Disconnect();
+	}
+	bool	SendCommand(DWORD dwCommand) {
+		if( NULL == m_pInstance )	return false;
+		return m_pInstance->SendCommand(dwCommand);	
 	}
 private:
 	IFilterCtrl	*	m_pInstance;

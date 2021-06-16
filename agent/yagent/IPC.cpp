@@ -41,13 +41,14 @@ bool	CAgent::IPCRecvCallback(
 			CBuffer	data(header.dwSize);
 			if( data.Data() ) {
 				if( dwBytes = pClient->Read(__FUNCTION__, hClient, data.Data(), data.Size())) {
-					Json::CharReaderBuilder	rbuilder;
-					const std::unique_ptr<Json::CharReader>		
-											reader(rbuilder.newCharReader());
 					Json::Value				req, res;
 					std::string				errors;
 
 					try {					
+						Json::CharReaderBuilder	rbuilder;
+						const std::unique_ptr<Json::CharReader>		
+							reader(rbuilder.newCharReader());
+
 						if( reader->parse((PCSTR)data.Data(), (PCSTR)data.Data() + data.Size(), &req, &errors) ) {					
 							pClass->Log((PSTR)data.Data());
 							if( req.isMember("header") ) {

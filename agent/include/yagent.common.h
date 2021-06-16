@@ -127,6 +127,7 @@ private:
 typedef UINT64	BootUID;
 
 namespace YAgent {
+	HANDLE		GetProcessHandle(IN DWORD PID);
 	bool		SetFileContent(IN LPCTSTR lpPath, IN PVOID lpContent, IN DWORD dwSize);
 	PVOID		GetFileContent(IN LPCTSTR lpPath, OUT DWORD * pSize);
 	void		FreeFileContent(PVOID p);

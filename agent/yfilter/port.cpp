@@ -25,7 +25,7 @@ NTSTATUS	CommandConnected(
 			//	[TODO] 이미 연결된 상태? 이전 연결을 끊어주는 것보다는.. 새로운 연결을 거부하고 싶다. 
 			FltCloseClientPort(Config()->pFilter, &Config()->client.command.pPort);
 		}
-		FLT_ASSERT(Config()->client.client.command.pPort == NULL);
+		FLT_ASSERT(Config()->client.command.pPort == NULL);
 		Config()->client.command.pPort = ClientPort;
 		Config()->client.command.hProcess = PsGetCurrentProcessId();
 		RtlStringCbCopyW(Config()->client.command.szName, sizeof(Config()->client.command.szName), 
@@ -59,6 +59,47 @@ VOID	CommandDisconnected(_In_opt_ PVOID ConnectionCookie)
 }
 NTSTATUS	StartDriver();
 NTSTATUS	StopDriver();
+
+void		GetProcessTableList() {
+	ProcessTable()->List(NULL, 
+		[](bool bSaved, PPROCESS_ENTRY pEntry, PVOID pContext) {
+		UNREFERENCED_PARAMETER(bSaved);
+		UNREFERENCED_PARAMETER(pContext);
+
+		PY_PROCESS	pMsg	= NULL;
+		if( Config()->client.event.nConnected ) {
+			//	DISPATCH_LEVEL 이라 GetProcessTimes 호출 불가.			
+			//if( NT_FAILED(GetProcessTimes(pEntry->PID, &pEntry->times, false)) ) {
+			//	__dlog("%-32s GetProcessTimes() failed.", "GetProcessTableList");
+			//}
+			CreateProcessMessage(
+				YFilter::Message::SubType::ProcessStart2,
+				pEntry->PID,
+				pEntry->PPID,
+				pEntry->CPID,
+				&pEntry->PUID,
+				&pEntry->PPUID,
+				&pEntry->ProcPath,
+				&pEntry->Command,
+				&pEntry->times,
+				&pMsg
+			);
+			if( pMsg ) {
+				//__dlog("%-32s %p %d", __func__, pEntry->PUID, pEntry->PID);
+				if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, pMsg->wSize, false) ) {
+					pMsg	= NULL;
+				}
+				else {
+					CMemory::Free(pMsg);
+				}
+			}	
+		}
+		else {
+			__log("%-32s not connected", __func__);
+		}
+	});
+	MessageThreadPool()->Alert(YFilter::Message::Category::Process);
+}
 
 NTSTATUS	CommandMessage
 (
@@ -118,22 +159,32 @@ Return Value:
 	if (InputBuffer && sizeof(Y_COMMAND) == InputBufferSize) {
 		PY_COMMAND	pCommand = (PY_COMMAND)InputBuffer;
 		switch (pCommand->dwCommand) {
-			case YFILTER_COMMAND_START:
+			case Y_COMMAND_START:
 				__log("%s YFILTER_COMMAND_START", __FUNCTION__);
-				if( NT_SUCCESS(StartDriver()) )	bRet	= true;
+				//if( NT_SUCCESS(StartDriver()) )	
+				bRet	= true;
+				//ExInterlockedExchangeUlong(&Config()->nRun, 1, &Config()->lock);
+				_InterlockedExchange((LONG *)&Config()->nRun, 1);
+				AddProcessToTable2(__func__, false, PsGetCurrentProcessId(), NULL, NULL, NULL, false, NULL, NULL);
 				break;
-			case YFILTER_COMMAND_STOP:
-				if (NT_SUCCESS(StopDriver()))	bRet = true;
+			case Y_COMMAND_STOP:
 				__log("%s YFILTER_COMMAND_STOP", __FUNCTION__);
+				//if (NT_SUCCESS(StopDriver()))	
+				bRet = true;
+				_InterlockedExchange((LONG *)&Config()->nRun, 0);
+				break;
+
+			case Y_COMMAND_GET_PROCESS_LIST:
+				__log("%s Y_COMMAND_GET_PROCESS_LIST", __FUNCTION__);
+				GetProcessTableList();
 				break;
 		}
 	}
-
-	if (OutputBuffer && sizeof(Y_REPLY) == OutputBufferSize) {
+	if (OutputBuffer && OutputBufferSize) {
 		__log("%s OutputBuffer=%p, OutputBufferSize=%d", __FUNCTION__, OutputBuffer, OutputBufferSize);
 		((PY_REPLY)OutputBuffer)->bRet = bRet;
 		if (ReturnOutputBufferLength)
-			*ReturnOutputBufferLength = sizeof(Y_REPLY);
+			*ReturnOutputBufferLength = OutputBufferSize;
 	}
 	return status;
 }
@@ -160,7 +211,7 @@ NTSTATUS	EventConnected(
 			//	[TODO] 이미 연결된 상태? 이전 연결을 끊어주는 것보다는.. 새로운 연결을 거부하고 싶다. 
 			FltCloseClientPort(Config()->pFilter, &Config()->client.event.pPort);
 		}
-		FLT_ASSERT(Config()->client.pPort == NULL);
+		FLT_ASSERT(Config()->client.event.pPort == NULL);
 		Config()->client.event.pPort = ClientPort;
 		Config()->client.event.hProcess = PsGetCurrentProcessId();
 		Config()->client.event.nConnected++;

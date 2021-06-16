@@ -75,9 +75,9 @@ void LoadImageNotifyRoutine(
 				PUNICODE_STRING	pImageFileName = NULL;
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
 				{
-					KERNEL_USER_TIMES	times;
-					PROCUID				PUID;
-					GetProcessTimes(ProcessId, &times);
+					KERNEL_USER_TIMES	times	= {0,};
+					PROCUID				PUID	= 0;
+					GetProcessTimes(ProcessId, &times, false);
 					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
 					GetProcGuid(false, ProcessId, NULL, pImageFileName, &times.CreateTime,
 						&pMsg->data.ProcGuid, &PUID);

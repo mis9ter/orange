@@ -36,23 +36,25 @@ typedef struct _PEB {
 	ULONG                         SessionId;
 } PEB, * PPEB;
 
-bool		AddProcessToTable(
-	PCSTR			pCause,
-	bool			bDetectByCallback,
-	HANDLE			PID, 
-	PUNICODE_STRING	pProcPath,
-	PUNICODE_STRING	pCommand,
-	bool			bAddParent,
-	PVOID			pContext,
-	void			(*pCallback)
+bool		AddProcessToTable2(
+	PCSTR				pCause,
+	bool				bDetectByCallback,
+	HANDLE				PID, 
+	PUNICODE_STRING		pProcPath,
+	PUNICODE_STRING		pCommand,
+	PKERNEL_USER_TIMES	pTimes,
+	bool				bAddParent,
+	PVOID				pContext,
+	void				(*pCallback)
 	(
-		PVOID			pContext,
-		HANDLE			PID,
-		PROCUID			PUID,
-		PUNICODE_STRING	pProcPath,
-		PUNICODE_STRING	pCommand,
-		HANDLE			PPID,
-		PROCUID			PPUID
+		PVOID				pContext,
+		HANDLE				PID,
+		PROCUID				PUID,
+		PUNICODE_STRING		pProcPath,
+		PUNICODE_STRING		pCommand,
+		PKERNEL_USER_TIMES	pTimes,
+		HANDLE				PPID,
+		PROCUID				PPUID
 	)
 ) 
 {
@@ -60,9 +62,12 @@ bool		AddProcessToTable(
 	PUNICODE_STRING		_pProcPath	= NULL;
 	PUNICODE_STRING		_pCommand	= NULL;
 	PUNICODE_STRING		pPProcPath	= NULL;
-	KERNEL_USER_TIMES	times;
+	KERNEL_USER_TIMES	times		= {0,};
 
-	GetProcessTimes(PID, &times);
+	if( NULL == pTimes ) {
+		GetProcessTimes(PID, &times, false);
+		pTimes	= &times;
+	}
 	PROCUID				PUID		= 0;
 	PROCUID				PPUID		= 0;
 
@@ -73,7 +78,7 @@ bool		AddProcessToTable(
 				pProcPath	= _pProcPath;
 			}
 			else {
-				__log("%-32s GetProcessImagePathByProcessId(%d) failed.", __func__, (DWORD)PID);
+				//__log("%-32s GetProcessImagePathByProcessId(%d) failed.", __func__, (DWORD)PID);
 				__leave;
 			}
 		}
@@ -83,19 +88,19 @@ bool		AddProcessToTable(
 			}	
 		}
 		GetProcUID(PID, PPID, pProcPath, &times.CreateTime, &PUID);
+		KERNEL_USER_TIMES	parentTimes	= {0,};
 		if( NT_SUCCESS(GetProcessImagePathByProcessId(PPID, &pPProcPath))) {
-			KERNEL_USER_TIMES	ptimes;
-			GetProcessTimes(PPID, &ptimes);
-			GetProcUID(PPID, GetParentProcessId(PPID), pPProcPath, &ptimes.CreateTime, &PPUID);		
+			GetProcessTimes(PPID, &parentTimes, false);
+			GetProcUID(PPID, GetParentProcessId(PPID), pPProcPath, &parentTimes.CreateTime, &PPUID);		
 		}			
 		//if( PID <= (HANDLE)4 || PPID <= (HANDLE)4) {
 		//	__log("PID=%6d PPID=%06d %wZ", (DWORD)PID, (DWORD)PPID, pProcPath);
 		//}
-		if( ProcessTable()->Add(bDetectByCallback, PID, PPID, PPID, PUID, PPUID, pProcPath, pCommand) ) {	
+		if( ProcessTable()->Add(bDetectByCallback, PID, PPID, PPID, PUID, PPUID, pProcPath, pCommand, &times) ) {	
 			//	이미 존재하는 PID라면 실패될 수도 있다.
 			//__log("%-32s PID=%06d PPID=%06d", __func__, (DWORD)PID, (DWORD)PPID);
 			if( pCallback )
-				pCallback(pContext, PID, PUID, pProcPath, pCommand, PPID, PPUID);
+				pCallback(pContext, PID, PUID, pProcPath, pCommand, pTimes, PPID, PPUID);
 			bRet	= true;
 
 			UNREFERENCED_PARAMETER(pCause);
@@ -115,7 +120,7 @@ bool		AddProcessToTable(
 		//	PID의 Add 성공 여부와 상관없이 부모가 없다면 부모도 넣어주자.
 		if( bAddParent && false == ProcessTable()->IsExisting(PPID, NULL, NULL)) {
 			//__log("%-32s add PPID %06d", __func__, PPID);
-			AddProcessToTable(__func__, false, PPID, pPProcPath, NULL, true, pContext, pCallback);		
+			AddProcessToTable2(__func__, false, PPID, pPProcPath, NULL, &parentTimes, true, pContext, pCallback);		
 		}
 	}
 	__finally {
@@ -294,7 +299,10 @@ NTSTATUS	GetProcUID(
 
 	KERNEL_USER_TIMES	times	= {0, };
 	if( NULL == pCreateTime ) {
-		GetProcessTimes(PPID, &times);
+		if( NT_FAILED(GetProcessTimes(PPID, &times, false))) {
+			__dlog("%-32s GetProcessTimes() failed.", __func__);
+		
+		}
 		pCreateTime	= &times.CreateTime;
 	}
 	RtlStringCbPrintfW(proc, proc.CbSize(), L"%wZ.%d.%d.%d.%d.%d.%wZ",
@@ -402,8 +410,14 @@ NTSTATUS	GetProcGuid(IN bool bCreate,
 	if( pUID )	*pUID	= Path2CRC64(procGuid);
 	return status;
 }
-NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
+NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p, bool bLog)
 {
+	if( p ) {
+		RtlZeroMemory(p, sizeof(KERNEL_USER_TIMES));
+	}
+	else {
+		return STATUS_UNSUCCESSFUL;
+	}
 	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
 	if( NULL == hProcessId) {
 		RtlZeroMemory(p, sizeof(KERNEL_USER_TIMES));
@@ -411,7 +425,10 @@ NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
 	}
 	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
 	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
-	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	{
+		__dlog("%-32s KeGetCurrentIrql() == %d", __func__, KeGetCurrentIrql());
+		return STATUS_UNSUCCESSFUL;
+	}
 
 	NTSTATUS			status = STATUS_UNSUCCESSFUL;
 	HANDLE				hProcess = NULL;
@@ -429,15 +446,15 @@ NTSTATUS	GetProcessTimes(IN HANDLE hProcessId, KERNEL_USER_TIMES* p)
 #endif
 		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
 		if (!NT_SUCCESS(status)) {
-			__log("%-32s ZwOpenProcess(%d) failed.", __func__, (DWORD)hProcessId);
+			__dlog("%-32s ZwOpenProcess(%d) failed.", __func__, (DWORD)hProcessId);
 			__leave;
 		}
 		status = pZwQueryInformationProcess(hProcess, ProcessTimes, p, sizeof(KERNEL_USER_TIMES), NULL);
 		if (NT_SUCCESS(status)) {
-
+			if( bLog )				__dlog("%-32s succeeded.", __func__);
 		}
 		else {
-			__log("%-32s ZwQueryInformationProcess(%d) failed.", __func__, (DWORD)hProcessId);
+			__dlog("%-32s ZwQueryInformationProcess(%d) failed.", __func__, (DWORD)hProcessId);
 		}
 	}
 	__finally

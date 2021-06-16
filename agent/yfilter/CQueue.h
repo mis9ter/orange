@@ -122,9 +122,10 @@ public:
 
 		__lock_log(__FUNCTION__, "poping", m_szName, pCause);
 		//while(ExQueryDepthSList(&m_head))
+		while( true )
 		{
 			p = (PQUEUE_WORKITEM)ExInterlockedPopEntrySList(&m_head, &m_lock);
-			if (p)
+			if( p )
 			{
 				//__dlog("%-32s", __func__);
 				if (m_pCallback)		m_pCallback(p, m_pCallbackPtr);
@@ -133,6 +134,7 @@ public:
 				CMemory::Free(p, TAG_CQUEUE);
 				bRet	= true;
 			}
+			else break;
 		}
 		__lock_log(__FUNCTION__, "poped", m_szName, pCause);
 		return bRet;

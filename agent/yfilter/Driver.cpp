@@ -105,32 +105,32 @@ void		DestroyFilterPort(PFLT_PORT	*ppPort, PCWSTR pName)
 {
 	if (*ppPort)
 	{
+		UNREFERENCED_PARAMETER(pName);
 		__log("%s %ws", __FUNCTION__, pName);
 		FltCloseCommunicationPort(*ppPort);
 		*ppPort = NULL;
 	}
 }
 
-NTSTATUS	StartDriver()
+NTSTATUS	StartDriver(PDRIVER_OBJECT pDriverObject)
 {
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
 	__try
 	{
 		if (NULL == Config())	__leave;
-		if (0 == Config()->nRun) {
-			ExInterlockedExchangeUlong(&Config()->nRun, 1, &Config()->lock);
-			if (StartProcessFilter())
-			{
-				__log("process filtering ..");
-			}
-			//if (StartThreadFilter()) {
-			//	__log("thread filtering ..");
-			//}
-			//if (StartModuleFilter())
-			//{
-			//	__log("module filtering ..");
-			//}
+		if (StartProcessFilter())
+		{
+			__log("process filtering ..");
 		}
+		StartRegistryFilter(pDriverObject);
+		//	Registry 콜백 시작 - 단 초기엔 콜백만 걸려있지 아무 것도 하지 않음.
+		//if (StartThreadFilter()) {
+		//	__log("thread filtering ..");
+		//}
+		//if (StartModuleFilter())
+		//{
+		//	__log("module filtering ..");
+		//}
 		status = STATUS_SUCCESS;
 	}
 	__finally
@@ -150,12 +150,10 @@ NTSTATUS	StopDriver()
 	{
 		if (Config())
 		{
-			if (1 == Config()->nRun) {
-				ExInterlockedExchangeUlong(&Config()->nRun, 0, &Config()->lock);
-				//StopModuleFilter();
-				//StopThreadFilter();
-				StopProcessFilter();
-			}
+			//StopModuleFilter();
+			//StopThreadFilter();
+			StopRegistryFilter();
+			StopProcessFilter();
 		}
 		status = STATUS_SUCCESS;
 	}
@@ -253,6 +251,9 @@ Return Value:
 			__log("CreateFilterPort() failed. name=%ws status=%08x", DRIVER_EVENT_PORT, status);
 			__leave;
 		}
+		if( NT_FAILED(StartDriver(pDriverObject))) 
+			__leave;
+
 		//	FILE  보호를 위한 콜백 받기 시작.
 		status = FltStartFiltering(Config()->pFilter);
 		if (NT_FAILED(status))
@@ -260,8 +261,6 @@ Return Value:
 			__log("FltStartFiltering() failed. status=%08x", status);
 			__leave;
 		}
-		//	Registry 콜백 시작 - 단 초기엔 콜백만 걸려있지 아무 것도 하지 않음.
-		StartRegistryFilter(pDriverObject);
 		status	= STATUS_SUCCESS;
 	}
 	__finally
@@ -311,7 +310,6 @@ Return Value:
 	if (Config())
 	{
 		StopDriver();
-		StopRegistryFilter();
 		if (Config()->pDeviceObject)
 		{
 			IoDeleteSymbolicLink(&Config()->dosDeviceName);

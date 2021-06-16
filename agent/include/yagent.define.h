@@ -9,10 +9,10 @@ typedef GUID UUID;
 
 typedef	uint64_t				PROCUID;
 
-#define AGENT_SERVICE_NAME		L"orange.service"
+#define AGENT_SERVICE_NAME		L"orange"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
 #define AGENT_DISPLAY_NAME		L"by oragneworks"
-#define AGENT_SERVICE_DESC		L"orange.service"
+#define AGENT_SERVICE_DESC		L"orange"
 #define AGENT_DEFAULT_LOG_NAME	L"orange.log"
 #define AGENT_SERVICE_PIPE_NAME	L"\\\\.\\pipe\\{523E4858-04BA-4CB1-AE5D-6AD6C9503C16}"
 #define AGENT_WEBAPP_PIPE_NAME	L"\\\\.\\pipe\\{D12BB45C-977B-4FBA-88A2-1A4F6B3D1D75}"
@@ -116,8 +116,13 @@ namespace YFilter
 			ThreadStop,
 			ModuleLoad,
 			ModuleUnload,
+			RegistryUnknown,
 			RegistryGetValue,
 			RegistrySetValue,
+			RegistryDeleteValue,
+			RegistryCreateKey,
+			RegistryDeleteKey,
+			RegistryRenameKey,
 		};
 	};
 	namespace Object
@@ -229,8 +234,9 @@ typedef struct _KERNEL_USER_TIMES {
 typedef KERNEL_USER_TIMES* PKERNEL_USER_TIMES;
 #endif
 
-#define YFILTER_COMMAND_START	0x00000001
-#define YFILTER_COMMAND_STOP	0x00000000
+#define Y_COMMAND_START					0x00000001
+#define Y_COMMAND_STOP					0x00000000
+#define Y_COMMAND_GET_PROCESS_LIST		0x00001000
 
 typedef struct Y_HEADER {
 	YFilter::Message::Mode		mode;						//
@@ -263,7 +269,9 @@ typedef struct Y_REGISTRY
 {
 	YFilter::Message::SubType	subType;
 	REGUID						RegUID;
-	ULONG						nDataSize;
+	REGUID						RegPUID;
+	ULONG64						nDataSize;
+	ULONG						nCount;
 	Y_STRING					RegPath;
 	Y_STRING					RegValueName;
 } Y_REGISTRY, *PY_REGISTRY;
@@ -285,7 +293,9 @@ typedef struct Y_PROCESS
 	YFilter::Message::SubType	subType;
 	PROCUID						PPUID;
 	ULONG_PTR					pImsageSize;
+#pragma pack(pop)
 	KERNEL_USER_TIMES			times;
+#pragma pack(push,1)
 	ULONG						SID;
 
 	union {

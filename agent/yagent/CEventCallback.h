@@ -6,7 +6,7 @@
 #include "yagent.string.h"
 
 #define IDLE_COMMIT		1
-#define IDLE_COUNT		300
+#define IDLE_COUNT		1000
 #define IDLE_TICKS		60000
 
 class CAppPath
@@ -185,6 +185,9 @@ public:
 		IN	Json::Value & res, IN bool bRet, IN int nCode, IN PCSTR pMsg /*utf8*/
 	)	= NULL;
 	virtual	INotifyCenter *	NotifyCenter() = NULL;
+	uint64_t		GetTimestamp(IN LARGE_INTEGER *p) {
+		return CTime::LargeInteger2UnixTimestamp(p) / 1000;	
+	}
 	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 				PWSTR pValue, DWORD dwSize) {
 		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
@@ -453,11 +456,12 @@ protected:
 				Log("%-32s response %d bytes", __FUNCTION__, dwResponseSize);
 				Log("%s", pResponseData);
 
-				Json::CharReaderBuilder	rbuilder;
-				const std::unique_ptr<Json::CharReader>		reader(rbuilder.newCharReader());
-
-				std::string		errors;
 				try {
+					Json::CharReaderBuilder	rbuilder;
+					const std::unique_ptr<Json::CharReader>		reader(rbuilder.newCharReader());
+
+					std::string		errors;
+
 					if( reader->parse((const char *)pResponseData, (const char *)pResponseData + dwResponseSize, 
 						&res, &errors) ) {
 
@@ -584,12 +588,13 @@ protected:
 		}
 #if 1 == IDLE_COMMIT
 		DWORD	dwGap	= (DWORD)(GetTickCount64() - dwTicks);
-		if (dwCount >= IDLE_COUNT || (dwCount && dwGap >= IDLE_TICKS) ) {
+		if ( dwCount >= IDLE_COUNT || (dwCount && dwGap >= IDLE_TICKS) ) {
 			pClass->CommitAndBegin(dwGap);
 			dwCount	= 0;
 			dwTicks	= GetTickCount64();
 		}
 #endif
+		Sleep(1);
 		return bRet;
 	}
 	EventCallbackTable & CallbackTable() {
@@ -615,6 +620,9 @@ private:
 			return;
 		}
 		nCount	= pDB->Commit(__FUNCTION__);
+		if( nCount ) {
+			Log("%-32s %d commit", __func__, nCount);
+		}
 		pDB->Begin(__FUNCTION__);
 
 		//if( 0 == dwCount++ % 10 )

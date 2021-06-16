@@ -25,6 +25,9 @@ public:
 	virtual	CDB *	Db()	= NULL;
 	virtual	PCWSTR	UUID2String(IN UUID * p, PWSTR pValue, DWORD dwSize)	= NULL;
 	virtual	bool	SendMessageToWebApp(Json::Value & req, Json::Value & res) = NULL;
+	virtual	INotifyCenter *	NotifyCenter() = NULL;
+	virtual	uint64_t	GetTimestamp(LARGE_INTEGER *)	= NULL;
+
 	PCSTR			Name() {
 		return m_name.c_str();
 	}
@@ -72,6 +75,8 @@ public:
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
+		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, this, PeriodicCallback);
+
 	}
 	void		Destroy()
 	{
@@ -153,6 +158,19 @@ protected:
 		PY_PROCESS			p		= (PY_PROCESS)pMessage;
 		CProcessCallback	*pClass = (CProcessCallback *)pContext;
 
+		switch( p->subType ) {
+			case YFilter::Message::SubType::ProcessStart:
+			case YFilter::Message::SubType::ProcessStop:
+			break;
+
+			default:
+			{
+				GetProcessTimes()
+			
+			}
+			break;
+		}
+
 #if defined(USE_PROCESS_LOG) && 1 == USE_PROCESS_LOG 
 		pClass->m_log.Log("  mode     :%d", p->mode);
 		pClass->m_log.Log("  category :%d", p->category);
@@ -169,6 +187,20 @@ protected:
 
 		pClass->m_log.Log("  PUID     :%p", p->PUID);
 		pClass->m_log.Log("  PPUID    :%p", p->PPUID);
+		pClass->m_log.Log("  CREATE   :%p", p->times.CreateTime.QuadPart);
+		if( p->times.CreateTime.QuadPart ) {
+			char	szTime[30]	= "";
+			CTime::LaregInteger2LocalTimeString(&p->times.CreateTime, szTime, sizeof(szTime));
+			pClass->m_log.Log("           :%s", szTime);
+		}
+		pClass->m_log.Log("  EXIT     :%p", p->times.ExitTime.QuadPart);
+		if( p->times.ExitTime.QuadPart ) {
+			char	szTime[30]	= "";
+			CTime::LaregInteger2LocalTimeString(&p->times.ExitTime, szTime, sizeof(szTime));
+			pClass->m_log.Log("           :%s", szTime);
+		}
+		pClass->m_log.Log("  KERNEL   :%p", p->times.KernelTime.QuadPart);
+		pClass->m_log.Log("  USER     :%p", p->times.UserTime.QuadPart);
 #endif
 
 		p->DevicePath.pBuf	= (PWSTR)((char *)p + p->DevicePath.wOffset);						
@@ -338,7 +370,6 @@ private:
 			}
 			sqlite3_reset(pStmt);
 		}
-		m_log.Log("%-32s %d", __func__, nCount);
 		return nCount? true : false;
 	}
 	/*
@@ -382,9 +413,15 @@ private:
 			sqlite3_bind_int(pStmt,		++nIndex, p->bIsSystem);
 			sqlite3_bind_text16(pStmt,	++nIndex, p->Command.pBuf, -1, SQLITE_STATIC);
 			sqlite3_bind_null(pStmt,	++nIndex);
-			sqlite3_bind_int64(pStmt,	++nIndex, CTime::LargeInteger2UnixTimestamp(&p->times.CreateTime));
-			sqlite3_bind_int64(pStmt,	++nIndex, CTime::LargeInteger2UnixTimestamp(&p->times.ExitTime));
 
+			if( p->times.CreateTime.QuadPart )
+				sqlite3_bind_int64(pStmt,	++nIndex, GetTimestamp(&p->times.CreateTime));
+			else 
+				sqlite3_bind_null(pStmt, ++nIndex);
+			if( p->times.ExitTime.QuadPart )
+				sqlite3_bind_int64(pStmt,	++nIndex, GetTimestamp(&p->times.ExitTime));
+			else 
+				sqlite3_bind_null(pStmt, ++nIndex);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->times.KernelTime.QuadPart);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->times.UserTime.QuadPart);
 
@@ -394,7 +431,7 @@ private:
 			}
 			sqlite3_reset(pStmt);
 		} 
-		m_log.Log("%-32s %d", __func__, bRet);
+		//m_log.Log("%-32s %d", __func__, bRet);
 		return bRet;
 	}
 	/*
@@ -417,7 +454,7 @@ private:
 					-1, SQLITE_TRANSIENT);
 			}
 			else {
-				Log("---- CreateTime is null");
+				Log("%-32s CreateTime is null", __func__);
 				sqlite3_bind_null(pStmt, ++nIndex);
 			}
 			if (p->times.ExitTime.QuadPart) {
@@ -437,5 +474,11 @@ private:
 			sqlite3_reset(pStmt);
 		}
 		return bRet;
+	}
+	static	void	PeriodicCallback(
+		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
+	) {
+		CProcessCallback	*pClass	= (CProcessCallback *)pContext;
+		pClass->m_log.Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
 	}
 };

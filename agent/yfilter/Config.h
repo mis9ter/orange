@@ -171,7 +171,7 @@ typedef struct FLT_SERVER_PORT {
 } FLT_SERVER_PORT, *PFLT_SERVER_PORT;
 typedef struct CONFIG
 {
-	ULONG							nRun;
+	volatile	ULONG				nRun;
 	DWORD							dwCPU;
 	KSPIN_LOCK						lock;
 	size_t							dbSize;
@@ -191,6 +191,12 @@ typedef struct CONFIG
 	} client;
 
 	DWORD							bootId;
+
+	struct {
+		ULONG						nRegistryEvent;
+		ULONG						nThreadEvent;
+		ULONG						nModuleEvent;
+	} flag;
 
 	UNICODE_STRING					registry;
 	UNICODE_STRING					name;
