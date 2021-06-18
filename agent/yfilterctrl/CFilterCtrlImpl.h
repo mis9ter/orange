@@ -381,7 +381,7 @@ public:
 			{
 				__leave;
 			}
-			if (CreatePortInfo(&m_driver.event, DRIVER_EVENT_PORT, dwCPU, EventThread2))
+			if (CreatePortInfo(&m_driver.event, DRIVER_EVENT_PORT, 1, EventThread2))
 			{
 
 			}

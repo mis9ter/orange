@@ -261,6 +261,10 @@ typedef struct Y_STRING
 	WCHAR						*pBuf;
 } Y_STRING, *PY_STRING;
 
+inline void			SetStringOffset(PVOID p, PY_STRING str) {
+	str->pBuf			= (PWSTR)((char *)p + str->wOffset);
+}
+
 typedef UINT64					REGUID;
 typedef WORD					STRING_POS;
 typedef struct Y_REGISTRY
@@ -302,7 +306,7 @@ typedef struct Y_PROCESS
 		ULONG Property;
 		struct {
 			ULONG ImageAddressingMode : 8;  // Code addressing mode
-			ULONG SystemModeImage : 1;  // System mode image
+			ULONG SystemModeImage : 1;		// System mode image
 			ULONG ImageMappedToAllPids : 1;  // Image mapped into all processes
 			ULONG ExtendedInfoPresent : 1;  // IMAGE_INFO_EX available
 			ULONG MachineTypeMismatch : 1;  // Architecture type mismatch

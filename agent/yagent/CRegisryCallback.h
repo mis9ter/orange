@@ -6,6 +6,10 @@
 	https://superuser.com/questions/689788/what-does-the-path-registry-a-in-sysinternals-procmon-log-mean
 
 */
+
+typedef std::shared_ptr<Y_REGISTRY>	RegPtr;
+typedef std::map<REGUID, RegPtr>	RegMap;
+
 class CRegistryCallback
 	:
 	protected		IEventCallback,
@@ -26,20 +30,21 @@ public:
 	virtual	CDB *	Db()	= NULL;
 	virtual	PCWSTR	UUID2String(IN UUID * p, PWSTR pValue, DWORD dwSize)	= NULL;
 	virtual	bool	SendMessageToWebApp(Json::Value & req, Json::Value & res) = NULL;
+	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	PCSTR			Name() {
 		return m_name.c_str();
 	}
 	void			Create()
 	{
-		const char	*pIsExisting	= "select count(RegPUID) from registry where RegPUID=? and SubType=?";
+		const char	*pIsExisting	= "select count(RegPUID) from registry where RegPUID=?";
 		const char	*pInsert		= "insert into registry"	\
 			"("\
-			"RegPUID,RegUID,PUID,SubType,RegPath,"\
-			"RegValueName,DataSize,Cnt"\
+			"RegPUID,RegUID,PUID,SubType,PID,"\
+			"RegPath,RegValueName,DataSize,Cnt"\
 			") "\
 			"values("\
 			"?,?,?,?,?"\
-			",?,?,?"\
+			",?,?,?,?"\
 			")";
 		const char	*pUpdate			= "update registry "	\
 			"set DataSize = DataSize + ?, Cnt = Cnt + ?, UpdateTime = CURRENT_TIMESTAMP "
@@ -57,6 +62,7 @@ public:
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
+		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, this, PeriodicCallback);
 	}
 	void					Destroy()
 	{
@@ -91,37 +97,24 @@ protected:
 	{
 		PY_REGISTRY			p	= (PY_REGISTRY)pMessage;
 		CRegistryCallback	*pClass = (CRegistryCallback *)pContext;
-		
-		#ifdef USE_LOG
-		pClass->m_log.Log("  mode     :%d", p->mode);
-		pClass->m_log.Log("  category :%d", p->category);
-		pClass->m_log.Log("  wSize    :%d", p->wSize);
-		pClass->m_log.Log("  wRevision:%d", p->wRevision);
-		pClass->m_log.Log("  subType  :%d", p->subType);
-		pClass->m_log.Log("  RegUID   :%p", p->RegUID);
-		pClass->m_log.Log("  RegPUID  :%p", p->RegPUID);
-		pClass->m_log.Log("  PID      :%d", p->PID);
-		pClass->m_log.Log("  PUID     :%p", p->PUID);
-		#endif
-
-		p->RegPath.pBuf	= (PWSTR)((char *)p + p->RegPath.wOffset);						
-		p->RegValueName.pBuf	= (PWSTR)((char *)p + p->RegValueName.wOffset);
-
-		#ifdef USE_LOG
-		pClass->m_log.Log("  RegPath  :%ws [%d]", p->RegPath.pBuf, p->RegPath.wSize);
-		pClass->m_log.Log("  RegValue :%ws [%d]", p->RegValueName.pBuf, p->RegValueName.wSize);
-		pClass->m_log.Log("  count    :%d", p->nCount);
-		pClass->m_log.Log("  Size     :%I64d", p->nDataSize);
-
-		pClass->m_log.Log(TEXTLINE);
-		#endif
-
-		if( pClass->IsExisting(p) )
-			pClass->Update(p);
-		else
-			if( false == pClass->Insert(p) )
-				pClass->Update(p);
-
+		SetStringOffset(p, &p->RegPath);
+		SetStringOffset(p, &p->RegValueName);
+		//	SetStringOffset(p);
+		pClass->m_lock.Lock(p, [&](PVOID pContext) {
+			auto	t	= pClass->m_table.find(p->RegPUID);
+			if( pClass->m_table.end() == t ) {
+				RegPtr	ptr	= std::shared_ptr<Y_REGISTRY>((PY_REGISTRY)(new char[p->wSize]));
+				CopyMemory(ptr.get(), pContext, p->wSize);
+				SetStringOffset(ptr.get(), &ptr->RegPath);
+				SetStringOffset(ptr.get(), &ptr->RegValueName);
+				pClass->m_table[ptr->RegPUID]	= ptr;			
+				//pClass->Dump(ptr.get());
+			}
+			else {
+				t->second->nCount		+= p->nCount;
+				t->second->nDataSize	+= p->nDataSize;			
+			}
+		});
 		return true;
 	}
 	static	bool			Proc(
@@ -143,6 +136,8 @@ private:
 		sqlite3_stmt	*pSelect;
 		sqlite3_stmt	*pProcessList;
 	}	m_stmt;
+	CLock				m_lock;
+	RegMap				m_table;
 
 	bool	IsExisting(
 		PY_REGISTRY			p
@@ -152,7 +147,7 @@ private:
 		if (pStmt) {
 			int		nIndex = 0;
 			sqlite3_bind_int64(pStmt, ++nIndex, p->RegPUID);
-			sqlite3_bind_int(pStmt, ++nIndex, p->subType);
+			//sqlite3_bind_int(pStmt, ++nIndex, p->subType);
 			if (SQLITE_ROW == sqlite3_step(pStmt))	{
 				nCount	= sqlite3_column_int(pStmt, 0);
 			}
@@ -175,6 +170,7 @@ private:
 			sqlite3_bind_int64(pStmt,	++nIndex, p->RegUID);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->PUID);
 			sqlite3_bind_int(pStmt,		++nIndex, p->subType);
+			sqlite3_bind_int(pStmt,		++nIndex, p->PID);
 			sqlite3_bind_text16(pStmt,	++nIndex, p->RegPath.pBuf, -1, SQLITE_STATIC);
 			sqlite3_bind_text16(pStmt,	++nIndex, p->RegValueName.pBuf, -1, SQLITE_STATIC);
 			sqlite3_bind_int64(pStmt, ++nIndex, p->nDataSize);
@@ -206,5 +202,33 @@ private:
 			sqlite3_reset(pStmt);
 		}
 		return bRet;
+	}
+	static	void	PeriodicCallback(
+		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
+	) {
+		CRegistryCallback	*pClass	= (CRegistryCallback *)pContext;
+		static	DWORD	dwCount;
+		if( dwCount++ % 10 )	return;
+
+		//pClass->m_log.Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
+
+		//pClass->Db()->Begin(__func__);
+		pClass->m_lock.Lock(NULL, [&](PVOID pContext) {
+			try {
+				UNREFERENCED_PARAMETER(pContext);		
+				for( auto t : pClass->m_table ) {		
+					if (pClass->IsExisting(t.second.get()))
+						pClass->Update(t.second.get());
+					else	{
+						pClass->Insert(t.second.get());
+					}
+				}
+				pClass->m_table.clear();
+			}
+			catch( std::exception & e) {
+				pClass->m_log.Log("Proc2", e.what());
+			}
+		});
+		//pClass->Db()->Commit(__func__);
 	}
 };

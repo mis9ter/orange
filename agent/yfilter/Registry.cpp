@@ -170,7 +170,7 @@ void		RegistryDeleteValueLog(REG_CALLBACK_ARG * p, PVOID pObject, PUNICODE_STRIN
 		}
 	*/
 }
-void		CreateRegistryContext(
+void		CreateRegistryMessage(
 	PREG_ENTRY	p,
 	PY_REGISTRY	*pOut
 )
@@ -182,8 +182,7 @@ void		CreateRegistryContext(
 	wPacketSize		+=	GetStringDataSize(&p->RegValueName);
 
 	PY_REGISTRY			pMsg	= NULL;
-	HANDLE				PID		= PsGetCurrentProcessId();
-	HANDLE				PPID	= GetParentProcessId(PID);
+	HANDLE				PPID	= GetParentProcessId(p->PID);
 
 	pMsg = (PY_REGISTRY)CMemory::Allocate(PagedPool, wPacketSize, TAG_PROCESS);
 	if (pMsg) 
@@ -201,11 +200,11 @@ void		CreateRegistryContext(
 		pMsg->wRevision	= 1;
 
 		pMsg->PUID		= p->PUID;
-		pMsg->PID		= (DWORD)PID;
-		pMsg->CPID		= (DWORD)PID;
+		pMsg->PID		= (DWORD)p->PID;
+		pMsg->CPID		= (DWORD)p->PID;
 		pMsg->RPID		= (DWORD)0;
 		pMsg->PPID		= (DWORD)PPID;
-		pMsg->CTID		= (DWORD)PsGetCurrentThreadId();
+		pMsg->CTID		= (DWORD)p->TID;
 		pMsg->TID		= pMsg->CTID;
 
 		pMsg->RegUID	= p->RegUID;
@@ -233,123 +232,6 @@ void		CreateRegistryContext(
 		}
 	}
 }
-
-
-void		CreateRegistryContext(
-
-	PROCUID * pPUID, 
-	REGUID *	pRegUID, 
-	REGUID *	pRegPUID,
-	YFilter::Message::SubType	subType,
-	PUNICODE_STRING pRegPath, 
-	PUNICODE_STRING pRegValueName,
-	PVOID	*pOut
-)
-{
-	bool	bUse		= USE_REGISTRY_EVENT;
-	if( false == bUse )	{
-		if( pOut )	*pOut = NULL;
-		return;
-	}
-	WORD	wPacketSize	= sizeof(Y_HEADER);
-
-	wPacketSize		+=	sizeof(Y_REGISTRY);
-	wPacketSize		+=	GetStringDataSize(pRegPath);
-	wPacketSize		+=	GetStringDataSize(pRegValueName);
-
-	PY_REGISTRY			pMsg	= NULL;
-	HANDLE				PID		= PsGetCurrentProcessId();
-	HANDLE				PPID	= GetParentProcessId(PID);
-
-	pMsg = (PY_REGISTRY)CMemory::Allocate(PagedPool, wPacketSize, TAG_PROCESS);
-	if (pMsg) 
-	{
-		//__dlog("%-32s message size:%d", __func__, wPacketSize);
-		//__dlog("  header :%d", sizeof(Y_HEADER));
-		//__dlog(" struct  :%d", sizeof(Y_REGISTRY));
-		//__dlog(" regpath :%d", GetStringDataSize(pRegPath));
-		//__dlog(" value   :%d", GetStringDataSize(pRegValueName));
-
-		pMsg->mode		= YFilter::Message::Mode::Event;
-		pMsg->category	= YFilter::Message::Category::Registry;
-		pMsg->subType	= subType;
-		pMsg->wSize		= wPacketSize;
-		pMsg->wRevision	= 1;
-
-		pMsg->PUID		= *pPUID;
-		pMsg->PID		= (DWORD)PID;
-		pMsg->CPID		= (DWORD)PID;
-		pMsg->RPID		= (DWORD)0;
-		pMsg->PPID		= (DWORD)PPID;
-		pMsg->CTID		= (DWORD)PsGetCurrentThreadId();
-		pMsg->TID		= pMsg->CTID;
-
-		pMsg->RegUID	= ( pRegUID )?	*pRegUID : 0;
-		pMsg->RegPUID	= ( pRegPUID)?	*pRegPUID : 0;
-		WORD		dwStringOffset	= (WORD)(sizeof(Y_HEADER) + sizeof(Y_REGISTRY));
-
-		pMsg->RegPath.wOffset	= dwStringOffset;
-		pMsg->RegPath.wSize		= GetStringDataSize(pRegPath);
-		pMsg->RegPath.pBuf		= (WCHAR *)((char *)pMsg + dwStringOffset);
-		RtlStringCbCopyUnicodeString(pMsg->RegPath.pBuf, pMsg->RegPath.wSize, pRegPath);
-
-		dwStringOffset			+= pMsg->RegPath.wSize;
-		pMsg->RegValueName.wOffset	= dwStringOffset;
-		pMsg->RegValueName.wSize	= GetStringDataSize(pRegValueName);
-		pMsg->RegValueName.pBuf		= (WCHAR *)((char *)pMsg + dwStringOffset);
-		RtlStringCbCopyUnicodeString(pMsg->RegValueName.pBuf, pMsg->RegValueName.wSize, pRegValueName);
-
-		if( pOut ) {
-			*pOut	= pMsg;
-		}
-		else {
-			CMemory::Free(pMsg);
-		}
-	}
-}
-void		RegistryPostQueryValueLog(REG_CALLBACK_ARG * p)
-{
-	PAGED_CODE();
-	static	ULONG		nCount;
-	//ULONG				nRegCount	= 0;
-
-	if( NT_FAILED(p->status))	return;
-
-	__try {
-		if ( p->pRegPath && p->pRegValueName ) {	
-			if( ProcessTable()->IsExisting(p->PID, p, [](
-				bool					bCreationSaved,
-				IN PPROCESS_ENTRY		pEntry,			
-				IN PVOID				pContext
-				) {
-				UNREFERENCED_PARAMETER(bCreationSaved);
-				UNREFERENCED_PARAMETER(pEntry);
-
-				PREG_CALLBACK_ARG	p	= (PREG_CALLBACK_ARG)pContext;
-				_InterlockedIncrement((LONG *)&pEntry->registry.GetValue.nCount);
-				_InlineInterlockedAdd64(&pEntry->registry.GetValue.nSize, p->nSize);
-
-				p->PUID	= pEntry->PUID;
-				p->pContext	= NULL;
-			}
-			) ) {
-			
-				ULONG	nRegCount	= 0;
-				RegistryTable()->Add(p, nRegCount);					
-			}
-			else {
-				__dlog("%-32s PID(%d) is not found.", __func__, p->PID);
-
-			}		
-		}		
-		else {
-			__log("%-32s GetRegistryPath() failed.", __func__);
-		}
-	}
-	__finally {
-
-	}
-}
 void		RegistryLog(REG_CALLBACK_ARG * p)
 {
 	PAGED_CODE();
@@ -368,6 +250,7 @@ void		RegistryLog(REG_CALLBACK_ARG * p)
 				UNREFERENCED_PARAMETER(pEntry);
 
 				PREG_CALLBACK_ARG	p	= (PREG_CALLBACK_ARG)pContext;
+				p->PUID	= pEntry->PUID;
 				switch( p->notifyClass ) {
 					case RegNtRenameKey:
 						_InterlockedIncrement((LONG *)&pEntry->registry.RenameKey.nCount);
@@ -387,7 +270,7 @@ void		RegistryLog(REG_CALLBACK_ARG * p)
 						break;
 				}
 				_InlineInterlockedAdd64(&pEntry->registry.GetValue.nSize, p->nSize);
-				p->PUID	= pEntry->PUID;
+				
 				p->pContext	= NULL;
 			}) ) {
 				ULONG	nRegCount	= 0;
@@ -400,125 +283,6 @@ void		RegistryLog(REG_CALLBACK_ARG * p)
 	}
 	__finally {
 
-	}
-}
-void		RegistryPreQueryValueLog(REG_CALLBACK_ARG * p, PREG_QUERY_VALUE_KEY_INFORMATION pp)
-{
-	PAGED_CODE();
-	UNREFERENCED_PARAMETER(p);
-	PUNICODE_STRING	pRegPath = NULL;
-	__try {
-		if (GetRegistryPath(pp->Object, &pRegPath)) {		
-			if( ProcessTable()->IsExisting(p->PID, p, [](
-				bool					bCreationSaved,
-				IN PPROCESS_ENTRY		pEntry,			
-				IN PVOID				pContext
-				) {
-				UNREFERENCED_PARAMETER(bCreationSaved);
-				UNREFERENCED_PARAMETER(pEntry);
-
-				PREG_CALLBACK_ARG				p	= (PREG_CALLBACK_ARG)pContext;
-				PREG_SET_VALUE_KEY_INFORMATION	pp	= 
-					(PREG_SET_VALUE_KEY_INFORMATION)(p->pArgument2);
-
-				_InterlockedIncrement((LONG *)&pEntry->registry.GetValue.nCount);
-				_InlineInterlockedAdd64(&pEntry->registry.GetValue.nSize, pp->DataSize);
-
-			}
-			) ) {
-
-
-			}
-			else {
-				__dlog("%-32s PID(%d) is not found.", __func__, p->PID);
-
-			}		
-		}		
-		else {
-			__log("%-32s GetRegistryPath() failed.", __func__);
-		}
-	}
-	__finally {
-		if (pRegPath)
-		{
-			CMemory::Free(pRegPath);
-			p->pRegPath	= NULL;
-		}	
-	}
-}
-void		RegistryPreSetValueLog(REG_CALLBACK_ARG * p, PREG_SET_VALUE_KEY_INFORMATION pp)
-{
-	PAGED_CODE();
-	UNREFERENCED_PARAMETER(p);
-	PUNICODE_STRING	pRegPath = NULL;
-	__try {
-		if (GetRegistryPath(pp->Object, &pRegPath)) {		
-			if( ProcessTable()->IsExisting(p->PID, p, [](
-				bool					bCreationSaved,
-				IN PPROCESS_ENTRY		pEntry,			
-				IN PVOID				pContext
-				) {
-					UNREFERENCED_PARAMETER(bCreationSaved);
-					UNREFERENCED_PARAMETER(pEntry);
-
-					PREG_CALLBACK_ARG				p	= (PREG_CALLBACK_ARG)pContext;
-					PREG_SET_VALUE_KEY_INFORMATION	pp	= 
-						(PREG_SET_VALUE_KEY_INFORMATION)(p->pArgument2);
-
-					_InterlockedIncrement((LONG *)&pEntry->registry.SetValue.nCount);
-					_InlineInterlockedAdd64(&pEntry->registry.SetValue.nSize, pp->DataSize);
-				}
-			) ) {
-				if( p->pContext ) {
-					PY_REGISTRY		pReg	= (PY_REGISTRY)p->pContext;
-					//__log("%ws[%d]", pReg->RegPath.pBuf, pReg->RegPath.wSize);
-					//__log("%ws[%d]", pReg->RegValueName.pBuf, pReg->RegValueName.wSize);
-
-					//__log("%-32s message size:%d", __func__, pReg->wSize);
-					//__log("  header :%d", sizeof(Y_HEADER));
-					//__log(" struct  :%d", sizeof(Y_REGISTRY));
-					//__log(" regpath :%ws[%d]", pReg->RegPath.pBuf, pReg->RegPath.wSize);
-					//__log(" value   :%ws[%d]", pReg->RegValueName.pBuf, pReg->RegValueName.wSize);
-
-					pReg->nDataSize	= pp->DataSize;
-					if (MessageThreadPool()->Push(__FUNCTION__,
-						pReg->mode,
-						pReg->category,
-						pReg, pReg->wSize, false))
-					{
-						//	pMsg는 SendMessage 성공 후 해제될 것이다. 
-						MessageThreadPool()->Alert(YFilter::Message::Category::Registry);
-						p->pContext	= NULL;
-					}
-					else {
-						__log("%-32s Push() failed.", __func__);
-					}
-					if( p->pContext ) {
-						CMemory::Free(p->pContext);
-						p->pContext	= NULL;
-					}
-				}
-				else {
-					__dlog("%-32s pContext is null.", __func__);
-				}
-			}
-			else {
-				__dlog("%-32s PID(%d) is not found.", __func__, p->PID);
-				if( false == AddProcessToTable2(__func__, false, p->PID) ) {
-					__log("%-32s AddProcessToTable(%d) failed.", __func__, p->PID);
-				
-				}
-			}		
-		}		
-		else {
-			__log("%-32s GetRegistryPath() failed.", __func__);
-		}
-	}
-	__finally {
-		if (pRegPath)
-		{
-			CMemory::Free(pRegPath);
-		}	
 	}
 }
 NTSTATUS	RegistryCallback
@@ -538,16 +302,17 @@ NTSTATUS	RegistryCallback
 		//__log("%-32s %d", __func__, Config()->nRun);
 		return STATUS_SUCCESS;
 	}
-
-	REG_CALLBACK_ARG	arg;
-	arg.PID	= PsGetCurrentProcessId();
+	HANDLE	PID	= PsGetCurrentProcessId();
 	if (NULL == pArgument2 ||
 		KeGetCurrentIrql() > APC_LEVEL ||
-		arg.PID <= (HANDLE)4 ||
+		PID <= (HANDLE)4 ||
 		KernelMode == ExGetPreviousMode()
 	)	return STATUS_SUCCESS;	
 
+	REG_CALLBACK_ARG	arg;
 	RtlZeroMemory(&arg, sizeof(arg));
+	arg.PID			= PID;
+	arg.TID			= PsGetCurrentThreadId();
 	arg.pArgument	= pArgument;
 	arg.pArgument2	= pArgument2;
 	arg.status		= STATUS_SUCCESS;

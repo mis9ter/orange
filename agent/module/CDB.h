@@ -229,7 +229,6 @@ public:
 	}
 	void	Begin(PCSTR pCause)
 	{
-		__function_lock(m_lock.Get());
 		if( m_pDb ) {
 			sqlite3_exec(m_pDb, "BEGIN;", NULL, NULL, NULL);
 			m_log.Log("%s", __FUNCTION__);
@@ -237,7 +236,6 @@ public:
 	}
 	int		Commit(PCSTR pCause)
 	{
-		__function_lock(m_lock.Get());
 		int		nCount	= 0;
 		if( m_pDb ) {
 			sqlite3_exec(m_pDb, "COMMIT;", NULL, NULL, NULL);

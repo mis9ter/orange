@@ -70,6 +70,12 @@ public:
 		UNREFERENCED_PARAMETER(pCause);
 		::EnterCriticalSection(&m_section);
 	}
+	inline	void	Lock(PVOID pContext, std::function<void (PVOID)> pCallback) {
+		::EnterCriticalSection(&m_section);
+		if( pCallback )	pCallback(pContext);
+		::LeaveCriticalSection(&m_section);
+	
+	}
 	inline	void	Unlock(IN LPCSTR pCause=NULL)
 	{
 		UNREFERENCED_PARAMETER(pCause);
@@ -127,6 +133,9 @@ private:
 typedef UINT64	BootUID;
 
 namespace YAgent {
+	bool		SetPrivilege(HANDLE hToken, LPCTSTR Privilege, BOOL bEnablePrivilege);
+	HANDLE		SetDebugPrivilege();
+	void		UnsetDebugPrivilege(IN HANDLE hToken);
 	HANDLE		GetProcessHandle(IN DWORD PID);
 	bool		SetFileContent(IN LPCTSTR lpPath, IN PVOID lpContent, IN DWORD dwSize);
 	PVOID		GetFileContent(IN LPCTSTR lpPath, OUT DWORD * pSize);

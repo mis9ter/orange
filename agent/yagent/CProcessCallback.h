@@ -5,6 +5,10 @@
 #define	GUID_STRLEN	37
 #define USE_PROCESS_LOG		1
 
+typedef std::shared_ptr<Y_PROCESS>		ProcessPtr;
+typedef std::map<PROCUID, ProcessPtr>	ProcessMap;
+
+
 class CProcessCallback
 	:
 	protected		IEventCallback,
@@ -149,59 +153,37 @@ public:
 		return bRet;
 	}
 protected:
-	static	bool			Proc2
-	(
-		PY_HEADER			pMessage,
-		PVOID				pContext
-	) 
-	{
-		PY_PROCESS			p		= (PY_PROCESS)pMessage;
-		CProcessCallback	*pClass = (CProcessCallback *)pContext;
 
-		switch( p->subType ) {
-			case YFilter::Message::SubType::ProcessStart:
-			case YFilter::Message::SubType::ProcessStop:
-			break;
+	void	Dump(PY_PROCESS p) {
+		m_log.Log("  mode     :%d", p->mode);
+		m_log.Log("  category :%d", p->category);
+		m_log.Log("  wSize    :%d", p->wSize);
+		m_log.Log("  wRevision:%d", p->wRevision);
+		m_log.Log("  subType  :%d", p->subType);
 
-			default:
-			{
-				GetProcessTimes()
-			
-			}
-			break;
-		}
+		m_log.Log("  PID      :%d", p->PID);
+		m_log.Log("  TID      :%d", p->TID);
+		m_log.Log("  CTID     :%d", p->CTID);
+		m_log.Log("  CPID     :%d", p->CPID);
+		m_log.Log("  PPID     :%p", p->PPID);
+		m_log.Log("  RPID     :%p", p->PPID);
 
-#if defined(USE_PROCESS_LOG) && 1 == USE_PROCESS_LOG 
-		pClass->m_log.Log("  mode     :%d", p->mode);
-		pClass->m_log.Log("  category :%d", p->category);
-		pClass->m_log.Log("  wSize    :%d", p->wSize);
-		pClass->m_log.Log("  wRevision:%d", p->wRevision);
-		pClass->m_log.Log("  subType  :%d", p->subType);
-
-		pClass->m_log.Log("  PID      :%d", p->PID);
-		pClass->m_log.Log("  TID      :%d", p->TID);
-		pClass->m_log.Log("  CTID     :%d", p->CTID);
-		pClass->m_log.Log("  CPID     :%d", p->CPID);
-		pClass->m_log.Log("  PPID     :%p", p->PPID);
-		pClass->m_log.Log("  RPID     :%p", p->PPID);
-
-		pClass->m_log.Log("  PUID     :%p", p->PUID);
-		pClass->m_log.Log("  PPUID    :%p", p->PPUID);
-		pClass->m_log.Log("  CREATE   :%p", p->times.CreateTime.QuadPart);
+		m_log.Log("  PUID     :%p", p->PUID);
+		m_log.Log("  PPUID    :%p", p->PPUID);
+		m_log.Log("  CREATE   :%p", p->times.CreateTime.QuadPart);
 		if( p->times.CreateTime.QuadPart ) {
 			char	szTime[30]	= "";
 			CTime::LaregInteger2LocalTimeString(&p->times.CreateTime, szTime, sizeof(szTime));
-			pClass->m_log.Log("           :%s", szTime);
+			m_log.Log("           :%s", szTime);
 		}
-		pClass->m_log.Log("  EXIT     :%p", p->times.ExitTime.QuadPart);
+		m_log.Log("  EXIT     :%p", p->times.ExitTime.QuadPart);
 		if( p->times.ExitTime.QuadPart ) {
 			char	szTime[30]	= "";
 			CTime::LaregInteger2LocalTimeString(&p->times.ExitTime, szTime, sizeof(szTime));
-			pClass->m_log.Log("           :%s", szTime);
+			m_log.Log("           :%s", szTime);
 		}
-		pClass->m_log.Log("  KERNEL   :%p", p->times.KernelTime.QuadPart);
-		pClass->m_log.Log("  USER     :%p", p->times.UserTime.QuadPart);
-#endif
+		m_log.Log("  KERNEL   :%p", p->times.KernelTime.QuadPart);
+		m_log.Log("  USER     :%p", p->times.UserTime.QuadPart);
 
 		p->DevicePath.pBuf	= (PWSTR)((char *)p + p->DevicePath.wOffset);						
 		p->Command.pBuf		= (PWSTR)((char *)p + p->Command.wOffset);
@@ -211,17 +193,42 @@ protected:
 		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szWinPath, sizeof(szWinPath)) )
 			StringCbCopy(szWinPath, sizeof(szWinPath), p->DevicePath.pBuf);
 
-#if defined(USE_PROCESS_LOG) && 1 == USE_PROCESS_LOG 
-		pClass->m_log.Log("  DevicePat:%ws [%d]", p->DevicePath.pBuf, p->DevicePath.wSize);
-		pClass->m_log.Log("  ProcPath :%ws", szWinPath);
-		pClass->m_log.Log("  Command  :%ws [%d]", p->Command.pBuf, p->Command.wSize);
+		m_log.Log("  DevicePat:%ws [%d]", p->DevicePath.pBuf, p->DevicePath.wSize);
+		m_log.Log("  ProcPath :%ws", szWinPath);
+		m_log.Log("  Command  :%ws [%d]", p->Command.pBuf, p->Command.wSize);
 		//pClass->m_log.Log("  Size     :%d", p->nDataSize);	
-		pClass->m_log.Log(TEXTLINE);
-#endif
+		m_log.Log(TEXTLINE);
 
-		if (pClass->IsExisting(p))
-			pClass->Update(p);
-		else	pClass->Insert(p, szWinPath);
+	}
+	static	bool			Proc2
+	(
+		PY_HEADER			pMessage,
+		PVOID				pContext
+	) 
+	{
+		PY_PROCESS			p		= (PY_PROCESS)pMessage;
+		CProcessCallback	*pClass = (CProcessCallback *)pContext;
+		SetStringOffset(p, &p->DevicePath);
+		SetStringOffset(p, &p->Command);
+		pClass->m_lock.Lock(p, [&](PVOID pContext) {
+			try {
+				auto	t	= pClass->m_table.find(p->PUID);
+				if( pClass->m_table.end() == t ) {
+					ProcessPtr	ptr	= std::shared_ptr<Y_PROCESS>((PY_PROCESS)(new char[p->wSize]));
+					CopyMemory(ptr.get(), pContext, p->wSize);
+					SetStringOffset(ptr.get(), &ptr->DevicePath);
+					SetStringOffset(ptr.get(), &ptr->Command);
+					//pClass->Dump(ptr.get());
+					pClass->m_table[ptr->PUID]	= ptr;
+				}
+				else {
+					t->second->times	= p->times;
+				}
+			}
+			catch( std::exception & e) {
+				pClass->m_log.Log("Proc2", e.what());
+			}
+		});
 		return true;
 	}
 
@@ -353,6 +360,8 @@ private:
 		sqlite3_stmt	*pSelect;
 		sqlite3_stmt	*pProcessList;
 	}	m_stmt;
+	CLock				m_lock;
+	ProcessMap			m_table;
 
 	bool	IsExisting(
 		PY_PROCESS	p
@@ -372,20 +381,6 @@ private:
 		}
 		return nCount? true : false;
 	}
-	/*
-			const char	*pInsert		= "insert into process"	\
-			"("\
-			"PUID,BootUID,PID,CPID,SID,"	\
-			"PPUID,PPID,DevicePath,ProcPath,ProcName,"	\
-			"IsSystem,CmdLine,UserId,CreateTime,ExitTime,"\
-			"KernelTime,UserTime"\
-			") "\
-			"values("\
-			"?,?,?,?,?"\
-			",?,?,?,?,?"\
-			",?,?,?,?,?"\
-			",?,?)";
-	*/
 	bool	Insert(
 		PY_PROCESS	p,
 		PCWSTR		pProcPath
@@ -434,11 +429,6 @@ private:
 		//m_log.Log("%-32s %d", __func__, bRet);
 		return bRet;
 	}
-	/*
-		const char	*pUpdate		= "update process "	\
-			"set CreateTime=?, ExitTime=?, KernelTime=?, UserTime=? "\
-			"where PUID=?";
-	*/
 	bool	Update
 	(
 		PY_PROCESS		p
@@ -475,10 +465,62 @@ private:
 		}
 		return bRet;
 	}
+
+	void	UpdateProcessTime(PY_PROCESS p) {
+		HANDLE		h		= YAgent::GetProcessHandle(p->PID);
+		FILETIME	t[4]	= {0,};
+		if( h ) {
+			if( GetProcessTimes(h, &t[0], &t[1], &t[2], &t[3]) ) {
+				p->times.CreateTime.HighPart	= t[0].dwHighDateTime;
+				p->times.CreateTime.LowPart		= t[0].dwLowDateTime;
+				p->times.ExitTime.HighPart		= t[1].dwHighDateTime;
+				p->times.ExitTime.LowPart		= t[1].dwLowDateTime;
+				p->times.KernelTime.HighPart	= t[2].dwHighDateTime;
+				p->times.KernelTime.LowPart		= t[2].dwLowDateTime;
+				p->times.UserTime.HighPart		= t[3].dwHighDateTime;
+				p->times.UserTime.LowPart		= t[3].dwLowDateTime;
+			}
+			CloseHandle(h);
+		}
+	}
 	static	void	PeriodicCallback(
 		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
 	) {
 		CProcessCallback	*pClass	= (CProcessCallback *)pContext;
-		pClass->m_log.Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
+
+		static	DWORD	dwCount;
+		if( dwCount++ % 5 )	return;
+
+		//pClass->m_log.Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
+
+		//pClass->Db()->Begin(__func__);
+		pClass->m_lock.Lock(NULL, [&](PVOID pContext) {
+			try {
+				UNREFERENCED_PARAMETER(pContext);		
+				for( auto t = pClass->m_table.begin() ; t != pClass->m_table.end() ; ) {		
+					pClass->UpdateProcessTime(t->second.get());
+					if (pClass->IsExisting(t->second.get()))
+						pClass->Update(t->second.get());
+					else	{
+						WCHAR		szWinPath[AGENT_PATH_SIZE]	= L"";
+						if( false == CAppPath::GetFilePath(t->second->DevicePath.pBuf, szWinPath, sizeof(szWinPath)) )
+							StringCbCopy(szWinPath, sizeof(szWinPath), t->second->DevicePath.pBuf);
+						pClass->Insert(t->second.get(), szWinPath);	
+					}
+
+					if( YFilter::Message::SubType::ProcessStop == t->second->subType ) {
+						auto	d	= t++;
+						pClass->m_table.erase(d);
+					}
+					else {
+						t++;					
+					}
+				}
+			}
+			catch( std::exception & e) {
+				pClass->m_log.Log("Proc2", e.what());
+			}
+		});
+		//pClass->Db()->Commit(__func__);
 	}
 };

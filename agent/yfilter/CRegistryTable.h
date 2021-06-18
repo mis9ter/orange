@@ -11,6 +11,7 @@ typedef struct REGISTRY_ENTRY
 	REGUID				RegUID;
 	HANDLE				PID;
 	PROCUID				PUID;
+	HANDLE				TID;
 	ULONG				nCount;
 	REG_NOTIFY_CLASS	nClass;
 	UNICODE_STRING		RegPath;
@@ -23,6 +24,7 @@ typedef struct REGISTRY_ENTRY
 typedef struct {
 	PVOID				pArgument2;	
 	HANDLE				PID;
+	HANDLE				TID;
 	PROCUID				PUID;
 	REGUID				RegUID;				//	key + value의 조합
 	REGUID				RegPUID;			//	pid + key + value의 조합
@@ -41,17 +43,7 @@ typedef void (*PRegTableCallback)(
 	IN PVOID				pContext
 );
 
-void		CreateRegistryContext(
-
-	PROCUID * pPUID, 
-	REGUID *	pRegUID, 
-	REGUID *	pRegPUID,
-	YFilter::Message::SubType	subType,
-	PUNICODE_STRING pRegPath, 
-	PUNICODE_STRING pRegValueName,
-	PVOID	*pOut
-);
-void		CreateRegistryContext(
+void		CreateRegistryMessage(
 	PREG_ENTRY	p,
 	PY_REGISTRY	*pOut
 );
@@ -81,11 +73,13 @@ public:
 	static	REGUID		GetRegistryPUID(HANDLE PID, REG_NOTIFY_CLASS nClass, PUNICODE_STRING pRegPath, PUNICODE_STRING pValueName) {
 		CWSTRBuffer	buf;
 
-		if( pRegPath && pValueName )
-			RtlStringCbPrintfW((PWSTR)buf, buf.CbSize(), L"%d.%d.%wZ.%wZ", PID, nClass, pRegPath, pValueName);
-		else if( pRegPath && NULL == pValueName)
+		if( NULL == pValueName)
 			RtlStringCbPrintfW((PWSTR)buf, buf.CbSize(), L"%d.%d.%wZ", PID, nClass, pRegPath);
-		return Path2CRC64(buf);
+		else 
+			RtlStringCbPrintfW((PWSTR)buf, buf.CbSize(), L"%d.%d.%wZ.%wZ", PID, nClass, pRegPath, pValueName);
+		REGUID	uid	= Path2CRC64((PCWSTR)buf);
+		//__log("%-32s %p %ws", __func__, uid, (PCWSTR)buf);
+		return uid;
 	}
 	static	REGUID		GetRegistryUID(PUNICODE_STRING pRegPath, PUNICODE_STRING pValueName) {
 		CWSTRBuffer	buf;
@@ -155,7 +149,7 @@ public:
 			if( bDelete ) {
 				p->nCount++;
 				PY_REGISTRY		pReg	= NULL;
-				CreateRegistryContext(pEntry, &pReg);
+				CreateRegistryMessage(pEntry, &pReg);
 				if( pReg ) {
 					if (MessageThreadPool()->Push(__FUNCTION__,
 						pReg->mode,
@@ -216,6 +210,7 @@ public:
 		entry.RegPUID	= GetRegistryPUID(p->PID, p->notifyClass, p->pRegPath, p->pRegValueName);
 
 		entry.PID		= p->PID;
+		entry.TID		= p->TID;
 		entry.PUID		= p->PUID;
 		entry.nClass	= p->notifyClass;
 		entry.nCount	= 0;

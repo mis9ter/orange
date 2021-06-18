@@ -76,12 +76,15 @@ void		MessageThreadCallback(PQUEUE_WORKITEM p, PVOID pCallbackPtr)
 		//		__FUNCTION__, 
 		//		pMsg->header.category, pMsg->data.bCreationSaved,
 		//		pMsg->data.szPath);
-		PYFILTER_MESSAGE	pMsg	= (PYFILTER_MESSAGE)p->pItem;
-		bool				bLog	= false;;
+		PY_HEADER	pMsg	= (PY_HEADER)p->pItem;
+		bool		bLog	= false;;
 
-		if( YFilter::Message::Category::Thread == pMsg->header.category )
+		if( YFilter::Message::Category::Thread == pMsg->category )
 			bLog	= true;
 		if( YFilter::Message::Mode::Event == p->nMode ) {
+			if( YFilter::Message::Category::Registry == pMsg->category ) {
+				//__dlog("%-32s PID:%d", __func__, pMsg->PID);
+			}
 			if (NT_FAILED(SendMessage(p->szCause, &Config()->client.event, p->pItem, p->nSize, true)) )
 			{
 
