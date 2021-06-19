@@ -7,7 +7,25 @@
 
 */
 
-typedef std::shared_ptr<Y_REGISTRY>	RegPtr;
+class CRegistry
+{
+public:
+	CRegistry(PY_REGISTRY _p) 
+		:	
+		p(_p),
+		dwLastTick(GetTickCount64())	
+	{
+		
+	}
+	~CRegistry() {
+	
+	}
+	PY_REGISTRY	p;
+	DWORD64		dwLastTick;
+};
+
+
+typedef std::shared_ptr<CRegistry>	RegPtr;
 typedef std::map<REGUID, RegPtr>	RegMap;
 
 class CRegistryCallback
@@ -103,16 +121,16 @@ protected:
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			auto	t	= pClass->m_table.find(p->RegPUID);
 			if( pClass->m_table.end() == t ) {
-				RegPtr	ptr	= std::shared_ptr<Y_REGISTRY>((PY_REGISTRY)(new char[p->wSize]));
-				CopyMemory(ptr.get(), pContext, p->wSize);
-				SetStringOffset(ptr.get(), &ptr->RegPath);
-				SetStringOffset(ptr.get(), &ptr->RegValueName);
-				pClass->m_table[ptr->RegPUID]	= ptr;			
+				RegPtr	ptr	= std::make_shared<CRegistry>((PY_REGISTRY)(new char[p->wSize]));
+				CopyMemory(ptr->p, pContext, p->wSize);
+				SetStringOffset(ptr.get(), &ptr->p->RegPath);
+				SetStringOffset(ptr.get(), &ptr->p->RegValueName);
+				pClass->m_table[ptr->p->RegPUID]	= ptr;			
 				//pClass->Dump(ptr.get());
 			}
 			else {
-				t->second->nCount		+= p->nCount;
-				t->second->nDataSize	+= p->nDataSize;			
+				t->second->p->nCount		+= p->nCount;
+				t->second->p->nDataSize		+= p->nDataSize;			
 			}
 		});
 		return true;
@@ -216,14 +234,20 @@ private:
 		pClass->m_lock.Lock(NULL, [&](PVOID pContext) {
 			try {
 				UNREFERENCED_PARAMETER(pContext);		
-				for( auto t : pClass->m_table ) {		
-					if (pClass->IsExisting(t.second.get()))
-						pClass->Update(t.second.get());
-					else	{
-						pClass->Insert(t.second.get());
+				DWORD64		dwTick	= GetTickCount64();
+				for( auto t = pClass->m_table.begin() ; t != pClass->m_table.end() ;  ) {
+					if( (dwTick - t->second->dwLastTick ) > (60 * 1000) ) {
+						if (pClass->IsExisting(t->second->p))
+							pClass->Update(t->second->p);
+						else	{
+							pClass->Insert(t->second->p);
+						}
+						auto	d	= t++;
+						pClass->m_table.erase(d);
 					}
+					else
+						t++;
 				}
-				pClass->m_table.clear();
 			}
 			catch( std::exception & e) {
 				pClass->m_log.Log("Proc2", e.what());

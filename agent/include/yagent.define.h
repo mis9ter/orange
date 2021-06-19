@@ -109,8 +109,8 @@ namespace YFilter
 			Count
 		};
 		enum SubType {
-			ProcessStart,	//	지금 프로세스가 실행되었다.
 			ProcessStop,	//	지금 프로세스가 종료되었다.
+			ProcessStart,	//	지금 프로세스가 실행되었다.			
 			ProcessStart2,	//	이전에 실행된 프로세스를 이제 알게 되었다.
 			ThreadStart,
 			ThreadStop,
@@ -320,9 +320,13 @@ typedef struct Y_PROCESS
 	Y_STRING					DevicePath;
 	Y_STRING					Command;
 	bool						bIsSystem;
-
 } Y_PROCESS, *PY_PROCESS;
 
+typedef struct Y_PROCESS_CONTEXT
+{
+
+
+} Y_PROCESS_CONTEXT, PY_PROCESS_CONTEXT;
 typedef struct YFILTER_DATA {
 	YFilter::Message::SubType	subType;
 

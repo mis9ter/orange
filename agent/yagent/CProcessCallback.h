@@ -5,7 +5,30 @@
 #define	GUID_STRLEN	37
 #define USE_PROCESS_LOG		1
 
-typedef std::shared_ptr<Y_PROCESS>		ProcessPtr;
+class CProcess
+{
+public:
+	CProcess(PY_PROCESS _p) 
+		:
+		p(_p),
+		dwLastTick(GetTickCount64()),
+		bUpdate(true),
+		ProcPath(L"")
+	{
+	
+	}
+	~CProcess() {
+		if( p )
+			delete p;
+	}
+	PY_PROCESS		p;
+	WCHAR			ProcPath[AGENT_PATH_SIZE];
+	DWORD64			dwLastTick;
+	bool			bUpdate;
+};
+
+
+typedef std::shared_ptr<CProcess>		ProcessPtr;
 typedef std::map<PROCUID, ProcessPtr>	ProcessMap;
 
 
@@ -214,16 +237,24 @@ protected:
 			try {
 				auto	t	= pClass->m_table.find(p->PUID);
 				if( pClass->m_table.end() == t ) {
-					ProcessPtr	ptr	= std::shared_ptr<Y_PROCESS>((PY_PROCESS)(new char[p->wSize]));
-					CopyMemory(ptr.get(), pContext, p->wSize);
-					SetStringOffset(ptr.get(), &ptr->DevicePath);
-					SetStringOffset(ptr.get(), &ptr->Command);
+					ProcessPtr	ptr	= std::make_shared<CProcess>((PY_PROCESS)(new char[p->wSize]));
+					CopyMemory(ptr->p, pContext, p->wSize);
+					SetStringOffset(ptr->p, &ptr->p->DevicePath);
+					SetStringOffset(ptr->p, &ptr->p->Command);
 					//pClass->Dump(ptr.get());
-					pClass->m_table[ptr->PUID]	= ptr;
+
+					if( false == CAppPath::GetFilePath(ptr->p->DevicePath.pBuf, ptr->ProcPath, sizeof(ptr->ProcPath)) )
+						StringCbCopy(ptr->ProcPath, sizeof(ptr->ProcPath), ptr->p->DevicePath.pBuf);
+
+					pClass->m_table[ptr->p->PUID]	= ptr;
 				}
 				else {
-					t->second->times	= p->times;
+					if( YFilter::Message::SubType::ProcessStop == t->second->p->subType ) {
+						t->second->p->times	= p->times;
+					}
 				}
+				t	= pClass->m_table.find(p->PUID);
+				pClass->m_log.Log("[%d] %p %ws", p->subType, t->second->p->PID, t->second->ProcPath);
 			}
 			catch( std::exception & e) {
 				pClass->m_log.Log("Proc2", e.what());
@@ -444,7 +475,9 @@ private:
 					-1, SQLITE_TRANSIENT);
 			}
 			else {
+				//if( p->PID )
 				Log("%-32s CreateTime is null", __func__);
+				Dump(p);
 				sqlite3_bind_null(pStmt, ++nIndex);
 			}
 			if (p->times.ExitTime.QuadPart) {
@@ -497,18 +530,30 @@ private:
 		pClass->m_lock.Lock(NULL, [&](PVOID pContext) {
 			try {
 				UNREFERENCED_PARAMETER(pContext);		
+				DWORD64	dwTick	= GetTickCount64();
 				for( auto t = pClass->m_table.begin() ; t != pClass->m_table.end() ; ) {		
-					pClass->UpdateProcessTime(t->second.get());
-					if (pClass->IsExisting(t->second.get()))
-						pClass->Update(t->second.get());
-					else	{
-						WCHAR		szWinPath[AGENT_PATH_SIZE]	= L"";
-						if( false == CAppPath::GetFilePath(t->second->DevicePath.pBuf, szWinPath, sizeof(szWinPath)) )
-							StringCbCopy(szWinPath, sizeof(szWinPath), t->second->DevicePath.pBuf);
-						pClass->Insert(t->second.get(), szWinPath);	
+					if( YFilter::Message::SubType::ProcessStop == t->second->p->subType ) {
+						t->second->bUpdate	= true;
 					}
-
-					if( YFilter::Message::SubType::ProcessStop == t->second->subType ) {
+					else {
+						//pClass->m_log.Log("%I64d - %I64d = %I64d", dwTick, t->second->dwLastTick, dwTick-t->second->dwLastTick);
+						if( (dwTick - t->second->dwLastTick) > (180 * 1000) ) {
+							pClass->UpdateProcessTime(t->second->p);
+							t->second->bUpdate		= true;
+							t->second->dwLastTick	= dwTick;
+						}
+					}
+					if( t->second->bUpdate ) {
+						if (pClass->IsExisting(t->second->p)) {
+							pClass->Update(t->second->p);
+						}
+						else	{
+							pClass->Insert(t->second->p, t->second->ProcPath);	
+						}			
+						pClass->m_log.Log("[U] %p %I64d %ws", t->second->p->PID, t->second->dwLastTick, t->second->ProcPath);
+						t->second->bUpdate	= false;
+					}
+					if( YFilter::Message::SubType::ProcessStop == t->second->p->subType ) {
 						auto	d	= t++;
 						pClass->m_table.erase(d);
 					}
