@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "CAppRegistry.h"
+#include <versionhelpers.h>
 /*
 	Driver Management	- Install/IsInstall/Uninstall/Start/Stop
 */
@@ -53,19 +54,10 @@ typedef struct _CONFIG
 	{
 		LeaveCriticalSection(&lock);
 	}
+
 	bool			IsGood()
 	{
-		bool	bRet = false;
-		__try
-		{
-			OSVERSIONINFOEX osvi = { 0 };
-			osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
-			if (!GetVersionEx((OSVERSIONINFO*)&osvi))	__leave;
-			if (osvi.dwMajorVersion < 6)	__leave;
-			if (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 0 && osvi.wServicePackMajor == 0)	__leave;
-			bRet = true;
-		}
-		__finally {}
+		bool	bRet = IsWindows7OrGreater();
 		return bRet;
 	}
 } CONFIG;
