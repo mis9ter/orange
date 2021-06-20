@@ -5,6 +5,46 @@
 #define	GUID_STRLEN	37
 #define USE_PROCESS_LOG		1
 
+typedef struct _MODULE {
+	_MODULE() 
+		:
+		ImageBase(0),
+		EntryPoint(0)
+	{
+		ZeroMemory(FullName, sizeof(FullName));
+		ZeroMemory(BaseName, sizeof(BaseName));
+	}
+	PVOID			ImageBase;
+	PVOID			EntryPoint;
+	WCHAR			FullName[MAX_PATH];
+	WCHAR			BaseName[MAX_PATH];
+} MODULE, *PMODULE;
+
+class CModule
+{
+public:
+	CModule(PMODULE p) 
+	{
+		ImageBase	= p->ImageBase;
+		EntryPoint	= p->EntryPoint;
+		strFullName	= p->FullName;
+		strBaseName	= p->BaseName;
+	}
+	~CModule() {
+	
+	}
+	PVOID			ImageBase;
+	PVOID			EntryPoint;
+	std::wstring	strFullName;
+	std::wstring	strBaseName;
+};
+
+typedef std::function<bool (PVOID,PMODULE)>	ModuleListCallback;
+typedef std::shared_ptr<CModule>			ModulePtr;
+typedef std::map<PVOID, ModulePtr>		ModuleMap;
+
+void	GetModules(DWORD PID, PVOID pContext, ModuleListCallback pCallback);
+
 class CProcess
 {
 public:
@@ -12,8 +52,7 @@ public:
 		:
 		p(_p),
 		dwLastTick(GetTickCount64()),
-		bUpdate(true),
-		ProcPath(L"")
+		bUpdate(true)
 	{
 	
 	}
@@ -22,15 +61,16 @@ public:
 			delete p;
 	}
 	PY_PROCESS		p;
-	WCHAR			ProcPath[AGENT_PATH_SIZE];
+	std::wstring	strPath;
+	std::wstring	strName;
 	DWORD64			dwLastTick;
 	bool			bUpdate;
+	REG_COUNT		registry;
+	ModuleMap		module;
 };
-
 
 typedef std::shared_ptr<CProcess>		ProcessPtr;
 typedef std::map<PROCUID, ProcessPtr>	ProcessMap;
-
 
 class CProcessCallback
 	:
@@ -243,18 +283,40 @@ protected:
 					SetStringOffset(ptr->p, &ptr->p->Command);
 					//pClass->Dump(ptr.get());
 
-					if( false == CAppPath::GetFilePath(ptr->p->DevicePath.pBuf, ptr->ProcPath, sizeof(ptr->ProcPath)) )
-						StringCbCopy(ptr->ProcPath, sizeof(ptr->ProcPath), ptr->p->DevicePath.pBuf);
-
+					WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
+					if( false == CAppPath::GetFilePath(ptr->p->DevicePath.pBuf, szPath, sizeof(szPath)) )
+						StringCbCopy(szPath, sizeof(szPath), ptr->p->DevicePath.pBuf);
+					PCWSTR	pName	= wcsrchr(szPath, L'\\');
+					ptr->strPath	= szPath;
+					ptr->strName	= pName? pName + 1 : szPath;
 					pClass->m_table[ptr->p->PUID]	= ptr;
 				}
 				else {
-					if( YFilter::Message::SubType::ProcessStop == t->second->p->subType ) {
-						t->second->p->times	= p->times;
-					}
+					t->second->p->times		= p->times;
+					t->second->p->subType	= p->subType;
+					t->second->p->registry	= p->registry;
 				}
+				pClass->m_log.Log("[%d] C:%05d P:%05d %ws", p->subType, pClass->m_table.size(), p->PID, p->DevicePath.pBuf);
 				t	= pClass->m_table.find(p->PUID);
-				pClass->m_log.Log("[%d] %p %ws", p->subType, t->second->p->PID, t->second->ProcPath);
+				if( pClass->m_table.end() == t ) {
+					pClass->m_log.Log("%-32s internal error", "CProcessCallback::Proc2");				
+				}
+				else {
+					if( YFilter::Message::SubType::ProcessStart2 == p->subType ) {
+						GetModules(p->PID, NULL, [&](PVOID pContext, PMODULE p)->bool {
+							ModulePtr	mptr	= std::make_shared<CModule>(p);
+							t->second->module[p->ImageBase]	= mptr;
+							return true;
+						});		
+					}
+					pClass->m_log.Log("REG_COUNT:");
+					pClass->m_log.Log("  GetValue  %05d %08d", p->registry.GetValue.nCount, (int)p->registry.GetValue.nSize);
+					pClass->m_log.Log("  SetValue  %05d %08d", p->registry.SetValue.nCount, (int)p->registry.SetValue.nSize);
+					pClass->m_log.Log("  CreateKey %05d %08d", p->registry.CreateKey.nCount, (int)p->registry.CreateKey.nSize);
+					pClass->m_log.Log("  DeleteKey %05d %08d", p->registry.DeleteKey.nCount, (int)p->registry.DeleteKey.nSize);
+					pClass->m_log.Log("MODULE_COUNT:%d", t->second->module.size());
+				}
+				//pClass->m_log.Log("%04d [%d] %p %ws", pClass->m_table.size(), p->subType, t->second->p->PID, t->second->ProcPath);
 			}
 			catch( std::exception & e) {
 				pClass->m_log.Log("Proc2", e.what());
@@ -475,9 +537,10 @@ private:
 					-1, SQLITE_TRANSIENT);
 			}
 			else {
-				//if( p->PID )
-				Log("%-32s CreateTime is null", __func__);
-				Dump(p);
+				if( p->PID ) {
+					m_log.Log("%-32s CreateTime is null", __func__);
+					Dump(p);
+				}
 				sqlite3_bind_null(pStmt, ++nIndex);
 			}
 			if (p->times.ExitTime.QuadPart) {
@@ -545,15 +608,17 @@ private:
 					}
 					if( t->second->bUpdate ) {
 						if (pClass->IsExisting(t->second->p)) {
+							pClass->m_log.Log("[U] %p %I64d %ws", t->second->p->PID, t->second->dwLastTick, t->second->strName.c_str());
 							pClass->Update(t->second->p);
 						}
 						else	{
-							pClass->Insert(t->second->p, t->second->ProcPath);	
+							pClass->Insert(t->second->p, t->second->strPath.c_str());	
+							pClass->m_log.Log("[I] %p %I64d %ws", t->second->p->PID, t->second->dwLastTick, t->second->strName.c_str());
 						}			
-						pClass->m_log.Log("[U] %p %I64d %ws", t->second->p->PID, t->second->dwLastTick, t->second->ProcPath);
 						t->second->bUpdate	= false;
 					}
 					if( YFilter::Message::SubType::ProcessStop == t->second->p->subType ) {
+						pClass->m_log.Log("[D] %p %I64d %ws", t->second->p->PID, t->second->dwLastTick, t->second->strName.c_str());
 						auto	d	= t++;
 						pClass->m_table.erase(d);
 					}

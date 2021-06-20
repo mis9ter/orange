@@ -74,9 +74,8 @@ interface   IEventCallback
 	virtual	PCSTR	Name()		= NULL;
 };
 #include "CProcessCallback.h"
-#include "CThreadCallback.h"
 #include "CModuleCallback.h"
-#include "CPreProcess.h"
+#include "CThreadCallback.h"
 #include "CBootCallback.h"
 #include "CRegisryCallback.h"
 
@@ -125,7 +124,6 @@ class CEventCallback
 	public	CProcessCallback,
 	public	CThreadCallback,
 	public	CModuleCallback,
-	public	CPreProcess,
 	public	CBootCallback,
 	public	CRegistryCallback
 {
@@ -224,43 +222,6 @@ public:
 			for (auto t : m_events) {
 				t.second->Create();
 			}
-			//	이전에 실행되어 동작중인 프로세스에 대한 정보들 수집
-			//	이 정보는 APP단에서 얻으려니 이모 저모 잘 안된다.
-			//	커널단에서 받아야 겠다.
-			//	커널 드라이버를 시작하면 이 정보부터 올라온다.
-
-			ProcMap			table;
-			/*
-			CPreProcess::Check2([&](
-				UUID	*pProcGuid, 
-				DWORD	PID, 
-				DWORD	PPID, 
-				PCWSTR	pPath,
-				PCWSTR	pCmdLine
-			) {
-				Log("%6d %ws", PID, pPath);
-				table[PID]	= *pProcGuid;
-				WCHAR	szProcGuid[40] = L"";
-				UUID2String(pProcGuid, szProcGuid, sizeof(szProcGuid));
-				Log("ProcGuid  : %ws", szProcGuid);
-				Log("CmdLine   : %ws", pCmdLine);
-				Log("PPID      : %6d", PPID);
-				if( PPID ) {
-					auto t = table.find(PPID);
-					if( table.end() == t ) {
-						Log("PProcGuid : NOT FOUND");
-					}
-					else {
-						UUID2String(&t->second, szProcGuid, sizeof(szProcGuid));
-						Log("PProcGuid : %ws", szProcGuid);
-					}
-				}
-				else {
-					Log("PProcGuid : NULL");
-				}
-				Log("-------------------------------------------");
-			});
-			*/
 			NotifyCenter()->RegisterNotifyCallback("SessionCallback", NOTIFY_TYPE_SESSION, 
 				NOTIFY_EVENT_SESSION, this, SessionCallback);
 			return true;
@@ -580,6 +541,11 @@ protected:
 			case YFilter::Message::Category::Process:
 				pClass->m_counter.dwProcess++;
 				bRet	= CProcessCallback::Proc2(pMessage, dynamic_cast<CProcessCallback *>(pClass));
+				break;
+
+			case YFilter::Message::Category::Module:
+				pClass->m_counter.dwModule++;
+				bRet	= CModuleCallback::Proc2(pMessage, dynamic_cast<CModuleCallback *>(pClass));
 				break;
 
 			default:

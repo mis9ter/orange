@@ -74,15 +74,7 @@ void		GetProcessTableList() {
 			//}
 			CreateProcessMessage(
 				YFilter::Message::SubType::ProcessStart2,
-				pEntry->PID,
-				pEntry->PPID,
-				pEntry->CPID,
-				&pEntry->PUID,
-				&pEntry->PPUID,
-				&pEntry->ProcPath,
-				&pEntry->Command,
-				&pEntry->times,
-				&pMsg
+				pEntry,	&pMsg
 			);
 			if( pMsg ) {
 				//__dlog("%-32s %p %d", __func__, pEntry->PUID, pEntry->PID);

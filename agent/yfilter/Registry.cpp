@@ -175,9 +175,7 @@ void		CreateRegistryMessage(
 	PY_REGISTRY	*pOut
 )
 {
-	WORD	wPacketSize	= sizeof(Y_HEADER);
-
-	wPacketSize		+=	sizeof(Y_REGISTRY);
+	WORD	wPacketSize	= sizeof(Y_REGISTRY);
 	wPacketSize		+=	GetStringDataSize(&p->RegPath);
 	wPacketSize		+=	GetStringDataSize(&p->RegValueName);
 
@@ -192,6 +190,8 @@ void		CreateRegistryMessage(
 		//__dlog(" struct  :%d", sizeof(Y_REGISTRY));
 		//__dlog(" regpath :%d", GetStringDataSize(pRegPath));
 		//__dlog(" value   :%d", GetStringDataSize(pRegValueName));
+
+		RtlZeroMemory(pMsg, wPacketSize);
 
 		pMsg->mode		= YFilter::Message::Mode::Event;
 		pMsg->category	= YFilter::Message::Category::Registry;
@@ -211,7 +211,7 @@ void		CreateRegistryMessage(
 		pMsg->RegPUID	= p->RegPUID;
 		pMsg->nCount	= p->nCount;
 		pMsg->nDataSize	= p->dwSize;
-		WORD		dwStringOffset	= (WORD)(sizeof(Y_HEADER) + sizeof(Y_REGISTRY));
+		WORD		dwStringOffset	= (WORD)(sizeof(Y_REGISTRY));
 
 		pMsg->RegPath.wOffset	= dwStringOffset;
 		pMsg->RegPath.wSize		= GetStringDataSize(&p->RegPath);
@@ -252,13 +252,15 @@ void		RegistryLog(REG_CALLBACK_ARG * p)
 				PREG_CALLBACK_ARG	p	= (PREG_CALLBACK_ARG)pContext;
 				p->PUID	= pEntry->PUID;
 				switch( p->notifyClass ) {
+					case RegNtPreDeleteKey:
+						_InterlockedIncrement((LONG *)&pEntry->registry.DeleteKey.nCount);
+						break;
+					case RegNtPostCreateKey:
+						_InterlockedIncrement((LONG *)&pEntry->registry.CreateKey.nCount);
+						break;
 					case RegNtRenameKey:
 						_InterlockedIncrement((LONG *)&pEntry->registry.RenameKey.nCount);
 						break;
-					case RegNtDeleteKey:
-						_InterlockedIncrement((LONG *)&pEntry->registry.DeleteKey.nCount);
-						break;
-
 					case RegNtDeleteValueKey:
 						_InterlockedIncrement((LONG *)&pEntry->registry.DeleteValue.nCount);
 						break;

@@ -132,6 +132,7 @@ protected:
 				t->second->p->nCount		+= p->nCount;
 				t->second->p->nDataSize		+= p->nDataSize;			
 			}
+			pClass->m_log.Log("%04d [%d] %ws", pClass->m_table.size(), p->subType, p->RegPath.pBuf);
 		});
 		return true;
 	}

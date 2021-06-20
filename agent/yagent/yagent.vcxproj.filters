@@ -129,6 +129,9 @@
     <ClInclude Include="CRegisryCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="undocumented.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">
@@ -173,6 +176,9 @@
     </ClCompile>
     <ClCompile Include="..\module\CDB.cpp">
       <Filter>module</Filter>
+    </ClCompile>
+    <ClCompile Include="undocumented.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

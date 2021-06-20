@@ -427,14 +427,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 					//	프로세스 정보를 기록해둔 경우 				
 					CreateProcessMessage(
 						YFilter::Message::SubType::ProcessStop,
-						pEntry->PID,
-						pEntry->PPID,
-						pEntry->CPID,
-						&pEntry->PUID,
-						&pEntry->PPUID,
-						&pEntry->ProcPath,
-						&pEntry->Command,
-						&pEntry->times,
+						pEntry,
 						&((struct __ARG *)pContext)->pMsg
 					);
 				}

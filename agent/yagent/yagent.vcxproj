@@ -232,6 +232,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="MD5\MD5.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="undocumented.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\module\CDB.cpp" />
@@ -247,6 +248,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </ClCompile>
     <ClCompile Include="Misc.cpp" />
     <ClCompile Include="Service.cpp" />
+    <ClCompile Include="undocumented.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc" />

@@ -206,6 +206,28 @@ namespace YFilter
 #pragma pack(push, 1)
 #define MAX_FILTER_MESSAGE_SIZE		(8 * 1024)		//	커널에서 전달 예상되는 최대 크기
 
+typedef struct _COUNT {
+	volatile ULONG	nCount;
+
+} _COUNT;
+typedef struct COUNT_SIZE 
+	:
+	public _COUNT
+{
+	volatile __int64	nSize;
+} _COUNT_SIZE;
+typedef struct _REG_COUNT {
+	_COUNT_SIZE		SetValue;
+	_COUNT_SIZE		GetValue;
+	_COUNT_SIZE		RenameValue;
+	_COUNT_SIZE		DeleteValue;
+	_COUNT_SIZE		CreateKey;
+	_COUNT_SIZE		DeleteKey;
+	_COUNT_SIZE		EnumerateKey;
+	_COUNT_SIZE		RenameKey;
+} REG_COUNT;
+
+
 typedef struct YFILTER_HEADER {
 	YFilter::Message::Mode		mode;				//
 	YFilter::Message::Category	category;			//	
@@ -302,25 +324,36 @@ typedef struct Y_PROCESS
 #pragma pack(push,1)
 	ULONG						SID;
 
-	union {
-		ULONG Property;
-		struct {
-			ULONG ImageAddressingMode : 8;  // Code addressing mode
-			ULONG SystemModeImage : 1;		// System mode image
-			ULONG ImageMappedToAllPids : 1;  // Image mapped into all processes
-			ULONG ExtendedInfoPresent : 1;  // IMAGE_INFO_EX available
-			ULONG MachineTypeMismatch : 1;  // Architecture type mismatch
-			ULONG ImageSignatureLevel : 4;  // Signature level
-			ULONG ImageSignatureType : 3;  // Signature type
-			ULONG ImagePartialMap : 1;  // Nonzero if entire image is not mapped
-			ULONG Reserved : 12;
-		} Properties;
-	} ImageProperties;
+	REG_COUNT					registry;
 
 	Y_STRING					DevicePath;
 	Y_STRING					Command;
 	bool						bIsSystem;
 } Y_PROCESS, *PY_PROCESS;
+
+typedef struct Y_MODULE
+	:
+	public	Y_HEADER
+{
+	YFilter::Message::SubType	subType;
+	PVOID						ImageBase;
+	union {
+		ULONG Properties;
+		struct {
+			ULONG ImageAddressingMode  : 8;  // Code addressing mode
+			ULONG SystemModeImage      : 1;  // System mode image
+			ULONG ImageMappedToAllPids : 1;  // Image mapped into all processes
+			ULONG ExtendedInfoPresent  : 1;  // IMAGE_INFO_EX available
+			ULONG MachineTypeMismatch  : 1;  // Architecture type mismatch
+			ULONG ImageSignatureLevel  : 4;  // Signature level
+			ULONG ImageSignatureType   : 3;  // Signature type
+			ULONG ImagePartialMap      : 1;  // Nonzero if entire image is not mapped
+			ULONG Reserved             : 12;
+		} ImageProperties;
+	};
+	SIZE_T						ImageSize;
+	Y_STRING					DevicePath;
+} Y_MODULE, *PY_MODULE;
 
 typedef struct Y_PROCESS_CONTEXT
 {

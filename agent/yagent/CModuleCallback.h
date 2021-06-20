@@ -90,6 +90,24 @@ public:
 		return bRet;
 	}
 protected:
+	static	bool			Proc2
+	(
+		PY_HEADER			pMessage,
+		PVOID				pContext
+	) 
+	{
+		PY_MODULE	p	= (PY_MODULE)pMessage;
+		CModuleCallback	*pClass = (CModuleCallback *)pContext;
+		SetStringOffset(p, &p->DevicePath);
+
+		WCHAR	ModulePath[AGENT_PATH_SIZE]	= L"";
+		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, ModulePath, sizeof(ModulePath)) )
+			StringCbCopy(ModulePath, sizeof(ModulePath), p->DevicePath.pBuf);
+
+		pClass->m_log.Log("%p %ws", p->ImageBase, ModulePath);
+
+		return true;
+	}
 	static	bool			Proc(
 		ULONGLONG			nMessageId,
 		PVOID				pCallbackPtr,

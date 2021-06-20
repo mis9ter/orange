@@ -1,6 +1,5 @@
 ﻿#include "Framework.h"
 
-
 void	CAgent::AddDbList(int nResourceID, PCWSTR pRootPath, PCWSTR pName, DbMap & table) {
 	Log("%-32s begin", __func__);
 	Log("%-32s %d", "nResourceID", nResourceID);

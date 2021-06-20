@@ -185,6 +185,28 @@ bool			OtSave(IN PUNICODE_STRING pRegistry, IN POBJECT_TABLE pTable);
 bool			OtRestore(IN POBJECT_TABLE pTable);
 ULONG			OtList(IN POBJECT_TABLE pTable);
 
+
+typedef struct PROCESS_ENTRY
+{
+	HANDLE				PID;				//	나의 핸들
+	HANDLE				PPID;				//	부모의 핸들
+	PROCUID				PUID;				//	고유번호
+	PROCUID				PPUID;				//	부모의 고유번호
+	HANDLE				TID;				//	메인 스레드 핸들
+	HANDLE				CPID;				//	나를 생성한 프로세스의 핸들
+											//	나를 생성한 프로세스 != 부모 프로세스
+	ULONG				SID;				//	프로세스 세션 ID
+	UNICODE_STRING		DevicePath;
+	UNICODE_STRING		Command;
+
+	PVOID				key;				//	[TODO]	뭐에 쓰는 물건인가요?
+	bool				bFree;				//	해제 대상
+	bool				bCallback;			//	콜백에 의해 수집
+											//DWORD64				dwTerminate;
+	KERNEL_USER_TIMES	times;
+	REG_COUNT			registry;
+} PROCESS_ENTRY, * PPROCESS_ENTRY;
+
 /*************************************************************************
 	Prototypes
 *************************************************************************/
@@ -255,6 +277,11 @@ void		CreateProcessMessage(
 	PUNICODE_STRING				pProcPath,
 	PUNICODE_STRING				pCommand,
 	PKERNEL_USER_TIMES			pTimes,
+	PY_PROCESS					*pOut
+);
+void		CreateProcessMessage(
+	YFilter::Message::SubType	subType,
+	PPROCESS_ENTRY				pEntry,
 	PY_PROCESS					*pOut
 );
 WORD		GetStringDataSize(PUNICODE_STRING pStr);
