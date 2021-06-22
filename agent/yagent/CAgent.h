@@ -26,7 +26,6 @@
 #include "CEventCallback.h"
 #include "CProtect.h"
 
-
 typedef std::function<void(HANDLE hShutdown, void * pCallbackPtr)>	PFUNC_AGENT_RUNLOOP;
 
 class CFilePath

@@ -317,6 +317,7 @@ void CreateThreadNotifyRoutine(
 			__log("  PsIsSystemThread(target) %d", PsIsSystemThread(pThread));
 		}
 	}
+	/*
 	PYFILTER_MESSAGE	pMsg	= NULL;
 	pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), 
 			TAG_THREAD);
@@ -376,7 +377,6 @@ void CreateThreadNotifyRoutine(
 			CMemory::Free(pImageFileName);
 		}
 	}
-
 	if (Create ) {
 		pMsg->data.subType = YFilter::Message::SubType::ThreadStart;
 		bool	bSameProcess = (CPID == ProcessId);
@@ -421,6 +421,7 @@ void CreateThreadNotifyRoutine(
 			pMsg	= NULL;
 		}
 	}
+	*/
 	/*
 	if (bTest) {
 		if( pMsg )	CMemory::Free(pMsg);
@@ -443,10 +444,12 @@ void CreateThreadNotifyRoutine(
 		}
 	}
 	*/
+	/*
 	if( pMsg )
 	{
 		CMemory::Free(pMsg);
 	}
+	*/
 }
 bool		StartThreadFilter()
 {

@@ -277,12 +277,12 @@ void		CreateProcessMessage(
 	PUNICODE_STRING				pProcPath,
 	PUNICODE_STRING				pCommand,
 	PKERNEL_USER_TIMES			pTimes,
-	PY_PROCESS					*pOut
+	PY_PROCESS_MESSAGE			*pOut
 );
 void		CreateProcessMessage(
 	YFilter::Message::SubType	subType,
 	PPROCESS_ENTRY				pEntry,
-	PY_PROCESS					*pOut
+	PY_PROCESS_MESSAGE			*pOut
 );
 WORD		GetStringDataSize(PUNICODE_STRING pStr);
 void		CopyStringData(PVOID pAddress, WORD wOffset, PY_STRING pDest, PUNICODE_STRING pSrc);

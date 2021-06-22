@@ -132,6 +132,9 @@
     <ClInclude Include="undocumented.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="CStringTable.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">

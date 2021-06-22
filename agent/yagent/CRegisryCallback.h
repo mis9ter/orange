@@ -8,19 +8,19 @@
 */
 
 class CRegistry
+	:
+	public	Y_REGISTRY_ENTRY
 {
 public:
-	CRegistry(PY_REGISTRY _p) 
+	CRegistry(PY_REGISTRY_DATA _p) 
 		:	
-		p(_p),
 		dwLastTick(GetTickCount64())	
 	{
-		
+		CopyMemory(dynamic_cast<PY_REGISTRY_DATA>(this), _p, sizeof(Y_REGISTRY_DATA));		
 	}
 	~CRegistry() {
 	
 	}
-	PY_REGISTRY	p;
 	DWORD64		dwLastTick;
 };
 
@@ -31,7 +31,8 @@ typedef std::map<REGUID, RegPtr>	RegMap;
 class CRegistryCallback
 	:
 	protected		IEventCallback,
-	public virtual	CAppLog
+	public virtual	CAppLog,
+	public	virtual	CStringTable
 {
 public:
 	CRegistryCallback() 
@@ -92,20 +93,20 @@ public:
 	}
 protected:
 //#define USE_LOG
-	void					Dump(PY_REGISTRY p) {
+	void					Dump(CRegistry * p) {
 		m_log.Log("  mode     :%d", p->mode);
 		m_log.Log("  category :%d", p->category);
-		m_log.Log("  wSize    :%d", p->wSize);
+		m_log.Log("  wSize    :%d", p->wDataSize);
 		m_log.Log("  wRevision:%d", p->wRevision);
 		m_log.Log("  subType  :%d", p->subType);
 		m_log.Log("  RegUID   :%p", p->RegUID);
 		m_log.Log("  RegPUID  :%p", p->RegPUID);
 		m_log.Log("  PID      :%d", p->PID);
 		m_log.Log("  PUID     :%p", p->PUID);
-		m_log.Log("  RegPath  :%ws [%d]", p->RegPath.pBuf, p->RegPath.wSize);
-		m_log.Log("  RegValue :%ws [%d]", p->RegValueName.pBuf, p->RegValueName.wSize);
+		//m_log.Log("  RegPath  :%ws [%d]", p->RegPath.pBuf, p->RegPath.wSize);
+		//m_log.Log("  RegValue :%ws [%d]", p->RegValueName.pBuf, p->RegValueName.wSize);
 		m_log.Log("  count    :%d", p->nCount);
-		m_log.Log("  Size     :%I64d", p->nDataSize);
+		m_log.Log("  Size     :%I64d", p->nRegDataSize);
 	}
 	static	bool			Proc2
 	(
@@ -113,7 +114,7 @@ protected:
 		PVOID				pContext
 	) 
 	{
-		PY_REGISTRY			p	= (PY_REGISTRY)pMessage;
+		PY_REGISTRY_MESSAGE	p	= (PY_REGISTRY_MESSAGE)pMessage;
 		CRegistryCallback	*pClass = (CRegistryCallback *)pContext;
 		SetStringOffset(p, &p->RegPath);
 		SetStringOffset(p, &p->RegValueName);
@@ -121,16 +122,16 @@ protected:
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			auto	t	= pClass->m_table.find(p->RegPUID);
 			if( pClass->m_table.end() == t ) {
-				RegPtr	ptr	= std::make_shared<CRegistry>((PY_REGISTRY)(new char[p->wSize]));
-				CopyMemory(ptr->p, pContext, p->wSize);
-				SetStringOffset(ptr.get(), &ptr->p->RegPath);
-				SetStringOffset(ptr.get(), &ptr->p->RegValueName);
-				pClass->m_table[ptr->p->RegPUID]	= ptr;			
+				RegPtr	ptr	= std::make_shared<CRegistry>(dynamic_cast<PY_REGISTRY_DATA>(p));
+
+				ptr->RegPathUID			= pClass->GetStrUID(StringRegistryKey, p->RegPath.pBuf);
+				ptr->RegValueNameUID	= pClass->GetStrUID(StringRegistryValue, p->RegValueName.pBuf);
+				pClass->m_table[ptr->RegPUID]	= ptr;			
 				//pClass->Dump(ptr.get());
 			}
 			else {
-				t->second->p->nCount		+= p->nCount;
-				t->second->p->nDataSize		+= p->nDataSize;			
+				t->second->nCount		+= p->nCount;
+				t->second->nRegDataSize	+= p->nRegDataSize;			
 			}
 			pClass->m_log.Log("%04d [%d] %ws", pClass->m_table.size(), p->subType, p->RegPath.pBuf);
 		});
@@ -159,7 +160,7 @@ private:
 	RegMap				m_table;
 
 	bool	IsExisting(
-		PY_REGISTRY			p
+		CRegistry	*p
 	) {
 		int			nCount	= 0;
 		sqlite3_stmt* pStmt = m_stmt.pIsExisting;
@@ -178,22 +179,29 @@ private:
 		return nCount? true : false;
 	}
 	bool	Insert(
-		PY_REGISTRY			p
+		CRegistry	*p
 	) {
 		bool			bRet	= false;
 		sqlite3_stmt	*pStmt	= m_stmt.pInsert;
 		if (pStmt) {
 			int		nIndex = 0;
 
+			std::wstring	strRegPath;
+			std::wstring	strRegValueName;
+
+			CStringTable::Lock(NULL, [&](PVOID pContext) {
+				strRegPath		= GetString(p->RegPathUID);
+				strRegValueName	= GetString(p->RegValueNameUID);			
+			});
 			sqlite3_bind_int64(pStmt,	++nIndex, p->RegPUID);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->RegUID);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->PUID);
 			sqlite3_bind_int(pStmt,		++nIndex, p->subType);
 			sqlite3_bind_int(pStmt,		++nIndex, p->PID);
-			sqlite3_bind_text16(pStmt,	++nIndex, p->RegPath.pBuf, -1, SQLITE_STATIC);
-			sqlite3_bind_text16(pStmt,	++nIndex, p->RegValueName.pBuf, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, p->nDataSize);
-			sqlite3_bind_int(pStmt, ++nIndex, p->nCount);
+			sqlite3_bind_text16(pStmt,	++nIndex, strRegPath.c_str(), -1, SQLITE_STATIC);
+			sqlite3_bind_text16(pStmt,	++nIndex, strRegValueName.c_str(), -1, SQLITE_STATIC);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->nRegDataSize);
+			sqlite3_bind_int(pStmt,		++nIndex, p->nCount);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
 				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
@@ -204,13 +212,13 @@ private:
 		return bRet;
 	}
 	bool	Update(
-		PY_REGISTRY			p
+		CRegistry	*p
 	) {
 		bool			bRet	= false;
 		sqlite3_stmt	*pStmt	= m_stmt.pUpdate;
 		if (pStmt) {
 			int			nIndex = 0;
-			sqlite3_bind_int64(pStmt, ++nIndex, p->nDataSize);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->nRegDataSize);
 			sqlite3_bind_int(pStmt, ++nIndex, p->nCount);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->RegPUID);
 			sqlite3_bind_int(pStmt, ++nIndex, p->subType);
@@ -238,10 +246,10 @@ private:
 				DWORD64		dwTick	= GetTickCount64();
 				for( auto t = pClass->m_table.begin() ; t != pClass->m_table.end() ;  ) {
 					if( (dwTick - t->second->dwLastTick ) > (60 * 1000) ) {
-						if (pClass->IsExisting(t->second->p))
-							pClass->Update(t->second->p);
+						if (pClass->IsExisting(t->second.get()))
+							pClass->Update(t->second.get());
 						else	{
-							pClass->Insert(t->second->p);
+							pClass->Insert(t->second.get());
 						}
 						auto	d	= t++;
 						pClass->m_table.erase(d);

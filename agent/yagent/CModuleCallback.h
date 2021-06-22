@@ -96,8 +96,8 @@ protected:
 		PVOID				pContext
 	) 
 	{
-		PY_MODULE	p	= (PY_MODULE)pMessage;
-		CModuleCallback	*pClass = (CModuleCallback *)pContext;
+		PY_MODULE_MESSAGE	p		= (PY_MODULE_MESSAGE)pMessage;
+		CModuleCallback		*pClass = (CModuleCallback *)pContext;
 		SetStringOffset(p, &p->DevicePath);
 
 		WCHAR	ModulePath[AGENT_PATH_SIZE]	= L"";

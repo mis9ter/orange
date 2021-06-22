@@ -35,14 +35,16 @@ void LoadImageNotifyRoutine(
 
 	HANDLE		PID			= PsGetCurrentProcessId();
 	struct __ARG {
-		PY_MODULE			p;
+		PY_MODULE_MESSAGE	pMessage;
 		PUNICODE_STRING		path;
-		WORD				wSize;
+		WORD				wDataSize;
+		WORD				wStringSize;
 	} arg;
 
-	arg.p		= NULL;
-	arg.path	= FullImageName;	
-	arg.wSize	= 0;
+	arg.pMessage		= NULL;
+	arg.path			= FullImageName;	
+	arg.wDataSize		= sizeof(Y_MODULE_DATA);
+	arg.wStringSize		= 0;
 	if( ProcessTable()->IsExisting(PID, &arg, 
 		[](
 			bool				bCreationSaved,	
@@ -51,33 +53,35 @@ void LoadImageNotifyRoutine(
 		{
 			UNREFERENCED_PARAMETER(bCreationSaved);			
 			struct __ARG	*p	= (struct __ARG *)pContext;
-			p->wSize	= sizeof(Y_MODULE) + GetStringDataSize(p->path);
-			p->p		= (PY_MODULE)CMemory::Allocate(PagedPool, p->wSize, TAG_MODULE);
-			if( p->p ) {
-				RtlZeroMemory(p->p, p->wSize);
-				p->p->PID		= (DWORD)pEntry->PID;
-				p->p->PUID		= pEntry->PUID;
+			p->wStringSize	= sizeof(Y_MODULE_STRING);			
+			p->wStringSize	+= GetStringDataSize(p->path);
+			p->pMessage		= (PY_MODULE_MESSAGE)CMemory::Allocate(PagedPool, p->wDataSize + p->wStringSize, TAG_MODULE);
+			if( p->pMessage ) {
+				RtlZeroMemory(p->pMessage, p->wDataSize + p->wStringSize);
+				p->pMessage->PID		= (DWORD)pEntry->PID;
+				p->pMessage->PUID		= pEntry->PUID;
+				p->pMessage->mode		= YFilter::Message::Mode::Event;
+				p->pMessage->category	= YFilter::Message::Category::Module;
+				p->pMessage->wRevision	= Y_MESSAGE_REVISION;
+				p->pMessage->wDataSize	= p->wDataSize;
+				p->pMessage->wStringSize= p->wStringSize;
 
-				WORD		wOffset			= (WORD)(sizeof(Y_MODULE));
-				CopyStringData(p->p, wOffset, &p->p->DevicePath, p->path);
+				WORD		wOffset			= (WORD)(sizeof(Y_MODULE_MESSAGE));
+				CopyStringData(p->pMessage, wOffset, &p->pMessage->DevicePath, p->path);
 			}
 		}
 	)) {
-		arg.p->mode				= YFilter::Message::Mode::Event;
-		arg.p->category			= YFilter::Message::Category::Module;
-		arg.p->wSize			= arg.wSize;
-		arg.p->wRevision		= Y_MESSAGE_REVISION;
-		arg.p->Properties		= ImageInfo->Properties;
-		arg.p->ImageSize		= ImageInfo->ImageSize;
-		arg.p->ImageBase		= ImageInfo->ImageBase;
+		arg.pMessage->Properties		= ImageInfo->Properties;
+		arg.pMessage->ImageSize		= ImageInfo->ImageSize;
+		arg.pMessage->ImageBase		= ImageInfo->ImageBase;
 		if (MessageThreadPool()->Push(__FUNCTION__,
-			arg.p->mode, arg.p->category, arg.p, arg.wSize,false))
+			arg.pMessage->mode, arg.pMessage->category, arg.pMessage, arg.wDataSize+arg.wStringSize,false))
 		{
 			//	pMsg는 SendMessage 성공 후 해제될 것이다. 
 			MessageThreadPool()->Alert(YFilter::Message::Category::Module);
 		}
 		else {
-			CMemory::Free(arg.p);
+			CMemory::Free(arg.pMessage);
 		}
 	}
 	else {

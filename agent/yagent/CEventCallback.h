@@ -4,6 +4,7 @@
 #include <atomic>
 #include "CDB.h"
 #include "yagent.string.h"
+#include "CStringTable.h"
 
 #define IDLE_COMMIT		1
 #define IDLE_COUNT		1000
@@ -125,7 +126,8 @@ class CEventCallback
 	public	CThreadCallback,
 	public	CModuleCallback,
 	public	CBootCallback,
-	public	CRegistryCallback
+	public	CRegistryCallback,
+	virtual	public	CStringTable
 {
 
 public:
@@ -205,7 +207,7 @@ public:
 		CEventCallback	*pClass	= (CEventCallback *)pContext;
 		pClass->Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
 	}
-	bool		CreateCallback()
+	bool			CreateCallback()
 	{	
 		Log(__FUNCTION__);
 
@@ -224,6 +226,7 @@ public:
 			}
 			NotifyCenter()->RegisterNotifyCallback("SessionCallback", NOTIFY_TYPE_SESSION, 
 				NOTIFY_EVENT_SESSION, this, SessionCallback);
+			CStringTable::Create();
 			return true;
 		}
 		else {
@@ -231,12 +234,13 @@ public:
 		}
 		return false;
 	}
-	void		DestroyCallback() {
+	void			DestroyCallback() {
 		Log("%s", __FUNCTION__);
 		for (auto t : m_events) {
 			Log("%s %s", __FUNCTION__, t.second->Name());
 			//t.second->Destroy();
 		}
+		CStringTable::Destroy();
 		CDB		*pDB	= Db(DB_EVENT_NAME);
 		if( NULL == pDB ) {
 			return;
@@ -245,7 +249,7 @@ public:
 		if(pDB->IsOpened())	pDB->Commit(__FUNCTION__);
 #endif
 	}
-	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) {
+	PCWSTR			UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) {
 		StringCbPrintf(pValue, dwSize,
 			L"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 			p->Data1, p->Data2, p->Data3,
@@ -253,12 +257,11 @@ public:
 			p->Data4[4], p->Data4[5], p->Data4[6], p->Data4[7]);
 		return pValue;
 	}
-
-	DWORD	GetBootId()
+	DWORD			GetBootId()
 	{
 		return m_dwBootId;
 	}
-	DWORD		QueryUnknonwn
+	DWORD			QueryUnknonwn
 	(
 		const	Json::Value		&query,
 		const	Json::Value		&bind,

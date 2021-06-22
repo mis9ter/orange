@@ -377,15 +377,16 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 						UNREFERENCED_PARAMETER(PPUID);
 
 						if( Config()->client.event.nConnected ) {
-							PY_PROCESS	pMsg	= NULL;
-							HANDLE		CPID	= *(HANDLE *)pContext;
+							PY_PROCESS_MESSAGE	pMsg	= NULL;
+							HANDLE				CPID	= *(HANDLE *)pContext;
 							CreateProcessMessage(
 								YFilter::Message::SubType::ProcessStart,
 								PID, PPID, CPID, &PUID, &PPUID, pProcPath, pCommand, pTimes,
 								&pMsg
 							);
 							if( pMsg ) {
-								if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, pMsg->wSize, false) ) {
+								if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, 
+										pMsg, pMsg->wDataSize+pMsg->wStringSize, false) ) {
 									MessageThreadPool()->Alert(pMsg->category);
 									pMsg	= NULL;
 								}
@@ -395,12 +396,6 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 							}	
 						}
 				});
-				//PY_PROCESS			pMsg	= NULL;
-
-				//CreateProcessMessage(
-				//	YFilter::Message::SubType::ProcessStart, 
-				//	
-				//);
 			}
 			else
 			{
@@ -410,7 +405,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		else
 		{
 			struct __ARG { 
-				PY_PROCESS			pMsg;
+				PY_PROCESS_MESSAGE	pMsg;
 				KERNEL_USER_TIMES	times;
 			} arg;
 			RtlZeroMemory(&arg, sizeof(arg));
@@ -436,30 +431,33 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				}
 			}))
 			{
-				//RegistryTable()->Flush(ProcessId);
+				
 			}
 			else {
 				__log("%-32s PID:%d is not found.", __func__, (DWORD)ProcessId);			
 			}
-			PY_PROCESS			pMsg	= arg.pMsg;
+			PY_PROCESS_MESSAGE			pMsg	= arg.pMsg;
 			if( pMsg ) {
-				__log(TEXTLINE);
-				__log("%s", __func__);
-				__log(TEXTLINE);
-				__log("PID  :%d",	(DWORD)pMsg->PID);
-				__log("CPID :%d",	(DWORD)PsGetCurrentProcessId());
-				__log("TID  :%d",	(DWORD)pMsg->TID);
-				__log("CTID :%d",	(DWORD)PsGetCurrentThreadId());
-				__log("PUID :%p",	pMsg->PUID);
-				__log("PATH :%ws",	pMsg->DevicePath.pBuf);
-				__log("CMD  :%ws",	pMsg->Command.pBuf);
-				__log("PPID :%d",	(DWORD)pMsg->PPID);
-				__log("PPUID:%p",	pMsg->PPUID);
-				__log("CREAT:%p",	pMsg->times.CreateTime.QuadPart);
-				__log("EXIT :%p",	pMsg->times.ExitTime.QuadPart);
-				__log("Kerne:%p",	pMsg->times.KernelTime.QuadPart);
-				__log("User :%p",	pMsg->times.UserTime.QuadPart);			
-				if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, arg.pMsg->wSize, false) ) {
+				if( false ) {
+					__log(TEXTLINE);
+					__log("%s", __func__);
+					__log(TEXTLINE);
+					__log("PID  :%d",	(DWORD)pMsg->PID);
+					__log("CPID :%d",	(DWORD)PsGetCurrentProcessId());
+					__log("TID  :%d",	(DWORD)pMsg->TID);
+					__log("CTID :%d",	(DWORD)PsGetCurrentThreadId());
+					__log("PUID :%p",	pMsg->PUID);
+					__log("PATH :%ws",	pMsg->DevicePath.pBuf);
+					__log("CMD  :%ws",	pMsg->Command.pBuf);
+					__log("PPID :%d",	(DWORD)pMsg->PPID);
+					__log("PPUID:%p",	pMsg->PPUID);
+					__log("CREAT:%p",	pMsg->times.CreateTime.QuadPart);
+					__log("EXIT :%p",	pMsg->times.ExitTime.QuadPart);
+					__log("Kerne:%p",	pMsg->times.KernelTime.QuadPart);
+					__log("User :%p",	pMsg->times.UserTime.QuadPart);		
+				}
+				if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, 
+						arg.pMsg->wDataSize+arg.pMsg->wStringSize, false) ) {
 					MessageThreadPool()->Alert(pMsg->category);
 					pMsg	= NULL;
 				}
@@ -548,14 +546,15 @@ bool		StartProcessFilter()
 			{
 				UNREFERENCED_PARAMETER(pContext);
 				if( Config()->client.event.nConnected ) {
-					PY_PROCESS	pMsg	= NULL;
+					PY_PROCESS_MESSAGE	pMsg	= NULL;
 					CreateProcessMessage(
 						YFilter::Message::SubType::ProcessStart2,
 						PID, PPID, PPID, &PUID, &PPUID, pProcPath, pCommand, pTimes,
 						&pMsg
 					);
 					if( pMsg ) {
-						if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, pMsg->wSize, false) ) {
+						if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, 
+								pMsg->wDataSize+pMsg->wStringSize, false) ) {
 							MessageThreadPool()->Alert(pMsg->category);
 							pMsg	= NULL;
 						}

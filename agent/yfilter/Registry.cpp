@@ -171,18 +171,19 @@ void		RegistryDeleteValueLog(REG_CALLBACK_ARG * p, PVOID pObject, PUNICODE_STRIN
 	*/
 }
 void		CreateRegistryMessage(
-	PREG_ENTRY	p,
-	PY_REGISTRY	*pOut
+	PREG_ENTRY			p,
+	PY_REGISTRY_MESSAGE	*pOut
 )
 {
-	WORD	wPacketSize	= sizeof(Y_REGISTRY);
-	wPacketSize		+=	GetStringDataSize(&p->RegPath);
-	wPacketSize		+=	GetStringDataSize(&p->RegValueName);
+	WORD	wDataSize	= sizeof(Y_REGISTRY_DATA);
+	WORD	wStringSize	= sizeof(Y_REGISTRY_STRING);
+	wStringSize		+=	GetStringDataSize(&p->RegPath);
+	wStringSize		+=	GetStringDataSize(&p->RegValueName);
 
-	PY_REGISTRY			pMsg	= NULL;
+	PY_REGISTRY_MESSAGE	pMsg	= NULL;
 	HANDLE				PPID	= GetParentProcessId(p->PID);
 
-	pMsg = (PY_REGISTRY)CMemory::Allocate(PagedPool, wPacketSize, TAG_PROCESS);
+	pMsg = (PY_REGISTRY_MESSAGE)CMemory::Allocate(PagedPool, wDataSize+wStringSize, TAG_PROCESS);
 	if (pMsg) 
 	{
 		//__dlog("%-32s message size:%d", __func__, wPacketSize);
@@ -191,12 +192,13 @@ void		CreateRegistryMessage(
 		//__dlog(" regpath :%d", GetStringDataSize(pRegPath));
 		//__dlog(" value   :%d", GetStringDataSize(pRegValueName));
 
-		RtlZeroMemory(pMsg, wPacketSize);
+		RtlZeroMemory(pMsg, wDataSize+wStringSize);
 
 		pMsg->mode		= YFilter::Message::Mode::Event;
 		pMsg->category	= YFilter::Message::Category::Registry;
 		pMsg->subType	= RegistryTable()->RegClass2SubType(p->nClass);
-		pMsg->wSize		= wPacketSize;
+		pMsg->wDataSize	= wDataSize;
+		pMsg->wStringSize	= wStringSize;
 		pMsg->wRevision	= 1;
 
 		pMsg->PUID		= p->PUID;
@@ -210,8 +212,8 @@ void		CreateRegistryMessage(
 		pMsg->RegUID	= p->RegUID;
 		pMsg->RegPUID	= p->RegPUID;
 		pMsg->nCount	= p->nCount;
-		pMsg->nDataSize	= p->dwSize;
-		WORD		dwStringOffset	= (WORD)(sizeof(Y_REGISTRY));
+		pMsg->nRegDataSize	= p->dwSize;
+		WORD		dwStringOffset	= (WORD)(sizeof(Y_REGISTRY_MESSAGE));
 
 		pMsg->RegPath.wOffset	= dwStringOffset;
 		pMsg->RegPath.wSize		= GetStringDataSize(&p->RegPath);
@@ -385,7 +387,7 @@ NTSTATUS	RegistryCallback
 					p->subType			= YFilter::Message::SubType::RegistryDeleteKey;
 					//p->pRegValueName	= pPreInfo->ValueName;
 					//p->nSize			= pPreInfo->ResultLength? *pPreInfo->ResultLength : 0;
-					__log("RegNtPreDeleteKey %wZ", p->pRegPath);
+					//__log("RegNtPreDeleteKey %wZ", p->pRegPath);
 					RegistryLog(p);
 					CMemory::Free(pRegPath);
 				}
