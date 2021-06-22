@@ -20,7 +20,6 @@ public:
 	~CModuleCallback() {
 
 	}
-	virtual	CDB*		Db() = NULL;
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
 	virtual	bool		GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize)	= NULL;
 	PCSTR				Name() {
@@ -89,6 +88,9 @@ public:
 		}
 		return bRet;
 	}
+	virtual	CDB *	Db()	= NULL;
+	virtual	INotifyCenter *	NotifyCenter() = NULL;
+	virtual	CDB*	Db(PCWSTR pName) = NULL;
 protected:
 	static	bool			Proc2
 	(
@@ -100,12 +102,21 @@ protected:
 		CModuleCallback		*pClass = (CModuleCallback *)pContext;
 		SetStringOffset(p, &p->DevicePath);
 
-		WCHAR	ModulePath[AGENT_PATH_SIZE]	= L"";
-		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, ModulePath, sizeof(ModulePath)) )
-			StringCbCopy(ModulePath, sizeof(ModulePath), p->DevicePath.pBuf);
+		MODULE	m;
+		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, m.FullName, sizeof(m.FullName)) )
+			StringCbCopy(m.FullName, sizeof(m.FullName), p->DevicePath.pBuf);
 
-		pClass->m_log.Log("%p %ws", p->ImageBase, ModulePath);
+		m.ImageBase		= p->ImageBase;
+		m.ImageSize		= p->ImageSize;
+		pClass->m_log.Log("%p %ws", p->ImageBase, m.FullName);
 
+		PCWSTR	pName	= _tcsrchr(m.FullName, L'\\');
+		if( pName )	pName++;
+		else 
+			pName	= m.FullName;
+		StringCbCopy(m.BaseName, sizeof(m.BaseName), pName);
+
+		//	
 		return true;
 	}
 	static	bool			Proc(

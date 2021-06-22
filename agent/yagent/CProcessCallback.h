@@ -16,8 +16,9 @@ typedef struct _MODULE {
 	}
 	PVOID			ImageBase;
 	PVOID			EntryPoint;
-	WCHAR			FullName[MAX_PATH];
-	WCHAR			BaseName[MAX_PATH];
+	UINT64			ImageSize;
+	WCHAR			FullName[AGENT_PATH_SIZE];
+	WCHAR			BaseName[AGENT_PATH_SIZE];
 } MODULE, *PMODULE;
 class CModule
 {
@@ -218,8 +219,28 @@ public:
 		}
 		return bRet;
 	}
+	bool		AddModule(PROCUID PUID, PMODULE p) {	
+		bool	bRet	= false;
+		m_lock.Lock(p, [&](PVOID pContext) {
+			try {
+				auto	t	= m_table.find(PUID);
+				if( m_table.end() == t ) {
+					return;
+				}
+				ModulePtr	mptr	= std::make_shared<CModule>(p);
+				mptr->FullNameUID	= GetStrUID(StringModulePath, p->FullName);
+				mptr->BaseNameUID	= GetStrUID(StringModuleName, p->BaseName);
+				std::pair<ModuleMap::iterator, bool>	ret	= 
+					t->second->module.insert(std::pair(p->ImageBase, mptr));
+				bRet	= ret.second;
+			}
+			catch( std::exception & e) {
+				m_log.Log("CProcessCallback::AddModule", e.what());
+			}
+		});
+		return true;
+	}
 protected:
-
 	void	Dump(CProcess * p) {
 		m_log.Log("  mode     :%d", p->mode);
 		m_log.Log("  category :%d", p->category);
@@ -324,7 +345,6 @@ protected:
 					if( YFilter::Message::SubType::ProcessStart2 == p->subType ) {
 						GetModules(p->PID, NULL, [&](PVOID pContext, PMODULE p)->bool {
 							ModulePtr	mptr	= std::make_shared<CModule>(p);
-
 							mptr->FullNameUID	= pClass->GetStrUID(StringModulePath, p->FullName);
 							mptr->BaseNameUID	= pClass->GetStrUID(StringModuleName, p->BaseName);
 							t->second->module[p->ImageBase]	= mptr;
@@ -348,7 +368,6 @@ protected:
 		});
 		return true;
 	}
-
 	static	bool			Proc(
 		ULONGLONG			nMessageId,
 		PVOID				pCallbackPtr,
