@@ -88,9 +88,10 @@ public:
 		}
 		return bRet;
 	}
-	virtual	CDB *	Db()	= NULL;
+	virtual	CDB *		Db()	= NULL;
 	virtual	INotifyCenter *	NotifyCenter() = NULL;
-	virtual	CDB*	Db(PCWSTR pName) = NULL;
+	virtual	CDB*		Db(PCWSTR pName) = NULL;
+	virtual	bool		AddModule(PROCUID PUID, PMODULE p)	= NULL;
 protected:
 	static	bool			Proc2
 	(
@@ -115,7 +116,7 @@ protected:
 		else 
 			pName	= m.FullName;
 		StringCbCopy(m.BaseName, sizeof(m.BaseName), pName);
-
+		pClass->AddModule(p->PUID, &m);
 		//	
 		return true;
 	}

@@ -392,6 +392,10 @@ public:
 		std::atomic<DWORD>		dwRegistry;
 
 	} m_counter;
+
+	bool		AddModule(PROCUID PUID, PMODULE p)	{
+		return CProcessCallback::AddModule(PUID, p);	
+	}
 protected:
 	void	Wait(IN DWORD dwMilliSeconds)
 	{
