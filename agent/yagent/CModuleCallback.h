@@ -1,8 +1,60 @@
 #pragma once
-
+#include "tlhelp32.h"
 #pragma comment(lib, "Rpcrt4.lib")
 
 #define	GUID_STRLEN	37
+
+typedef struct _MODULE {
+	_MODULE() 
+		:
+		ImageBase(0),
+		EntryPoint(0),
+		ImageSize(0)
+	{
+		ZeroMemory(FullName, sizeof(FullName));
+		ZeroMemory(BaseName, sizeof(BaseName));
+	}
+	PVOID			ImageBase;
+	PVOID			EntryPoint;
+	ULONG			ImageSize;
+	WCHAR			FullName[AGENT_PATH_SIZE];
+	WCHAR			BaseName[AGENT_PATH_SIZE];
+} MODULE, *PMODULE;
+class CModule
+{
+public:
+	CModule(PMODULE p) 
+	{
+		ImageBase	= p->ImageBase;
+		EntryPoint	= p->EntryPoint;
+		ImageSize	= p->ImageSize;
+		FullNameUID	= 0;
+		BaseNameUID	= 0;
+	}
+	CModule(PMODULEENTRY32 p)
+	{
+		ImageBase	= p->modBaseAddr;
+		EntryPoint	= NULL;
+		ImageSize	= p->modBaseSize;
+		FullNameUID	= 0;
+		BaseNameUID	= 0;
+	}
+	~CModule() {
+
+	}
+	PVOID			ImageBase;
+	PVOID			EntryPoint;
+	STRUID			FullNameUID;
+	STRUID			BaseNameUID;
+	ULONG			ImageSize;
+};
+
+typedef std::function<bool (PVOID,PMODULEENTRY32)>	ModuleListCallback2;
+typedef std::function<bool (PVOID,PMODULE)>			ModuleListCallback;
+typedef std::shared_ptr<CModule>					ModulePtr;
+typedef std::map<PVOID, ModulePtr>					ModuleMap;
+
+bool	GetModules(DWORD PID, PVOID pContext, ModuleListCallback pCallback);
 
 class CModuleCallback
 	:
@@ -19,6 +71,30 @@ public:
 	}
 	~CModuleCallback() {
 
+	}
+	bool		GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
+		HANDLE	hSnapshot	= CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32, PID);
+		if( INVALID_HANDLE_VALUE == hSnapshot ) {
+			CErrorMessage	err(GetLastError());
+			m_log.Log("%-32s PID:%d error:%d %s", __func__, PID, (DWORD)err, (PCSTR)err);
+			if( false == GetModules(PID, pContext, [&](PVOID pContext, PMODULE p)->bool {
+				m_log.Log("%p %ws", p->ImageBase, p->FullName);
+				return true;			
+			}) ) {
+				m_log.Log("GetModules1() failed.");
+			}
+			return false;
+		}
+		MODULEENTRY32	module;	
+		module.dwSize	= sizeof(module);
+		if( Module32First(hSnapshot, &module) ) {
+			do {
+				if( pCallback )			pCallback(pContext, &module);
+			}
+			while( Module32Next(hSnapshot, &module));
+		}		
+		CloseHandle(hSnapshot);
+		return true;
 	}
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
 	virtual	bool		GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize)	= NULL;
@@ -109,7 +185,7 @@ protected:
 
 		m.ImageBase		= p->ImageBase;
 		m.ImageSize		= p->ImageSize;
-		pClass->m_log.Log("%p %ws", p->ImageBase, m.FullName);
+		//pClass->m_log.Log("%p %ws %d", p->ImageBase, m.FullName, (int)p->ImageSize);
 
 		PCWSTR	pName	= _tcsrchr(m.FullName, L'\\');
 		if( pName )	pName++;
@@ -117,6 +193,7 @@ protected:
 			pName	= m.FullName;
 		StringCbCopy(m.BaseName, sizeof(m.BaseName), pName);
 		pClass->AddModule(p->PUID, &m);
+		//pClass->m_log.Log("ImageBase: %p %d", m.ImageBase, (int)m.ImageSize);
 		//	
 		return true;
 	}

@@ -8,7 +8,7 @@
 
 #define IDLE_COMMIT		1
 #define IDLE_COUNT		1000
-#define IDLE_TICKS		60000
+#define IDLE_TICKS		3000
 
 class CAppPath
 {
@@ -74,8 +74,8 @@ interface   IEventCallback
 	virtual	void	Destroy()	= NULL;
 	virtual	PCSTR	Name()		= NULL;
 };
-#include "CProcessCallback.h"
 #include "CModuleCallback.h"
+#include "CProcessCallback.h"
 #include "CThreadCallback.h"
 #include "CBootCallback.h"
 #include "CRegisryCallback.h"
@@ -169,7 +169,7 @@ public:
 		CloseHandle(m_hWait);
 		m_log.Log(__FUNCTION__);
 	}
-	void	RegisterEventCallback(IN IEventCallback* pCallback) {
+	void			RegisterEventCallback(IN IEventCallback* pCallback) {
 		Log("%s %s", __FUNCTION__, pCallback->Name());
 		m_events[pCallback->Name()] = pCallback;
 	}
@@ -177,6 +177,10 @@ public:
 		return CBootCallback::GetBootUID();	
 	}
 	virtual	CDB*	Db(PCWSTR pName) = NULL;
+	bool		GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
+		return CModuleCallback::GetModules2(PID, pContext, pCallback);	
+	}
+
 	CDB*			Db() {
 		return m_pDB;
 	}
@@ -188,11 +192,11 @@ public:
 	uint64_t		GetTimestamp(IN LARGE_INTEGER *p) {
 		return CTime::LargeInteger2UnixTimestamp(p) / 1000;	
 	}
-	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
-				PWSTR pValue, DWORD dwSize) {
+	bool			GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
+						PWSTR pValue, DWORD dwSize) {
 		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
 	}
-	bool	GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize) {
+	bool			GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize) {
 		return CProcessCallback::GetProcess(PUID, pValue, dwSize);
 	}
 	static	void	SystemCallback(
@@ -225,7 +229,7 @@ public:
 				t.second->Create();
 			}
 			NotifyCenter()->RegisterNotifyCallback("SessionCallback", NOTIFY_TYPE_SESSION, 
-				NOTIFY_EVENT_SESSION, this, SessionCallback);
+				NOTIFY_EVENT_SESSION, 0, this, SessionCallback);
 			CStringTable::Create();
 			return true;
 		}
@@ -396,6 +400,15 @@ public:
 	bool		AddModule(PROCUID PUID, PMODULE p)	{
 		return CProcessCallback::AddModule(PUID, p);	
 	}
+	bool		FindModule(PROCUID PUID, PVOID pStartAddress,
+		PVOID	pContext, std::function<void (PVOID, CProcess *, CModule *, PVOID)> pCallback) {
+		return CProcessCallback::FindModule(PUID, pStartAddress, pContext, pCallback);	
+		
+	}
+	bool		GetProcess(PROCUID PUID, 
+		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback) {
+		return CProcessCallback::GetProcess(PUID, pContext, pCallback);	
+	}
 protected:
 	void	Wait(IN DWORD dwMilliSeconds)
 	{
@@ -553,6 +566,11 @@ protected:
 			case YFilter::Message::Category::Module:
 				pClass->m_counter.dwModule++;
 				bRet	= CModuleCallback::Proc2(pMessage, dynamic_cast<CModuleCallback *>(pClass));
+				break;
+
+			case YFilter::Message::Category::Thread:
+				pClass->m_counter.dwThread++;
+				bRet	= CThreadCallback::Proc2(pMessage, dynamic_cast<CThreadCallback *>(pClass));
 				break;
 
 			default:

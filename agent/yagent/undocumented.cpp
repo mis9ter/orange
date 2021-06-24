@@ -11,7 +11,7 @@ using pNtQueryInformationProcess = NTSTATUS(NTAPI *)(HANDLE ProcessHandle,
 	ULONG ProcessInformationLength, PULONG ReturnLength);
 pNtQueryInformationProcess NtQueryInformationProcess = nullptr;
 
-void Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback)
+bool Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback)
 {
 	PROCESS_BASIC_INFORMATION procBasicInfo = { 0 };
 	ULONG ulRetLength = 0;
@@ -22,7 +22,7 @@ void Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 	{
 		//p->Log("Could not get process information. Status = %X",
 		//	ntStatus);
-		return;
+		return false;
 	}
 
 	PEB procPeb = { 0 };
@@ -33,7 +33,7 @@ void Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 	{
 		//p->Log("Failed to read PEB from process. Error = %X",
 		//	GetLastError());
-		return;
+		return false;
 	}
 
 	PEB_LDR_DATA pebLdrData = { 0 };
@@ -43,7 +43,7 @@ void Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 	{
 		//p->Log("Failed to read module list from process. Error = %X",
 		//	GetLastError());
-		return;
+		return false;
 	}
 
 	LIST_ENTRY *pLdrListHead = (LIST_ENTRY *)pebLdrData.InLoadOrderModuleList.Flink;
@@ -57,7 +57,7 @@ void Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 		{
 			//p->Log("Could not read list entry from LDR list. Error = %X",
 			//	GetLastError());
-			return;
+			return false;
 		}
 
 		pLdrCurrentNode = lstEntry.InLoadOrderLinks.Flink;
@@ -78,26 +78,29 @@ void Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 			if( pCallback ) {
 				module.ImageBase	= lstEntry.DllBase;
 				module.EntryPoint	= lstEntry.EntryPoint;
+				module.ImageSize	= lstEntry.SizeOfImage;
 				if( false == pCallback(pContext, &module) ) 
 					break;			
 			}
 		}
 	} while (pLdrListHead != pLdrCurrentNode);
+	return true;
 }
-void	GetModules(DWORD PID, PVOID pContext, ModuleListCallback pCallback)
+bool	GetModules(DWORD PID, PVOID pContext, ModuleListCallback pCallback)
 {
 	HMODULE hModule = GetModuleHandle(L"ntdll.dll");
 	NtQueryInformationProcess =
 		(pNtQueryInformationProcess)GetProcAddress(hModule, "NtQueryInformationProcess");
 	if (NtQueryInformationProcess == nullptr)
 	{
-		return;
+		return false;
 	}
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE, FALSE, PID);
 	if (hProcess == INVALID_HANDLE_VALUE)
 	{
-		return;
+		return false;
 	}
 	Modules(hProcess, pContext, pCallback);
 	CloseHandle(hProcess);
+	return true;
 }

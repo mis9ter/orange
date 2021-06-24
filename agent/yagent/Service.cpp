@@ -52,7 +52,7 @@ void	CAgent::ServiceHandler
 				case WTS_SESSION_UNLOCK:
 				case WTS_SESSION_REMOTE_CONTROL:
 					pAgent->Notify(NOTIFY_TYPE_SESSION, NOTIFY_EVENT_SESSION, 
-						(WTSSESSION_NOTIFICATION *)lpEventData, sizeof(WTSSESSION_NOTIFICATION));
+						(WTSSESSION_NOTIFICATION *)lpEventData, sizeof(WTSSESSION_NOTIFICATION), NULL);
 					break;
 
 				default:
@@ -85,7 +85,7 @@ bool	CAgent::ServiceFunction(IN DWORD dwFunction, IN DWORD dwControl, IN LPVOID 
 				case 0:
 					break;
 				case SERVICE_CONTROL_SHUTDOWN:
-					pAgent->Notify(NOTIFY_TYPE_SYSTEM, NOTIFY_EVENT_SHUTDOWN, NULL, NULL);
+					pAgent->Notify(NOTIFY_TYPE_SYSTEM, NOTIFY_EVENT_SHUTDOWN, NULL, NULL,NULL);
 				case SERVICE_CONTROL_STOP:
 				case SERVICE_CONTROL_USER_SHUTDOWN:
 					pAgent->Shutdown(dwControl);
@@ -93,7 +93,7 @@ bool	CAgent::ServiceFunction(IN DWORD dwFunction, IN DWORD dwControl, IN LPVOID 
 
 				case SERVICE_CONTROL_PRESHUTDOWN:
 					pAgent->Log("SERVICE_CONTROL_PRESHUTDOWN");
-					pAgent->Notify(NOTIFY_TYPE_SYSTEM, NOTIFY_EVENT_PRESHUTDOWN, NULL, NULL);
+					pAgent->Notify(NOTIFY_TYPE_SYSTEM, NOTIFY_EVENT_PRESHUTDOWN, NULL, NULL, NULL);
 					break;
 			}			
 			break;

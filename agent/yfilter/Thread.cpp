@@ -1,5 +1,6 @@
 #include "yfilter.h"
 
+#define TAG_MODULE			'erht'
 //#define USE_PsSetCreateThreadNotifyRoutineEx
 
 /*
@@ -243,7 +244,7 @@ void CreateThreadNotifyRoutine(
 
 	HANDLE	CPID		= PsGetCurrentProcessId();
 	HANDLE	PID			= ProcessId;
-	HANDLE	PPID		= GetParentProcessId(PID);
+	HANDLE	PPID		= GetParentProcessId(ProcessId);
 	HANDLE	TID			= ThreadId;
 	HANDLE	CTID		= PsGetCurrentThreadId();
 	KIRQL	irql		= KeGetCurrentIrql();
@@ -265,14 +266,76 @@ void CreateThreadNotifyRoutine(
 		//	Create, bIsSystem, PID, CPID, PPID, TID, CTID);
 		return;
 	}
-	//if (KeGetCurrentIrql() != PASSIVE_LEVEL ||
-	//	(HANDLE)4 == ProcessId || PsIsSystemThread(KeGetCurrentThread()))
-	//	return;
-	
-	//__log(__LINE);
-	PVOID	pStartAddress = NULL;
-	GetThreadWin32StartAddress(ThreadId, &pStartAddress);
-	//__log("[%d] process %p thread %p", Create, PsGetCurrentThreadId(), pStartAddress);
+	struct __ARG {
+		PVOID				pStartAddress;
+		WORD				wDataSize;
+		WORD				wStringSize;
+		PY_THREAD_MESSAGE	pMsg;
+	} arg	= {NULL,};
+	if( NT_FAILED(GetThreadWin32StartAddress(ThreadId, &arg.pStartAddress)) ) {
+		__log("%-32s GetThreadWin32StartAddress() failed.", __func__);	
+	}
+	if( Create ) {
+		if( CPID != PID ) {
+			//__log("%-32s CPID:%d PID:%d", __func__, CPID, PID);	
+		}	
+	}
+
+
+	if( ProcessTable()->IsExisting(PID, &arg, [](
+		bool				bCreationSaved,	
+		PPROCESS_ENTRY		pEntry,	
+		PVOID				pContext
+		) {
+			UNREFERENCED_PARAMETER(bCreationSaved);
+			struct __ARG	*p	= (struct __ARG *)pContext;
+			p->wStringSize		= 0;
+			p->wDataSize		= sizeof(Y_THREAD_MESSAGE);
+			p->pMsg				= (PY_THREAD_MESSAGE)CMemory::Allocate(PagedPool, 
+									p->wDataSize+p->wStringSize, TAG_THREAD);			
+			if( p->pMsg ) {
+				RtlZeroMemory(p->pMsg, sizeof(Y_THREAD_MESSAGE));
+				p->pMsg->PID		= (DWORD)pEntry->PID;
+				p->pMsg->PUID		= pEntry->PUID;
+				p->pMsg->wDataSize	= p->wDataSize;
+				p->pMsg->wStringSize= p->wStringSize;
+
+			}
+		})) {
+		if( arg.pMsg ) {
+			arg.pMsg->subType		= Create? 
+										YFilter::Message::SubType::ThreadStart	: 
+										YFilter::Message::SubType::ThreadStop;
+			arg.pMsg->CPID			= (DWORD)CPID;
+			arg.pMsg->PPID			= (DWORD)PPID;
+			arg.pMsg->TID			= (DWORD)TID;
+			arg.pMsg->CTID			= (DWORD)CTID;
+			arg.pMsg->mode			= YFilter::Message::Mode::Event;
+			arg.pMsg->category		= YFilter::Message::Category::Thread;
+			arg.pMsg->wRevision		= Y_MESSAGE_REVISION;
+			arg.pMsg->StartAddress	= arg.pStartAddress;		
+			if (MessageThreadPool()->Push(__FUNCTION__,
+				arg.pMsg->mode, arg.pMsg->category, arg.pMsg, arg.wDataSize+arg.wStringSize,false))
+			{
+				//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+				MessageThreadPool()->Alert(YFilter::Message::Category::Thread);
+			}
+			else {
+				CMemory::Free(arg.pMsg);
+				__log("%-32s Push() failed.", __func__);
+			}	
+		}	
+		else {
+			__log("%-32s pMsg is null.", __func__);
+		}
+	}
+	else {
+		__log("%-32s PID:%d is not found.", __func__, PID);
+		
+	}
+
+	/*
+	__log("[%d] process %p thread %p", Create, PsGetCurrentThreadId(), pStartAddress);
 
 	CWSTRBuffer		dest;
 	if (NT_FAILED(GetProcessImagePathByProcessId(ProcessId, dest,
@@ -317,6 +380,7 @@ void CreateThreadNotifyRoutine(
 			__log("  PsIsSystemThread(target) %d", PsIsSystemThread(pThread));
 		}
 	}
+	*/
 	/*
 	PYFILTER_MESSAGE	pMsg	= NULL;
 	pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), 

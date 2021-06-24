@@ -21,7 +21,7 @@ typedef	uint64_t				PROCUID;
 
 #define	AGENT_PATH_SIZE			1024
 #define AGENT_NAME_SIZE			64
-#define AGENT_RUNLOOP_PERIOD	3000
+#define AGENT_RUNLOOP_PERIOD	1000
 
 #define DRIVER_SERVICE_NAME		L"orange.driver"
 #define DRIVER_FILE_NAME		L"orange.sys"
@@ -295,6 +295,27 @@ inline void			SetStringOffset(PVOID p, PY_STRING str) {
 typedef UINT64					REGUID;
 typedef WORD					STRING_POS;
 
+typedef struct Y_THREAD_DATA
+	:
+	public	Y_HEADER
+{
+	YFilter::Message::SubType	subType;
+	PROCUID						PUID;
+	PVOID						StartAddress;
+} Y_THREAD_DATA, *PY_THREAD_DATA;
+
+typedef struct Y_THREAD_STRING
+{
+
+} Y_THREAD_STRING, *PY_THREAD_STRING;
+typedef struct Y_THREAD_MESSAGE
+	:
+	public	Y_THREAD_DATA,
+	public	Y_THREAD_STRING
+{
+
+} Y_THREAD_MESSAGE, *PY_THREAD_MESSAGE;
+
 typedef struct Y_PROCESS_DATA
 	:
 	public	Y_HEADER 
@@ -386,7 +407,7 @@ typedef struct Y_MODULE_DATA
 			ULONG Reserved             : 12;
 		} ImageProperties;
 	};
-	SIZE_T						ImageSize;
+	ULONG						ImageSize;
 } Y_MODULE_DATA, *PY_MODULE_DATA;
 typedef struct Y_MODULE_STRING
 {

@@ -248,6 +248,24 @@ NTSTATUS	SetProcessTimes(HANDLE PID, PY_PROCESS p) {
 	return STATUS_SUCCESS;
 }
 */
+
+#ifdef __DEV
+void	GetProcessModules(HANDLE PID) {
+
+	PEPROCESS	pProcess = NULL;
+	PsLookupProcessByProcessId(PID, &pProcess);
+
+	PPEB pPeb = PsGetProcessPeb(pProcess);
+	KAPC_STATE state;
+
+	KeStackAttachProcess(pProcess, &state);
+
+	PLIST_ENTRY pListEntry = pPeb->Ldr; //this problem
+
+	KeUnstackDetachProcess(&state);
+}
+#endif
+
 void	__stdcall	ProcessNotifyCallbackRoutineEx(
 	_Inout_		PEPROCESS Process,
 	_In_		HANDLE ProcessId,
@@ -301,6 +319,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 	
 	*/
+	
 	if (filter.Reference())
 	{
 		if (CreateInfo)

@@ -229,6 +229,7 @@ public:
 	}
 	void	Begin(PCSTR pCause)
 	{
+		//m_lock2.Lock(pCause);
 		if( m_pDb ) {
 			sqlite3_exec(m_pDb, "BEGIN;", NULL, NULL, NULL);
 			m_log.Log("%s", __FUNCTION__);
@@ -242,6 +243,7 @@ public:
 			nCount	= sqlite3_total_changes(m_pDb);
 			m_log.Log("%s %d", __FUNCTION__, nCount);
 		}
+		//m_lock2.Unlock(pCause);
 		return nCount;
 	}
 	sqlite3_stmt*	Stmt(IN PCWSTR query) {
@@ -347,5 +349,6 @@ public:
 private:
 	sqlite3			*m_pDb;
 	CLock			m_lock;
+	CLock			m_lock2;
 	CAppLog			m_log;
 };

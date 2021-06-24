@@ -81,7 +81,8 @@ public:
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
-		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, this, PeriodicCallback);
+		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, 30,
+							this, PeriodicCallback);
 	}
 	void					Destroy()
 	{
@@ -133,7 +134,7 @@ protected:
 				t->second->nCount		+= p->nCount;
 				t->second->nRegDataSize	+= p->nRegDataSize;			
 			}
-			pClass->m_log.Log("%04d [%d] %ws", pClass->m_table.size(), p->subType, p->RegPath.pBuf);
+			//pClass->m_log.Log("%04d [%d] %ws", pClass->m_table.size(), p->subType, p->RegPath.pBuf);
 		});
 		return true;
 	}
@@ -158,7 +159,47 @@ private:
 	}	m_stmt;
 	CLock				m_lock;
 	RegMap				m_table;
+	DWORD	Flush(bool bAll) {
+		DWORD	dwCount	=0;
+		m_lock.Lock(NULL, [&](PVOID pContext) {
+			try {
+				UNREFERENCED_PARAMETER(pContext);		
+				DWORD64		dwTick	= GetTickCount64();
+				for( auto t = m_table.begin() ; t != m_table.end() ;  ) {
 
+					if( bAll ) {
+						if (IsExisting(t->second.get()))
+							Update(t->second.get());
+						else	{
+							Insert(t->second.get());
+						}
+						dwCount++;
+						t++;
+					}
+					else {
+						if( (dwTick - t->second->dwLastTick ) > (60 * 1000) ) {
+							if (IsExisting(t->second.get()))
+								Update(t->second.get());
+							else	{
+								Insert(t->second.get());
+							}
+							auto	d	= t++;
+							m_table.erase(d);
+							dwCount++;
+						}
+						else
+							t++;
+					}
+				}
+			}
+			catch( std::exception & e) {
+				m_log.Log("Proc2", e.what());
+			}
+			if( bAll )	m_table.clear();
+		});
+		m_log.Log("%-32s %d", __func__, dwCount);
+		return dwCount;
+	}
 	bool	IsExisting(
 		CRegistry	*p
 	) {
@@ -190,8 +231,8 @@ private:
 			std::wstring	strRegValueName;
 
 			CStringTable::Lock(NULL, [&](PVOID pContext) {
-				strRegPath		= GetString(p->RegPathUID);
-				strRegValueName	= GetString(p->RegValueNameUID);			
+				GetString(p->RegPathUID, strRegPath);
+				GetString(p->RegValueNameUID, strRegValueName);			
 			});
 			sqlite3_bind_int64(pStmt,	++nIndex, p->RegPUID);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->RegUID);
@@ -235,33 +276,11 @@ private:
 	) {
 		CRegistryCallback	*pClass	= (CRegistryCallback *)pContext;
 		static	DWORD	dwCount;
-		if( dwCount++ % 10 )	return;
 
 		//pClass->m_log.Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
 
 		//pClass->Db()->Begin(__func__);
-		pClass->m_lock.Lock(NULL, [&](PVOID pContext) {
-			try {
-				UNREFERENCED_PARAMETER(pContext);		
-				DWORD64		dwTick	= GetTickCount64();
-				for( auto t = pClass->m_table.begin() ; t != pClass->m_table.end() ;  ) {
-					if( (dwTick - t->second->dwLastTick ) > (60 * 1000) ) {
-						if (pClass->IsExisting(t->second.get()))
-							pClass->Update(t->second.get());
-						else	{
-							pClass->Insert(t->second.get());
-						}
-						auto	d	= t++;
-						pClass->m_table.erase(d);
-					}
-					else
-						t++;
-				}
-			}
-			catch( std::exception & e) {
-				pClass->m_log.Log("Proc2", e.what());
-			}
-		});
+		pClass->CRegistryCallback::Flush(false);
 		//pClass->Db()->Commit(__func__);
 	}
 };

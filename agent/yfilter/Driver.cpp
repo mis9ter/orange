@@ -124,11 +124,7 @@ NTSTATUS	StartDriver(PDRIVER_OBJECT pDriverObject)
 		}
 		StartRegistryFilter(pDriverObject);
 		StartModuleFilter();
-		//	Registry 콜백 시작 - 단 초기엔 콜백만 걸려있지 아무 것도 하지 않음.
-		//if (StartThreadFilter()) {
-		//	__log("thread filtering ..");
-		//}
-
+		StartThreadFilter();
 		status = STATUS_SUCCESS;
 	}
 	__finally
@@ -148,8 +144,8 @@ NTSTATUS	StopDriver()
 	{
 		if (Config())
 		{
-			StopModuleFilter();
-			//StopThreadFilter();
+			StopThreadFilter();
+			StopModuleFilter();			
 			StopRegistryFilter();
 			StopProcessFilter();
 		}

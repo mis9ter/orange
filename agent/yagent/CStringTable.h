@@ -94,7 +94,8 @@ public:
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
-		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, this, PeriodicCallback);
+		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, 60, 
+							this, PeriodicCallback);
 	}	
 	void			Destroy() {
 		Flush(true);
@@ -131,30 +132,41 @@ public:
 		});
 		return SUID;
 	}
-	PCWSTR			GetString(STRUID SUID) {
+	PCWSTR			GetString(STRUID SUID, std::wstring & str) {
 		auto	t	= m_uid.find(SUID);
 		if( m_uid.end() == t ) {
 			//	메모리에 없는 경우 DB에서 읽습니다.
-			return m_szNull;
+			STRING	s(NULL);
+			if( Select1(SUID, &s) ) {			
+				str	= s.value;
+			}
+			else {
+				str	= L"can not select from db";
+			}				
 		}	
-		return t->second->value.c_str();
+		else	str	= t->second->value.c_str();
+		return str.c_str();
 	}
 	void			Flush(bool bAll = false) {
 		DWORD64	dwTick		= GetTickCount64();
 		ULONG	nDeleted	= 0;
 		bool	bDelete	= false;
 
-		Db()->Begin(__func__);
+		DWORD	dwUpsert	= 0;
+
+		//Db()->Begin(__func__);
 		Lock(NULL, [&](PVOID pContext) {
 			for( auto t = m_str.begin()  ; t != m_str.end() ; ) {			
 				bDelete	= false;
 				if(  bAll )	{
 					Upsert(t->second.get());
+					dwUpsert++;
 					bDelete	= true;
 				}
 				else {
 					if( IsOld(t->second.get()) ) {
 						Upsert(t->second.get());
+						dwUpsert++;
 						bDelete	= true;
 					}
 				}
@@ -171,9 +183,9 @@ public:
 				m_uid.clear();
 				m_str.clear();
 			}
-			m_log.Log("%-32s T:%d D:%d", __func__, m_str.size(), nDeleted);
+			m_log.Log("%-32s T:%d UPSERT:%d D:%d", __func__, m_str.size(), dwUpsert, nDeleted);
 		});	
-		Db()->Commit(__func__);
+		//Db()->Commit(__func__);
 	}
 	void			Lock(PVOID pContext, std::function<void (PVOID)> pCallback) {
 		m_lock.Lock(pContext, pCallback);
@@ -196,8 +208,8 @@ private:
 
 	bool			IsOld(PSTRING p, DWORD64 dwTick = 0) {
 		if( 0 == dwTick )	dwTick = GetTickCount64();
-		if( (dwTick - p->dwLastTick) >= 300 * 1000 ) {
-			m_log.Log("%04d %ws", p->nCount, p->value.c_str());
+		if( (dwTick - p->dwLastTick) >= 30 * 1000 ) {
+			//m_log.Log("%04d %ws", p->nCount, p->value.c_str());
 			return true;
 		}
 		return false;
@@ -219,7 +231,7 @@ private:
 				nCount		= sqlite3_column_int(pStmt, 0);
 			}
 			else {
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		} 
@@ -233,7 +245,7 @@ private:
 			sqlite3_bind_int64(pStmt,	++nBind,	p->SUID);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		} 
@@ -245,14 +257,15 @@ private:
 		}	
 		return Insert(p);
 	}
-	bool			Select(IN STRUID SUID, OUT PSTRING p) {
+	bool			Select1(IN STRUID SUID, OUT PSTRING p) {
 
 		bool			bRet	= false;
 		sqlite3_stmt	*pStmt	= m_stmt.pSelect1;
+		int				nRet	= 0;
 		if (pStmt) {
 			int		nBind	= 0;
 			sqlite3_bind_int64(pStmt,	++nBind, SUID);
-			if (SQLITE_DONE == sqlite3_step(pStmt))	{
+			if (SQLITE_ROW == (nRet = sqlite3_step(pStmt)))	{
 				int			nCol	= 0;
 				PCWSTR		pValue	= NULL;
 				uint64_t	nCount	= 0;
@@ -264,20 +277,20 @@ private:
 				bRet = true;
 			}
 			else {
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s RET:%d SUID:%s %s", __func__, nRet, std::to_string(SUID).c_str(), sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		} 
 		return bRet;
 	}
-	bool			Select(IN PCWSTR pStr, OUT PSTRING p) {
+	bool			Select2(IN PCWSTR pStr, OUT PSTRING p) {
 	
 		bool			bRet	= false;
-		sqlite3_stmt	*pStmt	= m_stmt.pSelect1;
+		sqlite3_stmt	*pStmt	= m_stmt.pSelect2;
 		if (pStmt) {
 			int		nBind	= 0;
 			sqlite3_bind_text16(pStmt,	++nBind, pStr, -1, SQLITE_STATIC);
-			if (SQLITE_DONE == sqlite3_step(pStmt))	{
+			if (SQLITE_ROW == sqlite3_step(pStmt))	{
 				int			nCol	= 0;
 				PCWSTR		pValue	= NULL;
 				uint64_t	nCount	= 0;
@@ -289,7 +302,7 @@ private:
 				bRet = true;
 			}
 			else {
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s STR:%ws %s", __func__, pStr, sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		} 
@@ -306,7 +319,7 @@ private:
 			sqlite3_bind_int(pStmt,		++nBind,	p->type);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		} 
@@ -319,9 +332,7 @@ private:
 		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
 	) {
 		CStringTable	*pClass	= (CStringTable *)pContext;
-
 		static	DWORD	dwCount;
-		if( dwCount++ % 5 )	return;
 
 		pClass->m_log.Log(__func__);
 		pClass->Flush();

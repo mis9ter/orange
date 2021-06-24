@@ -71,17 +71,19 @@ void LoadImageNotifyRoutine(
 			}
 		}
 	)) {
-		arg.pMessage->Properties		= ImageInfo->Properties;
-		arg.pMessage->ImageSize		= ImageInfo->ImageSize;
-		arg.pMessage->ImageBase		= ImageInfo->ImageBase;
-		if (MessageThreadPool()->Push(__FUNCTION__,
-			arg.pMessage->mode, arg.pMessage->category, arg.pMessage, arg.wDataSize+arg.wStringSize,false))
-		{
-			//	pMsg는 SendMessage 성공 후 해제될 것이다. 
-			MessageThreadPool()->Alert(YFilter::Message::Category::Module);
-		}
-		else {
-			CMemory::Free(arg.pMessage);
+		if( arg.pMessage ) {
+			arg.pMessage->Properties	= ImageInfo->Properties;
+			arg.pMessage->ImageSize		= (ULONG)ImageInfo->ImageSize;
+			arg.pMessage->ImageBase		= ImageInfo->ImageBase;
+			if (MessageThreadPool()->Push(__FUNCTION__,
+				arg.pMessage->mode, arg.pMessage->category, arg.pMessage, arg.wDataSize+arg.wStringSize,false))
+			{
+				//	pMsg는 SendMessage 성공 후 해제될 것이다. 
+				MessageThreadPool()->Alert(YFilter::Message::Category::Module);
+			}
+			else {
+				CMemory::Free(arg.pMessage);
+			}		
 		}
 	}
 	else {

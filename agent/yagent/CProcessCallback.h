@@ -1,49 +1,8 @@
 #pragma once
-
 #pragma comment(lib, "Rpcrt4.lib")
 
 #define	GUID_STRLEN	37
 #define USE_PROCESS_LOG		1
-
-typedef struct _MODULE {
-	_MODULE() 
-		:
-		ImageBase(0),
-		EntryPoint(0)
-	{
-		ZeroMemory(FullName, sizeof(FullName));
-		ZeroMemory(BaseName, sizeof(BaseName));
-	}
-	PVOID			ImageBase;
-	PVOID			EntryPoint;
-	UINT64			ImageSize;
-	WCHAR			FullName[AGENT_PATH_SIZE];
-	WCHAR			BaseName[AGENT_PATH_SIZE];
-} MODULE, *PMODULE;
-class CModule
-{
-public:
-	CModule(PMODULE p) 
-	{
-		ImageBase	= p->ImageBase;
-		EntryPoint	= p->EntryPoint;
-		FullNameUID	= 0;
-		BaseNameUID	= 0;
-	}
-	~CModule() {
-	
-	}
-	PVOID			ImageBase;
-	PVOID			EntryPoint;
-	STRUID			FullNameUID;
-	STRUID			BaseNameUID;
-};
-
-typedef std::function<bool (PVOID,PMODULE)>	ModuleListCallback;
-typedef std::shared_ptr<CModule>			ModulePtr;
-typedef std::map<PVOID, ModulePtr>			ModuleMap;
-
-void	GetModules(DWORD PID, PVOID pContext, ModuleListCallback pCallback);
 
 class CProcess
 	:
@@ -98,11 +57,12 @@ public:
 	virtual	bool			SendMessageToWebApp(Json::Value & req, Json::Value & res) = NULL;
 	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	virtual	uint64_t		GetTimestamp(LARGE_INTEGER *)	= NULL;
+	virtual	bool			GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback)	= NULL;
 
 	PCSTR			Name() {
 		return m_name.c_str();
 	}
-	void			Create()
+	void		Create()
 	{
 		const char	*pIsExisting	= "select count(PUID) from process where PUID=?";
 		const char	*pInsert		= "insert into process"	\
@@ -146,8 +106,8 @@ public:
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
-		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, this, PeriodicCallback);
-
+		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, 90, 
+							this, PeriodicCallback);
 	}
 	void		Destroy()
 	{
@@ -240,6 +200,69 @@ public:
 		});
 		return true;
 	}
+	bool		FindModule(PROCUID PUID, PVOID pStartAddress,
+					PVOID	pContext, std::function<void (PVOID, CProcess *, CModule *, PVOID)> pCallback)
+	
+	{	
+		bool			bRet	= false;
+		std::wstring	str;
+
+		m_lock.Lock(NULL, [&](PVOID pContext) {
+			try {
+				auto	t	= m_table.find(PUID);
+				if( m_table.end() == t ) {
+					if( pCallback ) {
+						pCallback(pContext, NULL, NULL, NULL);
+					}				
+					return;
+				}
+				//m_log.Log("* %ws", GetString(t->second->ProcPathUID, str));
+				//m_log.Log("%p THREAD", pStartAddress);
+				for( auto i : t->second->module ) {
+					if( pStartAddress >= i.second->ImageBase 	&&
+						(ULONG_PTR)pStartAddress <= ((ULONG_PTR)i.second->ImageBase + (ULONG_PTR)i.second->ImageSize)) {
+						if( pCallback ) {
+							pCallback(pContext, t->second.get(), i.second.get(), &t->second->module);
+						}
+						bRet	= true;
+						break;
+					}				
+				}
+				if( false == bRet ) {
+					if( pCallback ) {
+						pCallback(pContext, t->second.get(), NULL, &t->second->module);
+					}				
+				}
+			}
+			catch( std::exception & e) {
+				m_log.Log("CProcessCallback::AddModule", e.what());
+			}
+		});
+		return bRet;
+	}
+	bool		GetProcess(PROCUID PUID, 
+		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback)
+	{	
+		bool			bRet	= false;
+		std::wstring	str;
+
+		m_lock.Lock(NULL, [&](PVOID pContext) {
+			try {
+				auto	t	= m_table.find(PUID);
+				if( m_table.end() == t ) {
+					m_log.Log("%-32s PUID:%p is not found.", __func__, PUID);
+					return;
+				}
+				if( pCallback ) {
+					pCallback(pContext, t->second.get());
+				}
+			}
+			catch( std::exception & e) {
+				m_log.Log("CProcessCallback::GetProcess", e.what());
+			}
+		});
+		return bRet;
+	}
 protected:
 	void	Dump(CProcess * p) {
 		m_log.Log("  mode     :%d", p->mode);
@@ -326,7 +349,7 @@ protected:
 					PCWSTR	pName	= wcsrchr(szPath, L'\\');
 
 					ptr->ProcPathUID	= pClass->GetStrUID(StringProcPath, szPath);
-					ptr->ProcNameUID	= pClass->GetStrUID(StringProcName, pName? pName : szPath);
+					ptr->ProcNameUID	= pClass->GetStrUID(StringProcName, pName? pName + 1 : szPath);
 					ptr->CommandUID		= pClass->GetStrUID(StringCommand, p->Command.pBuf);
 					ptr->DevicePathUID	= pClass->GetStrUID(StringProcDevicePath, p->DevicePath.pBuf);
 					pClass->m_table[ptr->PUID]	= ptr;
@@ -343,11 +366,17 @@ protected:
 				}
 				else {
 					if( YFilter::Message::SubType::ProcessStart2 == p->subType ) {
-						GetModules(p->PID, NULL, [&](PVOID pContext, PMODULE p)->bool {
-							ModulePtr	mptr	= std::make_shared<CModule>(p);
-							mptr->FullNameUID	= pClass->GetStrUID(StringModulePath, p->FullName);
-							mptr->BaseNameUID	= pClass->GetStrUID(StringModuleName, p->BaseName);
-							t->second->module[p->ImageBase]	= mptr;
+						pClass->GetModules2(p->PID, NULL, [&](PVOID pContext, PMODULEENTRY32 pModule)->bool {
+							if( p ) {
+							
+								ModulePtr	mptr	= std::make_shared<CModule>(pModule);
+								mptr->BaseNameUID	= pClass->GetStrUID(StringModuleName, pModule->szModule);
+								mptr->FullNameUID	= pClass->GetStrUID(StringModulePath, pModule->szExePath);
+								t->second->module[mptr->ImageBase]	= mptr;
+							}
+							else {
+								pClass->m_log.Log("PID:%d module is not found.", p->PID);	
+							}
 							return true;
 						});		
 					}
@@ -530,10 +559,10 @@ private:
 			std::wstring	strName;
 
 			CStringTable::Lock(NULL, [&](PVOID pContext) {
-				strProcPath		= GetString(p->ProcPathUID);
-				strDevicePath	= GetString(p->DevicePathUID);
-				strCommand		= GetString(p->CommandUID);
-				strName			= GetString(p->ProcNameUID);
+				GetString(p->ProcPathUID, strProcPath);
+				GetString(p->DevicePathUID, strDevicePath);
+				GetString(p->CommandUID, strCommand);
+				GetString(p->ProcNameUID, strName);
 			});
 
 			int		nIndex = 0;
@@ -639,10 +668,8 @@ private:
 		CProcessCallback	*pClass	= (CProcessCallback *)pContext;
 
 		static	DWORD	dwCount;
-		if( dwCount++ % 5 )	return;
 
 		//pClass->m_log.Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
-
 		//pClass->Db()->Begin(__func__);
 		pClass->m_lock.Lock(NULL, [&](PVOID pContext) {
 			try {
@@ -664,23 +691,23 @@ private:
 					std::wstring	strName;
 
 					pClass->CStringTable::Lock(NULL, [&](PVOID pContext) {
-						strPath	= pClass->GetString(t->second->ProcPathUID);
-						strName	= pClass->GetString(t->second->ProcNameUID);
+						pClass->GetString(t->second->ProcPathUID, strPath);
+						pClass->GetString(t->second->ProcNameUID, strName);
 					});
 
 					if( t->second->bUpdate ) {
 						if (pClass->IsExisting(t->second.get())) {
-							pClass->m_log.Log("[U] %p %I64d %ws", t->second->PID, t->second->dwLastTick, strName.c_str());
+							//pClass->m_log.Log("[U] %p %I64d %ws", t->second->PID, t->second->dwLastTick, strName.c_str());
 							pClass->Update(t->second.get());
 						}
 						else	{
 							pClass->Insert(t->second.get());	
-							pClass->m_log.Log("[I] %p %I64d %ws", t->second->PID, t->second->dwLastTick, strPath.c_str());
+							//pClass->m_log.Log("[I] %p %I64d %ws", t->second->PID, t->second->dwLastTick, strPath.c_str());
 						}			
 						t->second->bUpdate	= false;
 					}
 					if( YFilter::Message::SubType::ProcessStop == t->second->subType ) {
-						pClass->m_log.Log("[D] %p %I64d %ws", t->second->PID, t->second->dwLastTick, strName.c_str());
+						//pClass->m_log.Log("[D] %p %I64d %ws", t->second->PID, t->second->dwLastTick, strName.c_str());
 						auto	d	= t++;
 						pClass->m_table.erase(d);
 					}
