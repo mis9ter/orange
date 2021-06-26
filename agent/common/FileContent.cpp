@@ -33,18 +33,16 @@ bool	YAgent::SetFileContent(
 	//
 
 	TCHAR	szPath[LBUFSIZE]	= _T("");
-
-	if( _T('\\') == lpPath[0] && _T('\\') != lpPath[1] )
-	{
-		// 현재 폴더를 기준으로 한 상대 경로
-		GetModulePath(szPath, sizeof(szPath));
-		::StringCbCat(szPath, sizeof(szPath), lpPath);
-		lpPath	= szPath;
+	if (lpPath && *lpPath && PathIsRelative(lpPath)) {
+		GetFullPathName(lpPath, _countof(szPath), szPath, NULL);
 	}
+	else
+		StringCbCopy(szPath, sizeof(szPath), lpPath);
+
 #ifdef PERMIT_DUPLICATED_JOB
 
 	hFile	= ::CreateFile(
-		lpPath, 
+		szPath, 
 		GENERIC_READ|GENERIC_WRITE, 
 		FILE_SHARE_READ|FILE_SHARE_WRITE, 
 		NULL, 
@@ -55,7 +53,7 @@ bool	YAgent::SetFileContent(
 #else
 
 	hFile	= ::CreateFile(
-		lpPath, 
+		szPath, 
 		GENERIC_WRITE, 
 		FILE_SHARE_READ,
 		NULL, 
@@ -91,18 +89,15 @@ PVOID	YAgent::GetFileContent(IN LPCTSTR lpPath, OUT DWORD * pSize)
 	DWORD		dwReadBytes	= 0;
 	DWORD		dwSize		= 0;
 
-	TCHAR	szPath[LBUFSIZE]	= _T("");
-
-	if( _T('\\') == lpPath[0] && _T('\\') != lpPath[1] )
-	{
-		// 현재 폴더를 기준으로 한 상대 경로
-		GetModulePath(szPath, sizeof(szPath));
-		::StringCbCat(szPath, sizeof(szPath), lpPath);
-		lpPath	= szPath;
+	TCHAR	szPath[LBUFSIZE] = _T("");
+	if (lpPath && *lpPath && PathIsRelative(lpPath)) {
+		GetFullPathName(lpPath, _countof(szPath), szPath, NULL);
 	}
+	else
+		StringCbCopy(szPath, sizeof(szPath), lpPath);
 	__try
 	{
-		hFile	= ::CreateFile(lpPath, GENERIC_READ, FILE_SHARE_READ, NULL, 
+		hFile	= ::CreateFile(szPath, GENERIC_READ, FILE_SHARE_READ, NULL, 
 			OPEN_EXISTING, FILE_ATTRIBUTE_ARCHIVE, NULL);
 		if( INVALID_HANDLE_VALUE == hFile )
 		{

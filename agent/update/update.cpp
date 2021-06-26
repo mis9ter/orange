@@ -4,9 +4,15 @@
 #include "pch.h"
 #include <iostream>
 
-int main()
+int _tmain(int ac, wchar_t **av)
 {
-    std::cout << "Hello World!\n";
+    CUpdate update;
+    printf("%-32s ac:%d\n", __func__, ac);
+    if (ac == 1) {
+        update.Update();
+    }
+    else if( ac == 2)
+        update.CreateProfile(L".");
 }
 
 // 프로그램 실행: <Ctrl+F5> 또는 [디버그] > [디버깅하지 않고 시작] 메뉴

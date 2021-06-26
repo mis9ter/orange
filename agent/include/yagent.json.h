@@ -13,6 +13,21 @@ namespace JsonUtil {
 		str	= Json::writeString(wbuilder, doc);
 		if( pCallback )		pCallback(str);
 	}
+	inline	bool	File2Json(PCWSTR pFilePath, IN Json::Value& doc) {
+		DWORD	dwSize	= 0;
+		char	*pContent	= (char *)YAgent::GetFileContent(pFilePath, &dwSize);
+		bool	bRet = false;
+		if (pContent) {
+			Json::CharReaderBuilder	builder;
+			const std::unique_ptr<Json::CharReader>		reader(builder.newCharReader());
+			std::string	err;
+			if (reader->parse(pContent, pContent + dwSize, &doc, &err)) {
+				bRet = true;
+			}
+			YAgent::FreeFileContent(pContent);
+		}
+		return bRet;
+	}
 	inline	DWORD	Json2File(IN Json::Value & doc, PCWSTR pFilePath) {
 		DWORD	dwSize	= 0;
 		Json2String(doc, [&](std::string & str) {

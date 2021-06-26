@@ -133,6 +133,21 @@ private:
 typedef UINT64	BootUID;
 
 namespace YAgent {
+	bool	Command(IN LPCTSTR lpPath, IN LPCTSTR szArgument, 
+		IN LPCTSTR lpRunPath,
+		IN DWORD dwType =SW_SHOW , 
+		IN bool bWait =false , 
+		IN int nWaitSeconds =0 , 
+		OUT DWORD* dwExitCode =0 );
+	bool		RequestFile
+	(
+		IN	LPCTSTR		pUrl,		//
+		OUT	LPCTSTR		lpPath,		// 응답은 파일로 만들어진다.
+		IN	DWORD		*pdwSize,	// IN lpPath의 크기, OUT 응답 파일의 크기 
+		IN	LPVOID		pContext,
+		IN	std::function<bool (LPVOID pContext, LPCWSTR lpPath, IN HANDLE hFile, IN DWORD dwTotalBytes, IN DWORD dwCurrentBytes)>	pCallback
+	);
+	bool	RequestUrl(IN LPCTSTR pUrl, OUT char ** pResponse, OUT DWORD * pdwResponseSize);
 	bool		GetAppTempPath(OUT LPTSTR szPath, IN DWORD dwSize);
 	bool		SetPrivilege(HANDLE hToken, LPCTSTR Privilege, BOOL bEnablePrivilege);
 	HANDLE		SetDebugPrivilege();
