@@ -11,3 +11,14 @@ PCWSTR		YAgent::GetDataFolder(IN PCWSTR pName, OUT PWSTR pValue, IN DWORD dwSize
 	}
 	return NULL;
 }
+bool	YAgent::GetAppTempPath(OUT LPTSTR szPath, IN DWORD dwSize)
+{
+	::GetTempPath(dwSize/sizeof(TCHAR), szPath);
+	if( PathIsDirectory(szPath) )
+	{
+		return true;
+	}
+	if( ::SHGetSpecialFolderPath(NULL, szPath, CSIDL_APPDATA, TRUE) )
+		return true;
+	return false;
+}

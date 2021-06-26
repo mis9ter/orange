@@ -133,6 +133,7 @@ private:
 typedef UINT64	BootUID;
 
 namespace YAgent {
+	bool		GetAppTempPath(OUT LPTSTR szPath, IN DWORD dwSize);
 	bool		SetPrivilege(HANDLE hToken, LPCTSTR Privilege, BOOL bEnablePrivilege);
 	HANDLE		SetDebugPrivilege();
 	void		UnsetDebugPrivilege(IN HANDLE hToken);
