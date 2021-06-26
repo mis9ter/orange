@@ -1,0 +1,51 @@
+name: build
+on: [push, pull_request]
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install packages
+      run: sudo apt-get install libmbedtls-dev
+    - name: make
+      run: make test test++ IPV6=0
+    - name: openssl
+      run: make test SSL=OPENSSL IPV6=0
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install packages
+      run: sudo apt-get install libmbedtls-dev
+    - name: examples
+      run: make ex
+  macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install packages
+      run: HOMEBREW_NO_AUTO_UPDATE=1 brew install jq mbedtls openssl
+    - name: make
+      run: make test++ upload-coverage IPV6=0
+    - name: openssl
+      run: make test SSL=OPENSSL IPV6=0
+    - name: exports
+      run: make mg_prefix
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: vc98
+      run: make vc98
+    - name: vc2017
+      run: make vc2017
+    - name: mingw
+      run: make mingw
+    - name: mingw++
+      run: make mingw++
+  arm:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: arm
+      run: make arm
