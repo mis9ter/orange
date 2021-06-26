@@ -10,7 +10,7 @@ Notes
 An update for Windows 8.1 increases the maximum number of drivers registered to receive load-image notifications from eight to 64. This update is installed as part of a cumulative update that is available through Windows Update starting on April 8, 2014. In addition, this cumulative update is available at https://support.microsoft.com/kb/2919355.
 Users of Windows 7 with Service Pack 1 (SP1) can install a hotfix to increase the maximum number of drivers registered to receive load-image notifications from eight to 64. This hotfix is available at https://support.microsoft.com/kb/2922790.
 */
-NTSTATUS	AddEarlyProcess(HANDLE hPID);
+#define TAG_MODULE			'udom'
 
 void LoadImageNotifyRoutine(
 	PUNICODE_STRING		FullImageName,
@@ -24,7 +24,7 @@ void LoadImageNotifyRoutine(
 
 	CWSTR		path(FullImageName);
 
-	if (ImageInfo->SystemModeImage) {
+	if (NULL == FullImageName || ImageInfo->SystemModeImage) {
 		//	커널 드라이버가 올라올 때는 ProcessId = 0 이다.
 		return;
 	}
@@ -33,87 +33,69 @@ void LoadImageNotifyRoutine(
 
 	if( NT_FAILED(PsLookupProcessByProcessId(ProcessId, &pProcess)))	return;
 
-	if( FullImageName ) {
-		PCWSTR	pName	= wcsrchr(path, L'\\');
-		if( pName ) {
-			//__log("%s %ws", __FUNCTION__, pName);
+	HANDLE		PID			= PsGetCurrentProcessId();
+	struct __ARG {
+		PY_MODULE_MESSAGE	pMessage;
+		PUNICODE_STRING		path;
+		WORD				wDataSize;
+		WORD				wStringSize;
+	} arg;
+
+	arg.pMessage		= NULL;
+	arg.path			= FullImageName;	
+	arg.wDataSize		= sizeof(Y_MODULE_DATA);
+	arg.wStringSize		= 0;
+	if( ProcessTable()->IsExisting(PID, &arg, 
+		[](
+			bool				bCreationSaved,	
+			PPROCESS_ENTRY		pEntry,	
+			PVOID				pContext) 
+		{
+			UNREFERENCED_PARAMETER(bCreationSaved);			
+			struct __ARG	*p	= (struct __ARG *)pContext;
+			p->wStringSize	= sizeof(Y_MODULE_STRING);			
+			p->wStringSize	+= GetStringDataSize(p->path);
+			p->pMessage		= (PY_MODULE_MESSAGE)CMemory::Allocate(PagedPool, p->wDataSize + p->wStringSize, TAG_MODULE);
+			if( p->pMessage ) {
+				RtlZeroMemory(p->pMessage, p->wDataSize + p->wStringSize);
+				p->pMessage->PID		= (DWORD)pEntry->PID;
+				p->pMessage->PUID		= pEntry->PUID;
+				p->pMessage->mode		= YFilter::Message::Mode::Event;
+				p->pMessage->category	= YFilter::Message::Category::Module;
+				p->pMessage->wRevision	= Y_MESSAGE_REVISION;
+				p->pMessage->wDataSize	= p->wDataSize;
+				p->pMessage->wStringSize= p->wStringSize;
+
+				WORD		wOffset			= (WORD)(sizeof(Y_MODULE_MESSAGE));
+				CopyStringData(p->pMessage, wOffset, &p->pMessage->DevicePath, p->path);
+			}
 		}
-		//SE_SIGNING_LEVEL;
-		/*
-		__log("%s %ws",	__FUNCTION__, pName? pName + 1 : path);
-		__log("  %wZ",	FullImageName);
-		__log("  ImageBase           %p", ImageInfo->ImageBase);
-		__log("  ImageSize           %d", (int)ImageInfo->ImageSize);
-		__log("  ImageSignatureType  %d", ImageInfo->ImageSignatureType);
-		__log("  ImageSignatureLevel %d", ImageInfo->ImageSignatureLevel);
-		*/
-
-		PYFILTER_MESSAGE	pMsg = NULL;
-		pMsg = (PYFILTER_MESSAGE)CMemory::Allocate(NonPagedPoolNx, sizeof(YFILTER_MESSAGE), TAG_PROCESS);
-		if (pMsg) {
-			RtlZeroMemory(pMsg, sizeof(YFILTER_MESSAGE));
-			RtlStringCbCopyUnicodeString(pMsg->data.szCommand, sizeof(pMsg->data.szCommand), FullImageName);
-			if (ProcessTable()->IsExisting(ProcessId, pMsg, [](
-				IN bool					bCreationSaved,	//	생성이 감지되어 저장된 정보 여부
-				IN PPROCESS_ENTRY		pEntry,			//	대상 엔트리 
-				IN PVOID				pCallbackPtr
-				) {
-					UNREFERENCED_PARAMETER(bCreationSaved);
-					PYFILTER_MESSAGE	pMsg	= (PYFILTER_MESSAGE)pCallbackPtr;
-					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), &pEntry->ProcPath);
-					pMsg->data.PUID	= pEntry->PUID;
-			})) {
-				//	네 존재합니다. 
-			}
-			else {
-				__log("%s ProcessId %d is not found.", __FUNCTION__, ProcessId);
-				__log("  FulLImageName:%wZ", FullImageName);
-				//	이 프로세스는 생성시점 드라이버가 실행 중이지 않아 
-				//	해당 프로세스 정보를 가지고 있지 않다. 
-				//	[TODO]
-				//AddEarlyProcess(ProcessId);
-				PUNICODE_STRING	pImageFileName = NULL;
-				if (NT_SUCCESS(GetProcessImagePathByProcessId(ProcessId, &pImageFileName)))
-				{
-					KERNEL_USER_TIMES	times	= {0,};
-					PROCUID				PUID	= 0;
-					GetProcessTimes(ProcessId, &times, false);
-					RtlStringCbCopyUnicodeString(pMsg->data.szPath, sizeof(pMsg->data.szPath), pImageFileName);
-					GetProcGuid(false, ProcessId, NULL, pImageFileName, &times.CreateTime,
-						&pMsg->data.ProcGuid, &PUID);
-					pMsg->data.PUID	= PUID;
-					CMemory::Free(pImageFileName);
-				}
-			}
-			pMsg->header.mode				= YFilter::Message::Mode::Event;
-			pMsg->header.category			= YFilter::Message::Category::Module;
-			pMsg->header.wSize				= sizeof(YFILTER_MESSAGE);
-			pMsg->header.wRevision			= 0;
-
-			pMsg->data.subType				= YFilter::Message::SubType::ModuleLoad;
-			pMsg->data.bCreationSaved		= true;
-			pMsg->data.PID					= (DWORD)ProcessId;
-
-			pMsg->data.pBaseAddress			= (ULONG_PTR)ImageInfo->ImageBase;
-			pMsg->data.pImageSize			= ImageInfo->ImageSize;
-			pMsg->data.ImageProperties.Property	= ImageInfo->Properties;
-
+	)) {
+		if( arg.pMessage ) {
+			arg.pMessage->Properties	= ImageInfo->Properties;
+			arg.pMessage->ImageSize		= (ULONG)ImageInfo->ImageSize;
+			arg.pMessage->ImageBase		= ImageInfo->ImageBase;
 			if (MessageThreadPool()->Push(__FUNCTION__,
-				YFilter::Message::Mode::Event,
-				YFilter::Message::Category::Module,
-				pMsg, sizeof(YFILTER_MESSAGE),
-				false))
+				arg.pMessage->mode, arg.pMessage->category, arg.pMessage, arg.wDataSize+arg.wStringSize,false))
 			{
 				//	pMsg는 SendMessage 성공 후 해제될 것이다. 
 				MessageThreadPool()->Alert(YFilter::Message::Category::Module);
 			}
 			else {
-				CMemory::Free(pMsg);
-			}
+				CMemory::Free(arg.pMessage);
+			}		
 		}
 	}
 	else {
-		__log("%s FullImageName is null.", __FUNCTION__);
+		PCWSTR	pName	= wcsrchr(path, L'\\');
+		//SE_SIGNING_LEVEL;
+		__log("%s %ws",	"NO PID", pName? pName + 1 : path);
+		__log("  %wZ",	FullImageName);
+		//__log("  PUID                %p", PUID);
+		//__log("  ImageBase           %p", ImageInfo->ImageBase);
+		//__log("  ImageSize           %d", (int)ImageInfo->ImageSize);
+		//__log("  ImageSignatureType  %d", ImageInfo->ImageSignatureType);
+		//__log("  ImageSignatureLevel %d", ImageInfo->ImageSignatureLevel);
 	}
 	if( pProcess )	ObDereferenceObject(pProcess);
 }

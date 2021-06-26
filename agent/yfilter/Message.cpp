@@ -15,6 +15,53 @@ void		CopyStringData(PVOID pAddress, WORD wOffset, PY_STRING pDest, PUNICODE_STR
 }
 void		CreateProcessMessage(
 	YFilter::Message::SubType	subType,
+	PPROCESS_ENTRY				pEntry,
+	PY_PROCESS_MESSAGE			*pOut
+) {
+	WORD	wDataSize	= sizeof(Y_PROCESS_DATA);
+	WORD	wStringSize	= sizeof(Y_PROCESS_STRING);
+	
+	wStringSize	+= GetStringDataSize(&pEntry->DevicePath);
+	wStringSize	+= GetStringDataSize(&pEntry->Command);
+
+	PY_PROCESS_MESSAGE		pMsg	= NULL;
+
+	pMsg	= (PY_PROCESS_MESSAGE)CMemory::Allocate(PagedPool, wDataSize + wStringSize, TAG_PROCESS);
+	if( pMsg ) {
+		RtlZeroMemory(pMsg, wDataSize + wStringSize);
+		pMsg->mode		= YFilter::Message::Mode::Event;
+		pMsg->category	= YFilter::Message::Category::Process;
+		pMsg->subType	= subType;
+		pMsg->wDataSize	= wDataSize;
+		pMsg->wStringSize= wStringSize;
+		pMsg->wRevision	= Y_MESSAGE_REVISION;
+
+		pMsg->times		= pEntry->times;
+		pMsg->pImsageSize	= 0;
+		pMsg->PUID		= pEntry->PUID;
+		pMsg->PPUID		= pEntry->PPUID;
+		pMsg->PID		= (DWORD)pEntry->PID;
+		pMsg->CPID		= (DWORD)pEntry->CPID;
+		pMsg->RPID		= (WORD)0;
+		pMsg->PPID		= (DWORD)pEntry->PPID;
+		pMsg->CTID		= (DWORD)pEntry->TID;
+		pMsg->TID		= (DWORD)pEntry->TID;
+		pMsg->registry	= pEntry->registry;
+
+
+		//__dlog("%-32s %d %d %d", __func__, sizeof(Y_PROCESS_DATA), pMsg->wDataSize, pMsg->wStringSize);
+
+		WORD		wOffset	= (WORD)(sizeof(Y_PROCESS_MESSAGE));
+		CopyStringData(pMsg, wOffset, &(pMsg->DevicePath), &pEntry->DevicePath);
+		CopyStringData(pMsg, (wOffset += pMsg->DevicePath.wSize), &(pMsg->Command), &pEntry->Command);
+		if( pOut )
+			*pOut	= pMsg;
+		else 
+			CMemory::Free(pMsg);	
+	}
+}
+void		CreateProcessMessage(
+	YFilter::Message::SubType	subType,
 	HANDLE						PID,
 	HANDLE						PPID,
 	HANDLE						CPID,
@@ -23,23 +70,23 @@ void		CreateProcessMessage(
 	PUNICODE_STRING				pDevicePath,
 	PUNICODE_STRING				pCommand,
 	PKERNEL_USER_TIMES			pTimes,
-	PY_PROCESS					*pOut
+	PY_PROCESS_MESSAGE			*pOut
 ) {
-	WORD			wSize	= sizeof(Y_HEADER);
+	WORD	wDataSize	= sizeof(Y_PROCESS_DATA);
+	WORD	wStringSize	= sizeof(Y_PROCESS_STRING);
+	wStringSize	+= GetStringDataSize(pDevicePath);
+	wStringSize	+= GetStringDataSize(pCommand);
 
-	wSize	+= sizeof(Y_PROCESS);
-	wSize	+= GetStringDataSize(pDevicePath);
-	wSize	+= GetStringDataSize(pCommand);
+	PY_PROCESS_MESSAGE		pMsg	= NULL;
 
-	PY_PROCESS		pMsg	= NULL;
-
-	pMsg	= (PY_PROCESS)CMemory::Allocate(PagedPool, wSize, TAG_PROCESS);
+	pMsg	= (PY_PROCESS_MESSAGE)CMemory::Allocate(PagedPool, wDataSize+wStringSize, TAG_PROCESS);
 	if( pMsg ) {
-		RtlZeroMemory(pMsg, sizeof(PY_PROCESS));
+		RtlZeroMemory(pMsg, wDataSize+wStringSize);
 		pMsg->mode		= YFilter::Message::Mode::Event;
 		pMsg->category	= YFilter::Message::Category::Process;
 		pMsg->subType	= subType;
-		pMsg->wSize		= wSize;
+		pMsg->wDataSize	= wDataSize;
+		pMsg->wStringSize	= wStringSize;
 		pMsg->wRevision	= Y_MESSAGE_REVISION;
 
 		if( pTimes )
@@ -56,7 +103,7 @@ void		CreateProcessMessage(
 		pMsg->CTID		= (DWORD)PsGetCurrentThreadId();
 		pMsg->TID		= pMsg->CTID;
 
-		WORD		wOffset			= (WORD)(sizeof(Y_HEADER) + sizeof(Y_PROCESS));
+		WORD		wOffset	= (WORD)(sizeof(Y_PROCESS_MESSAGE));
 		CopyStringData(pMsg, wOffset, &(pMsg->DevicePath), pDevicePath);
 		CopyStringData(pMsg, (wOffset += pMsg->DevicePath.wSize), &(pMsg->Command), pCommand);
 		if( pOut )

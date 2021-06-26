@@ -248,6 +248,24 @@ NTSTATUS	SetProcessTimes(HANDLE PID, PY_PROCESS p) {
 	return STATUS_SUCCESS;
 }
 */
+
+#ifdef __DEV
+void	GetProcessModules(HANDLE PID) {
+
+	PEPROCESS	pProcess = NULL;
+	PsLookupProcessByProcessId(PID, &pProcess);
+
+	PPEB pPeb = PsGetProcessPeb(pProcess);
+	KAPC_STATE state;
+
+	KeStackAttachProcess(pProcess, &state);
+
+	PLIST_ENTRY pListEntry = pPeb->Ldr; //this problem
+
+	KeUnstackDetachProcess(&state);
+}
+#endif
+
 void	__stdcall	ProcessNotifyCallbackRoutineEx(
 	_Inout_		PEPROCESS Process,
 	_In_		HANDLE ProcessId,
@@ -301,6 +319,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 	
 	*/
+	
 	if (filter.Reference())
 	{
 		if (CreateInfo)
@@ -377,15 +396,16 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 						UNREFERENCED_PARAMETER(PPUID);
 
 						if( Config()->client.event.nConnected ) {
-							PY_PROCESS	pMsg	= NULL;
-							HANDLE		CPID	= *(HANDLE *)pContext;
+							PY_PROCESS_MESSAGE	pMsg	= NULL;
+							HANDLE				CPID	= *(HANDLE *)pContext;
 							CreateProcessMessage(
 								YFilter::Message::SubType::ProcessStart,
 								PID, PPID, CPID, &PUID, &PPUID, pProcPath, pCommand, pTimes,
 								&pMsg
 							);
 							if( pMsg ) {
-								if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, pMsg->wSize, false) ) {
+								if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, 
+										pMsg, pMsg->wDataSize+pMsg->wStringSize, false) ) {
 									MessageThreadPool()->Alert(pMsg->category);
 									pMsg	= NULL;
 								}
@@ -395,12 +415,6 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 							}	
 						}
 				});
-				//PY_PROCESS			pMsg	= NULL;
-
-				//CreateProcessMessage(
-				//	YFilter::Message::SubType::ProcessStart, 
-				//	
-				//);
 			}
 			else
 			{
@@ -410,7 +424,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 		else
 		{
 			struct __ARG { 
-				PY_PROCESS			pMsg;
+				PY_PROCESS_MESSAGE	pMsg;
 				KERNEL_USER_TIMES	times;
 			} arg;
 			RtlZeroMemory(&arg, sizeof(arg));
@@ -427,14 +441,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 					//	프로세스 정보를 기록해둔 경우 				
 					CreateProcessMessage(
 						YFilter::Message::SubType::ProcessStop,
-						pEntry->PID,
-						pEntry->PPID,
-						pEntry->CPID,
-						&pEntry->PUID,
-						&pEntry->PPUID,
-						&pEntry->ProcPath,
-						&pEntry->Command,
-						&pEntry->times,
+						pEntry,
 						&((struct __ARG *)pContext)->pMsg
 					);
 				}
@@ -443,30 +450,33 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				}
 			}))
 			{
-				//RegistryTable()->Flush(ProcessId);
+				
 			}
 			else {
 				__log("%-32s PID:%d is not found.", __func__, (DWORD)ProcessId);			
 			}
-			PY_PROCESS			pMsg	= arg.pMsg;
+			PY_PROCESS_MESSAGE			pMsg	= arg.pMsg;
 			if( pMsg ) {
-				__log(TEXTLINE);
-				__log("%s", __func__);
-				__log(TEXTLINE);
-				__log("PID  :%d",	(DWORD)pMsg->PID);
-				__log("CPID :%d",	(DWORD)PsGetCurrentProcessId());
-				__log("TID  :%d",	(DWORD)pMsg->TID);
-				__log("CTID :%d",	(DWORD)PsGetCurrentThreadId());
-				__log("PUID :%p",	pMsg->PUID);
-				__log("PATH :%ws",	pMsg->DevicePath.pBuf);
-				__log("CMD  :%ws",	pMsg->Command.pBuf);
-				__log("PPID :%d",	(DWORD)pMsg->PPID);
-				__log("PPUID:%p",	pMsg->PPUID);
-				__log("CREAT:%p",	pMsg->times.CreateTime.QuadPart);
-				__log("EXIT :%p",	pMsg->times.ExitTime.QuadPart);
-				__log("Kerne:%p",	pMsg->times.KernelTime.QuadPart);
-				__log("User :%p",	pMsg->times.UserTime.QuadPart);			
-				if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, arg.pMsg->wSize, false) ) {
+				if( false ) {
+					__log(TEXTLINE);
+					__log("%s", __func__);
+					__log(TEXTLINE);
+					__log("PID  :%d",	(DWORD)pMsg->PID);
+					__log("CPID :%d",	(DWORD)PsGetCurrentProcessId());
+					__log("TID  :%d",	(DWORD)pMsg->TID);
+					__log("CTID :%d",	(DWORD)PsGetCurrentThreadId());
+					__log("PUID :%p",	pMsg->PUID);
+					__log("PATH :%ws",	pMsg->DevicePath.pBuf);
+					__log("CMD  :%ws",	pMsg->Command.pBuf);
+					__log("PPID :%d",	(DWORD)pMsg->PPID);
+					__log("PPUID:%p",	pMsg->PPUID);
+					__log("CREAT:%p",	pMsg->times.CreateTime.QuadPart);
+					__log("EXIT :%p",	pMsg->times.ExitTime.QuadPart);
+					__log("Kerne:%p",	pMsg->times.KernelTime.QuadPart);
+					__log("User :%p",	pMsg->times.UserTime.QuadPart);		
+				}
+				if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, 
+						arg.pMsg->wDataSize+arg.pMsg->wStringSize, false) ) {
 					MessageThreadPool()->Alert(pMsg->category);
 					pMsg	= NULL;
 				}
@@ -555,14 +565,15 @@ bool		StartProcessFilter()
 			{
 				UNREFERENCED_PARAMETER(pContext);
 				if( Config()->client.event.nConnected ) {
-					PY_PROCESS	pMsg	= NULL;
+					PY_PROCESS_MESSAGE	pMsg	= NULL;
 					CreateProcessMessage(
 						YFilter::Message::SubType::ProcessStart2,
 						PID, PPID, PPID, &PUID, &PPUID, pProcPath, pCommand, pTimes,
 						&pMsg
 					);
 					if( pMsg ) {
-						if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, pMsg->wSize, false) ) {
+						if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, 
+								pMsg->wDataSize+pMsg->wStringSize, false) ) {
 							MessageThreadPool()->Alert(pMsg->category);
 							pMsg	= NULL;
 						}

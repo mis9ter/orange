@@ -1,6 +1,5 @@
 ﻿#include "Framework.h"
 
-
 void	CAgent::AddDbList(int nResourceID, PCWSTR pRootPath, PCWSTR pName, DbMap & table) {
 	Log("%-32s begin", __func__);
 	Log("%-32s %d", "nResourceID", nResourceID);
@@ -249,7 +248,15 @@ void	CAgent::RunLoop(IN DWORD dwMilliSeconds)
 		if( WAIT_OBJECT_0 == WaitForSingleObject(m_config.hShutdown, dwMilliSeconds) ) {
 			break;
 		}
-		Notify(NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, &dwCount, sizeof(dwCount));
+		Notify(NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, &dwCount, sizeof(dwCount), 
+			[&](DWORD64 dwValue, bool *bCallback) {
+
+				if( dwCount && 0 == dwCount % dwValue ) 
+					*bCallback	= true;
+				else 
+					*bCallback	= false;
+			
+			});
 		if( m_config.bRun )
 		{
 			if( m_config.pRunLoopFunc )

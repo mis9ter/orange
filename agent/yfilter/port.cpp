@@ -66,7 +66,7 @@ void		GetProcessTableList() {
 		UNREFERENCED_PARAMETER(bSaved);
 		UNREFERENCED_PARAMETER(pContext);
 
-		PY_PROCESS	pMsg	= NULL;
+		PY_PROCESS_MESSAGE	pMsg	= NULL;
 		if( Config()->client.event.nConnected ) {
 			//	DISPATCH_LEVEL 이라 GetProcessTimes 호출 불가.			
 			//if( NT_FAILED(GetProcessTimes(pEntry->PID, &pEntry->times, false)) ) {
@@ -74,19 +74,11 @@ void		GetProcessTableList() {
 			//}
 			CreateProcessMessage(
 				YFilter::Message::SubType::ProcessStart2,
-				pEntry->PID,
-				pEntry->PPID,
-				pEntry->CPID,
-				&pEntry->PUID,
-				&pEntry->PPUID,
-				&pEntry->ProcPath,
-				&pEntry->Command,
-				&pEntry->times,
-				&pMsg
+				pEntry,	&pMsg
 			);
 			if( pMsg ) {
 				//__dlog("%-32s %p %d", __func__, pEntry->PUID, pEntry->PID);
-				if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, pMsg->wSize, false) ) {
+				if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, pMsg, pMsg->wDataSize + pMsg->wStringSize, false) ) {
 					pMsg	= NULL;
 				}
 				else {

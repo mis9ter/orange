@@ -139,6 +139,7 @@
       <AdditionalIncludeDirectories>..\include;..\lib;..\lib\zipvfs-sources\src;..\lib\spdlog\include;..\module;..\lib\include;..\module\crcspeed</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <StructMemberAlignment>Default</StructMemberAlignment>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -155,7 +156,6 @@
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
 echo ..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
-copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
 copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
 cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </PostBuildEvent>
@@ -176,6 +176,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
       <Optimization>Disabled</Optimization>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).$(Platform).pdb</ProgramDataBaseFileName>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <StructMemberAlignment>Default</StructMemberAlignment>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -192,7 +193,6 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
       <Command>if not exist "..\build\$(PlatformTarget)" mkdir "..\build\$(PlatformTarget)"
 echo ..\binary\utility\upx.exe "$(OutDir)$(TargetName)$(TargetExt)"
 copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\build\$(PlatformTarget)"
-copy /v /y "..\yagent\db\event.odb" "..\build\$(PlatformTarget)\event.odb"
 copy /v /y "$(OutDir)$(TargetName).$(Platform).pdb" "..\binary\lib\$(TargetName).$(Platform).pdb"
 cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </PostBuildEvent>
@@ -225,6 +225,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="CPreProcess.h" />
     <ClInclude Include="CProcessCallback.h" />
     <ClInclude Include="CRegisryCallback.h" />
+    <ClInclude Include="CStringTable.h" />
     <ClInclude Include="CThread.h" />
     <ClInclude Include="CThreadCallback.h" />
     <ClInclude Include="framework.h" />
@@ -232,6 +233,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="MD5\MD5.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="undocumented.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\module\CDB.cpp" />
@@ -247,6 +249,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     </ClCompile>
     <ClCompile Include="Misc.cpp" />
     <ClCompile Include="Service.cpp" />
+    <ClCompile Include="undocumented.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc" />

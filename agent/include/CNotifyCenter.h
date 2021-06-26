@@ -6,18 +6,6 @@
 #include <map>
 #include <list>
 
-typedef struct NotifyItem {
-	NotifyItem(PCSTR _s, DWORD _n, PVOID _p, PFUNC_NOTIFY_CALLBACK _c) {
-		dwNotify	= _n;
-		pContext	= _p;
-		pCallback	= _c;
-		cause		= _s;
-	}
-	DWORD					dwNotify;
-	PFUNC_NOTIFY_CALLBACK	pCallback;
-	PVOID					pContext;	
-	std::string				cause;
-} NotifyItem, *PNotifyItem;
 typedef std::shared_ptr<NotifyItem>			NotifyItemPtr;
 typedef std::list<NotifyItemPtr>			NotifyItemList;
 typedef struct NotifyListener {
@@ -48,8 +36,9 @@ public:
 	}
 	void			RegisterNotifyCallback(
 		PCSTR	pCause,
-		WORD wType, WORD wEvent, PVOID pContext, 
-		PFUNC_NOTIFY_CALLBACK	pCallback
+		WORD	wType, WORD wEvent, 
+		DWORD64	dwValue,
+		PVOID	pContext, PFUNC_NOTIFY_CALLBACK	pCallback
 	) {
 		if( false == m_bRegister ) {
 			m_log.Log("%s %4d %4d %s : registration failed.", __FUNCTION__, wType, wEvent, pCause);
@@ -63,7 +52,7 @@ public:
 			//	아직 등록된 건이 없으므로 새로 만듭니다.
 			NotifiListenerPtr	ptr	= std::make_shared<NotifyListener>();
 			__function_lock(ptr->lock.Get());
-			ptr->listener.push_back(std::make_shared<NotifyItem>(pCause, dwNotify, pContext, pCallback));
+			ptr->listener.push_back(std::make_shared<NotifyItem>(pCause, dwNotify, dwValue, pContext, pCallback));
 			{
 				__function_lock(m_tableLock.Get());
 				m_table[dwNotify]	= ptr;
@@ -72,29 +61,32 @@ public:
 		else {
 			//	기존에 등록된 건이 있습니다.
 			__function_lock(t->second->lock.Get());
-			t->second->listener.push_back(std::make_shared<NotifyItem>(pCause, dwNotify, pContext, pCallback));
+			t->second->listener.push_back(std::make_shared<NotifyItem>(pCause, dwNotify, dwValue, pContext, pCallback));
 		}
 	}
 	void			EnableRegistration(IN bool bFlag) {
 		m_bRegister	= bFlag;
 	}
 	DWORD			Notify(
-		WORD		wType, 
-		WORD		wEvent,
-		PVOID		pData,
-		ULONG_PTR	nDataSize
-
+		WORD				wType, 
+		WORD				wEvent,
+		PVOID				pData,
+		ULONG_PTR			nDataSize,
+		PFUNC_NOTIFY_FILTER	pFilter
 	) {
 		m_log.Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
-
 		DWORD	dwNotify	= MAKELONG(wEvent, wType);
 		DWORD	dwCount		= 0;
 		auto	t			= m_table.find(dwNotify);
 		if( m_table.end() != t ) {
 			//__function_lock(t->second->lock.Get());
+			bool	bCallback	= true;
 			for( auto i : t->second->listener ) {
-				i->pCallback(wType, wEvent, pData, nDataSize, i->pContext);
-				m_log.Log("  %4d %4d %s", wType, wEvent, i->cause.c_str());
+				if( pFilter )	pFilter(i->dwValue, &bCallback);
+				if( bCallback )	{
+					i->pCallback(wType, wEvent, pData, nDataSize, i->pContext);
+					m_log.Log("  %4d %4d %s", wType, wEvent, i->cause.c_str());
+				}
 				dwCount++;
 			}
 		}

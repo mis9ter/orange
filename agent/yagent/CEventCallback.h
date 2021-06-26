@@ -4,10 +4,11 @@
 #include <atomic>
 #include "CDB.h"
 #include "yagent.string.h"
+#include "CStringTable.h"
 
 #define IDLE_COMMIT		1
 #define IDLE_COUNT		1000
-#define IDLE_TICKS		60000
+#define IDLE_TICKS		3000
 
 class CAppPath
 {
@@ -73,10 +74,9 @@ interface   IEventCallback
 	virtual	void	Destroy()	= NULL;
 	virtual	PCSTR	Name()		= NULL;
 };
+#include "CModuleCallback.h"
 #include "CProcessCallback.h"
 #include "CThreadCallback.h"
-#include "CModuleCallback.h"
-#include "CPreProcess.h"
 #include "CBootCallback.h"
 #include "CRegisryCallback.h"
 
@@ -125,9 +125,9 @@ class CEventCallback
 	public	CProcessCallback,
 	public	CThreadCallback,
 	public	CModuleCallback,
-	public	CPreProcess,
 	public	CBootCallback,
-	public	CRegistryCallback
+	public	CRegistryCallback,
+	virtual	public	CStringTable
 {
 
 public:
@@ -169,7 +169,7 @@ public:
 		CloseHandle(m_hWait);
 		m_log.Log(__FUNCTION__);
 	}
-	void	RegisterEventCallback(IN IEventCallback* pCallback) {
+	void			RegisterEventCallback(IN IEventCallback* pCallback) {
 		Log("%s %s", __FUNCTION__, pCallback->Name());
 		m_events[pCallback->Name()] = pCallback;
 	}
@@ -177,6 +177,10 @@ public:
 		return CBootCallback::GetBootUID();	
 	}
 	virtual	CDB*	Db(PCWSTR pName) = NULL;
+	bool		GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
+		return CModuleCallback::GetModules2(PID, pContext, pCallback);	
+	}
+
 	CDB*			Db() {
 		return m_pDB;
 	}
@@ -188,11 +192,11 @@ public:
 	uint64_t		GetTimestamp(IN LARGE_INTEGER *p) {
 		return CTime::LargeInteger2UnixTimestamp(p) / 1000;	
 	}
-	bool	GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
-				PWSTR pValue, DWORD dwSize) {
+	bool			GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
+						PWSTR pValue, DWORD dwSize) {
 		return CModuleCallback::GetModule(pProcGuid, PID, pAddress, pValue, dwSize);
 	}
-	bool	GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize) {
+	bool			GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize) {
 		return CProcessCallback::GetProcess(PUID, pValue, dwSize);
 	}
 	static	void	SystemCallback(
@@ -207,7 +211,7 @@ public:
 		CEventCallback	*pClass	= (CEventCallback *)pContext;
 		pClass->Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
 	}
-	bool		CreateCallback()
+	bool			CreateCallback()
 	{	
 		Log(__FUNCTION__);
 
@@ -224,45 +228,9 @@ public:
 			for (auto t : m_events) {
 				t.second->Create();
 			}
-			//	이전에 실행되어 동작중인 프로세스에 대한 정보들 수집
-			//	이 정보는 APP단에서 얻으려니 이모 저모 잘 안된다.
-			//	커널단에서 받아야 겠다.
-			//	커널 드라이버를 시작하면 이 정보부터 올라온다.
-
-			ProcMap			table;
-			/*
-			CPreProcess::Check2([&](
-				UUID	*pProcGuid, 
-				DWORD	PID, 
-				DWORD	PPID, 
-				PCWSTR	pPath,
-				PCWSTR	pCmdLine
-			) {
-				Log("%6d %ws", PID, pPath);
-				table[PID]	= *pProcGuid;
-				WCHAR	szProcGuid[40] = L"";
-				UUID2String(pProcGuid, szProcGuid, sizeof(szProcGuid));
-				Log("ProcGuid  : %ws", szProcGuid);
-				Log("CmdLine   : %ws", pCmdLine);
-				Log("PPID      : %6d", PPID);
-				if( PPID ) {
-					auto t = table.find(PPID);
-					if( table.end() == t ) {
-						Log("PProcGuid : NOT FOUND");
-					}
-					else {
-						UUID2String(&t->second, szProcGuid, sizeof(szProcGuid));
-						Log("PProcGuid : %ws", szProcGuid);
-					}
-				}
-				else {
-					Log("PProcGuid : NULL");
-				}
-				Log("-------------------------------------------");
-			});
-			*/
 			NotifyCenter()->RegisterNotifyCallback("SessionCallback", NOTIFY_TYPE_SESSION, 
-				NOTIFY_EVENT_SESSION, this, SessionCallback);
+				NOTIFY_EVENT_SESSION, 0, this, SessionCallback);
+			CStringTable::Create();
 			return true;
 		}
 		else {
@@ -270,12 +238,13 @@ public:
 		}
 		return false;
 	}
-	void		DestroyCallback() {
+	void			DestroyCallback() {
 		Log("%s", __FUNCTION__);
 		for (auto t : m_events) {
 			Log("%s %s", __FUNCTION__, t.second->Name());
 			//t.second->Destroy();
 		}
+		CStringTable::Destroy();
 		CDB		*pDB	= Db(DB_EVENT_NAME);
 		if( NULL == pDB ) {
 			return;
@@ -284,7 +253,7 @@ public:
 		if(pDB->IsOpened())	pDB->Commit(__FUNCTION__);
 #endif
 	}
-	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) {
+	PCWSTR			UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) {
 		StringCbPrintf(pValue, dwSize,
 			L"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 			p->Data1, p->Data2, p->Data3,
@@ -292,12 +261,11 @@ public:
 			p->Data4[4], p->Data4[5], p->Data4[6], p->Data4[7]);
 		return pValue;
 	}
-
-	DWORD	GetBootId()
+	DWORD			GetBootId()
 	{
 		return m_dwBootId;
 	}
-	DWORD		QueryUnknonwn
+	DWORD			QueryUnknonwn
 	(
 		const	Json::Value		&query,
 		const	Json::Value		&bind,
@@ -428,6 +396,19 @@ public:
 		std::atomic<DWORD>		dwRegistry;
 
 	} m_counter;
+
+	bool		AddModule(PROCUID PUID, PMODULE p)	{
+		return CProcessCallback::AddModule(PUID, p);	
+	}
+	bool		FindModule(PROCUID PUID, PVOID pStartAddress,
+		PVOID	pContext, std::function<void (PVOID, CProcess *, CModule *, PVOID)> pCallback) {
+		return CProcessCallback::FindModule(PUID, pStartAddress, pContext, pCallback);	
+		
+	}
+	bool		GetProcess(PROCUID PUID, 
+		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback) {
+		return CProcessCallback::GetProcess(PUID, pContext, pCallback);	
+	}
 protected:
 	void	Wait(IN DWORD dwMilliSeconds)
 	{
@@ -580,6 +561,16 @@ protected:
 			case YFilter::Message::Category::Process:
 				pClass->m_counter.dwProcess++;
 				bRet	= CProcessCallback::Proc2(pMessage, dynamic_cast<CProcessCallback *>(pClass));
+				break;
+
+			case YFilter::Message::Category::Module:
+				pClass->m_counter.dwModule++;
+				bRet	= CModuleCallback::Proc2(pMessage, dynamic_cast<CModuleCallback *>(pClass));
+				break;
+
+			case YFilter::Message::Category::Thread:
+				pClass->m_counter.dwThread++;
+				bRet	= CThreadCallback::Proc2(pMessage, dynamic_cast<CThreadCallback *>(pClass));
 				break;
 
 			default:

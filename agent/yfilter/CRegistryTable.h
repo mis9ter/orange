@@ -44,8 +44,8 @@ typedef void (*PRegTableCallback)(
 );
 
 void		CreateRegistryMessage(
-	PREG_ENTRY	p,
-	PY_REGISTRY	*pOut
+	PREG_ENTRY			p,
+	PY_REGISTRY_MESSAGE	*pOut
 );
 PROCUID		Path2CRC64(PUNICODE_STRING pValue);
 PROCUID		Path2CRC64(PCWSTR pValue);
@@ -148,13 +148,13 @@ public:
 			}
 			if( bDelete ) {
 				p->nCount++;
-				PY_REGISTRY		pReg	= NULL;
+				PY_REGISTRY_MESSAGE		pReg	= NULL;
 				CreateRegistryMessage(pEntry, &pReg);
 				if( pReg ) {
 					if (MessageThreadPool()->Push(__FUNCTION__,
 						pReg->mode,
 						pReg->category,
-						pReg, pReg->wSize, false))
+						pReg, pReg->wDataSize + pReg->wStringSize, false))
 					{
 						
 					}

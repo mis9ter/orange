@@ -21,7 +21,7 @@ typedef	uint64_t				PROCUID;
 
 #define	AGENT_PATH_SIZE			1024
 #define AGENT_NAME_SIZE			64
-#define AGENT_RUNLOOP_PERIOD	3000
+#define AGENT_RUNLOOP_PERIOD	1000
 
 #define DRIVER_SERVICE_NAME		L"orange.driver"
 #define DRIVER_FILE_NAME		L"orange.sys"
@@ -203,8 +203,45 @@ namespace YFilter
 /////////////////////////////////////////////////////////////////////////////////////////
 //	도라이버-에이전트 정보 구조체
 /////////////////////////////////////////////////////////////////////////////////////////
+#define MAX_FILTER_MESSAGE_SIZE		(4 * 1024)		//	커널에서 전달 예상되는 최대 크기
+#define Y_COMMAND_START				0x00000001
+#define Y_COMMAND_STOP				0x00000000
+#define Y_COMMAND_GET_PROCESS_LIST	0x00001000
+
+#if !defined(_NTDDK_) && !defined(_PHLIB_)
+
+typedef struct _KERNEL_USER_TIMES {
+	LARGE_INTEGER CreateTime;
+	LARGE_INTEGER ExitTime;
+	LARGE_INTEGER KernelTime;
+	LARGE_INTEGER UserTime;
+} KERNEL_USER_TIMES;
+typedef KERNEL_USER_TIMES* PKERNEL_USER_TIMES;
+
+#endif
+
 #pragma pack(push, 1)
-#define MAX_FILTER_MESSAGE_SIZE		(8 * 1024)		//	커널에서 전달 예상되는 최대 크기
+
+typedef struct _COUNT {
+	volatile ULONG	nCount;
+
+} _COUNT;
+typedef struct COUNT_SIZE 
+	:
+	public _COUNT
+{
+	volatile __int64	nSize;
+} _COUNT_SIZE;
+typedef struct _REG_COUNT {
+	_COUNT_SIZE		SetValue;
+	_COUNT_SIZE		GetValue;
+	_COUNT_SIZE		RenameValue;
+	_COUNT_SIZE		DeleteValue;
+	_COUNT_SIZE		CreateKey;
+	_COUNT_SIZE		DeleteKey;
+	_COUNT_SIZE		EnumerateKey;
+	_COUNT_SIZE		RenameKey;
+} REG_COUNT;
 
 typedef struct YFILTER_HEADER {
 	YFilter::Message::Mode		mode;				//
@@ -224,24 +261,11 @@ typedef struct YFILTER_HEADER {
 	아.. 그래서 xfilter 에서 주고 받는 구조체에 union이 많은 거구나.
 	서로 다른 애들끼리는 필드를 중첩 시키려고.
 */
-#if !defined(_NTDDK_) && !defined(_PHLIB_)
-typedef struct _KERNEL_USER_TIMES {
-	LARGE_INTEGER CreateTime;
-	LARGE_INTEGER ExitTime;
-	LARGE_INTEGER KernelTime;
-	LARGE_INTEGER UserTime;
-} KERNEL_USER_TIMES;
-typedef KERNEL_USER_TIMES* PKERNEL_USER_TIMES;
-#endif
-
-#define Y_COMMAND_START					0x00000001
-#define Y_COMMAND_STOP					0x00000000
-#define Y_COMMAND_GET_PROCESS_LIST		0x00001000
-
 typedef struct Y_HEADER {
 	YFilter::Message::Mode		mode;						//
 	YFilter::Message::Category	category;					//	
-	WORD						wSize;
+	WORD						wDataSize;
+	WORD						wStringSize;
 	WORD						wRevision;
 
 	DWORD						PID;						//	current process id/all
@@ -261,36 +285,38 @@ typedef struct Y_STRING
 	WCHAR						*pBuf;
 } Y_STRING, *PY_STRING;
 
+typedef UINT64	STRUID;
+typedef STRUID	*PSTRUID;
+
 inline void			SetStringOffset(PVOID p, PY_STRING str) {
 	str->pBuf			= (PWSTR)((char *)p + str->wOffset);
 }
 
 typedef UINT64					REGUID;
 typedef WORD					STRING_POS;
-typedef struct Y_REGISTRY
+
+typedef struct Y_THREAD_DATA
 	:
-	public Y_HEADER
+	public	Y_HEADER
 {
 	YFilter::Message::SubType	subType;
-	REGUID						RegUID;
-	REGUID						RegPUID;
-	ULONG64						nDataSize;
-	ULONG						nCount;
-	Y_STRING					RegPath;
-	Y_STRING					RegValueName;
-} Y_REGISTRY, *PY_REGISTRY;
+	PROCUID						PUID;
+	PVOID						StartAddress;
+} Y_THREAD_DATA, *PY_THREAD_DATA;
 
-typedef struct Y_REGISTRY_SIMPLE
-	:
-	public Y_HEADER
+typedef struct Y_THREAD_STRING
 {
-	WORD						wSize;
-	REGUID						RegUID;
-	Y_STRING					wRegValueName;
-	
-} Y_REGISTRY_SIMPLE, *PY_REGISTRY_SIMPLE;
 
-typedef struct Y_PROCESS
+} Y_THREAD_STRING, *PY_THREAD_STRING;
+typedef struct Y_THREAD_MESSAGE
+	:
+	public	Y_THREAD_DATA,
+	public	Y_THREAD_STRING
+{
+
+} Y_THREAD_MESSAGE, *PY_THREAD_MESSAGE;
+
+typedef struct Y_PROCESS_DATA
 	:
 	public	Y_HEADER 
 {
@@ -301,32 +327,99 @@ typedef struct Y_PROCESS
 	KERNEL_USER_TIMES			times;
 #pragma pack(push,1)
 	ULONG						SID;
+	REG_COUNT					registry;
+	//bool						bIsSystem;
+} Y_PROCESS_DATA, *PY_PROCESS_DATA;
 
-	union {
-		ULONG Property;
-		struct {
-			ULONG ImageAddressingMode : 8;  // Code addressing mode
-			ULONG SystemModeImage : 1;		// System mode image
-			ULONG ImageMappedToAllPids : 1;  // Image mapped into all processes
-			ULONG ExtendedInfoPresent : 1;  // IMAGE_INFO_EX available
-			ULONG MachineTypeMismatch : 1;  // Architecture type mismatch
-			ULONG ImageSignatureLevel : 4;  // Signature level
-			ULONG ImageSignatureType : 3;  // Signature type
-			ULONG ImagePartialMap : 1;  // Nonzero if entire image is not mapped
-			ULONG Reserved : 12;
-		} Properties;
-	} ImageProperties;
-
+typedef struct Y_PROCESS_STRING
+{
 	Y_STRING					DevicePath;
 	Y_STRING					Command;
-	bool						bIsSystem;
-} Y_PROCESS, *PY_PROCESS;
+} Y_PROCESS_STRING, *PY_PROCESS_STRING;
 
-typedef struct Y_PROCESS_CONTEXT
+typedef struct Y_PROCESS_MESSAGE
+	:
+	public	Y_PROCESS_DATA,
+	public	Y_PROCESS_STRING
 {
 
+} Y_PROCESS_MESSAGE, *PY_PROCESS_MESSAGE;
 
-} Y_PROCESS_CONTEXT, PY_PROCESS_CONTEXT;
+typedef struct Y_PROCESS_ENTRY
+	:
+	public	Y_PROCESS_DATA
+{
+	STRUID						DevicePathUID;
+	STRUID						CommandUID;
+} Y_PROCESS_ENTRY, *PY_PROCESS_ENTRY;
+
+typedef struct Y_REGISTRY_DATA
+	:
+	public Y_HEADER
+{
+	YFilter::Message::SubType	subType;
+	REGUID						RegUID;
+	REGUID						RegPUID;
+	ULONG64						nRegDataSize;
+	ULONG						nCount;
+} Y_REGISTRY_DATA, *PY_REGISTRY_DATA;
+
+typedef struct Y_REGISTRY_STRING
+{
+	Y_STRING					RegPath;
+	Y_STRING					RegValueName;
+} Y_REGISTRY_STRING, *PY_REGISTRY_STRING;
+
+typedef struct Y_REGISTRY_MESSAGE 
+	:
+	public	Y_REGISTRY_DATA,
+	public	Y_REGISTRY_STRING
+
+{
+
+} Y_REGISTRY_MESSAGE, *PY_REGISTRY_MESSAGE;
+
+typedef struct Y_REGISTRY_ENTRY
+	:
+	public	Y_REGISTRY_DATA
+{
+	STRUID						RegPathUID;
+	STRUID						RegValueNameUID;
+} Y_REGISTRY_ENTRY, *PY_REGISTRY_ENTRY;
+
+typedef struct Y_MODULE_DATA
+	:
+	public	Y_HEADER
+{
+	YFilter::Message::SubType	subType;
+	PVOID						ImageBase;
+	union {
+		ULONG Properties;
+		struct {
+			ULONG ImageAddressingMode  : 8;  // Code addressing mode
+			ULONG SystemModeImage      : 1;  // System mode image
+			ULONG ImageMappedToAllPids : 1;  // Image mapped into all processes
+			ULONG ExtendedInfoPresent  : 1;  // IMAGE_INFO_EX available
+			ULONG MachineTypeMismatch  : 1;  // Architecture type mismatch
+			ULONG ImageSignatureLevel  : 4;  // Signature level
+			ULONG ImageSignatureType   : 3;  // Signature type
+			ULONG ImagePartialMap      : 1;  // Nonzero if entire image is not mapped
+			ULONG Reserved             : 12;
+		} ImageProperties;
+	};
+	ULONG						ImageSize;
+} Y_MODULE_DATA, *PY_MODULE_DATA;
+typedef struct Y_MODULE_STRING
+{
+	Y_STRING					DevicePath;
+} Y_MODULE_STRING, *PY_MODULE_STRING;
+typedef struct Y_MODULE_MESSAGE
+	:
+	public	Y_MODULE_DATA,
+	public	Y_MODULE_STRING
+{
+} Y_MODULE_MESSAGE, *PY_MODULE_MESSAGE;
+
 typedef struct YFILTER_DATA {
 	YFilter::Message::SubType	subType;
 
@@ -374,7 +467,6 @@ typedef struct YFILTER_DATA {
 		char					szMsg[32];	
 	} debug;
 } YFILTER_DATA, *PYFILTER_DATA;
-
 typedef struct YFILTER_MESSAGE {
 	YFILTER_HEADER	header;
 	YFILTER_DATA	data;

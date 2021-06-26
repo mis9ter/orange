@@ -1,5 +1,4 @@
 #pragma once
-//#include <functional>
 
 #define TAG_PROCESS			'corp'
 
@@ -21,52 +20,10 @@
 
 
 */
-
-typedef struct _COUNT {
-	volatile ULONG	nCount;
-
-} _COUNT;
-typedef struct COUNT_SIZE 
-	:
-	public _COUNT
-{
-	volatile __int64	nSize;
-} _COUNT_SIZE;
-
-typedef struct PROCESS_ENTRY
-{
-	HANDLE				PID;				//	나의 핸들
-	HANDLE				PPID;				//	부모의 핸들
-	PROCUID				PUID;				//	고유번호
-	PROCUID				PPUID;				//	부모의 고유번호
-	HANDLE				TID;				//	메인 스레드 핸들
-	HANDLE				CPID;				//	나를 생성한 프로세스의 핸들
-											//	나를 생성한 프로세스 != 부모 프로세스
-	ULONG				SID;				//	프로세스 세션 ID
-	UNICODE_STRING		ProcPath;
-	UNICODE_STRING		Command;
-
-	PVOID				key;				//	[TODO]	뭐에 쓰는 물건인가요?
-	bool				bFree;				//	해제 대상
-	bool				bCallback;			//	콜백에 의해 수집
-	//DWORD64				dwTerminate;
-	KERNEL_USER_TIMES	times;
-	struct {
-		_COUNT_SIZE		SetValue;
-		_COUNT_SIZE		GetValue;
-		_COUNT_SIZE		RenameValue;
-		_COUNT_SIZE		DeleteValue;
-		_COUNT_SIZE		CreateKey;
-		_COUNT_SIZE		DeleteKey;
-		_COUNT_SIZE		EnumerateKey;
-		_COUNT_SIZE		RenameKey;
-	} registry;
-} PROCESS_ENTRY, * PPROCESS_ENTRY;
-
 typedef void (*PProcessTableCallback)(
 	IN bool					bCreationSaved,	//	생성이 감지되어 저장된 정보 여부
 	IN PPROCESS_ENTRY		pEntry,			//	대상 엔트리 
-	IN PVOID				pCallbackPtr
+	IN PVOID				pContext
 );
 
 //typedef std::function<void (bool,PPROCESS_ENTRY,PVOID)>	PProcessTableCallback;
@@ -160,7 +117,7 @@ public:
 		{
 			if (pProcPath)
 			{
-				if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.ProcPath, pProcPath, 'PDDA')) {
+				if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.DevicePath, pProcPath, 'PDDA')) {
 					__dlog("CMemory::AllocateUnicodeString() failed.");
 					__leave;
 				}
@@ -170,7 +127,7 @@ public:
 				//	PID만 설정하는 경우 있음 - 프로세스 경로가 없으면 직접 구함. 
 				if (NT_SUCCESS(GetProcessImagePathByProcessId(PID, (PWSTR)procPath, procPath.CbSize(), NULL)))
 				{
-					if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.ProcPath, procPath)) {
+					if (false == CMemory::AllocateUnicodeString(PoolType(), &entry.DevicePath, procPath)) {
 						__dlog("CMemory::AllocateUnicodeString() failed.");
 						__leave;
 					}
@@ -333,7 +290,7 @@ public:
 		if (NULL == pEntry)	return;
 		//__log("  %wZ", __FUNCTION__, &pEntry->path);
 		//__log("  %wZ", __FUNCTION__, &pEntry->command);
-		CMemory::FreeUnicodeString(&pEntry->ProcPath, bLog);
+		CMemory::FreeUnicodeString(&pEntry->DevicePath, bLog);
 		CMemory::FreeUnicodeString(&pEntry->Command, bLog);
 	}
 	void		Clear()

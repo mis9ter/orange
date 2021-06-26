@@ -1,7 +1,12 @@
 ﻿#pragma once
-
 #include <tlhelp32.h>
 
+/*
+	ntdll.dll 에서 생성되는 스레드는 무엇?
+
+	https://docs.microsoft.com/en-us/windows/win32/procthread/thread-pools
+
+*/
 inline	BOOL GetModule(__in DWORD dwProcId, 
 	__in	BYTE * dwThreadStartAddr,
 	__out_bcount(MAX_PATH + 1) LPWSTR lpstrModule, 
@@ -42,10 +47,13 @@ inline	BOOL GetModule(__in DWORD dwProcId,
 class CThreadCallback
 	:
 	protected		IEventCallback,
-	public virtual	CAppLog
+	public virtual	CAppLog,
+	virtual public	CStringTable
 {
 public:
 	CThreadCallback()
+		:
+		m_log(L"thread.log")
 	{
 		ZeroMemory(&m_stmt, sizeof(m_stmt));
 		m_name = EVENT_CALLBACK_NAME;
@@ -58,6 +66,11 @@ public:
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
 	virtual	bool		GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 						PWSTR pValue, DWORD dwSize)	= NULL;
+	virtual		bool		FindModule(PROCUID PUID, PVOID pStartAddress,
+						PVOID	pContext, std::function<void (PVOID, CProcess *, CModule *, PVOID)> pCallback)	= NULL;
+	virtual		bool		GetProcess(PROCUID PUID, 
+		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback)	= NULL;
+
 	PCSTR				Name() {
 		return m_name.c_str();
 	}
@@ -100,12 +113,74 @@ protected:
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
 	}
-
-	PCWSTR	GetFileName(PCWSTR pFilePath) {
+	PCWSTR		GetFileName(PCWSTR pFilePath) {
 		PCWSTR	p	= wcsrchr(pFilePath, L'\\');
 		return p? p + 1: pFilePath;
 	}
+	static	bool			Proc2
+	(
+		PY_HEADER			pMessage,
+		PVOID				pContext
+	) 
+	{
+		PY_THREAD_MESSAGE	p		= (PY_THREAD_MESSAGE)pMessage;
+		CThreadCallback		*pClass = (CThreadCallback *)pContext;
 
+		std::wstring		str;
+
+		if( YFilter::Message::SubType::ThreadStart == p->subType ) {
+			//pClass->m_log.Log("PID:%05d TID:%05d StartAddress:%p", p->PID, p->TID, p->StartAddress);
+			if( !pClass->FindModule(p->PUID, p->StartAddress, pClass, 
+				[&](PVOID pContext, CProcess * pProc, CModule * pModule, PVOID pModuleMap) {
+
+					if( pProc && pModule ) {
+					/*
+						pClass->m_log.Log("%p PID:%d CPID:%d", p->StartAddress, p->PID, p->CPID);
+						pClass->m_log.Log(TEXTLINE);
+						pClass->m_log.Log("PROCESS:%ws", pClass->GetString(pProc->ProcNameUID, str));
+						pClass->m_log.Log("MODULE :%ws", pClass->GetString(pModule->FullNameUID, str));					
+						pClass->m_log.Log("PATH   :%ws", pClass->GetString(pProc->ProcPathUID, str));
+						pClass->m_log.Log("COMMAND:%ws", pClass->GetString(pProc->CommandUID, str));					
+						pClass->m_log.Log(TEXTLINE);
+					*/
+					
+					}
+					else if( pProc && NULL == pModule ) {
+						pClass->m_log.Log("%p MODULE NOT FOUND", p->StartAddress);
+						pClass->m_log.Log("PID :%d", p->PID);
+						pClass->m_log.Log("CPID:%d", p->CPID);
+						pClass->m_log.Log("PATH:%ws", pClass->GetString(pProc->ProcPathUID, str));
+						pClass->m_log.Log("COMM:%ws", pClass->GetString(pProc->CommandUID, str));
+
+						if( pModuleMap ) {
+							ModuleMap	*	pMap	= (ModuleMap *)pModuleMap;
+							pClass->m_log.Log("MODULES:");
+							for( auto i : *pMap ) {
+								pClass->m_log.Log("%p %p %ws", i.second->ImageBase, 
+									(LONG_PTR)i.second->ImageBase + i.second->ImageSize, 
+									pClass->GetString(i.second->BaseNameUID, str));
+							}						
+						}
+						pClass->m_log.Log(TEXTLINE);					
+					}
+					else if( NULL == pProc && NULL == pModule ) {
+					
+						pClass->m_log.Log("%p PROCESS NOT FOUND", p->StartAddress);
+						pClass->m_log.Log("PID :%d", p->PID);
+						pClass->m_log.Log("CPID:%d", p->CPID);
+					}
+		
+			}) ) {
+
+			}
+		}
+		pClass->m_lock.Lock(p, [&](PVOID pContext) {
+
+
+
+		});
+		return true;
+	}
 	static	bool			Proc(
 		ULONGLONG			nMessageId,
 		PVOID				pCallbackPtr,
@@ -181,6 +256,8 @@ protected:
 	}
 private:
 	std::string		m_name;
+	CLock			m_lock;
+	CAppLog			m_log;
 	struct {
 		sqlite3_stmt* pInsert;
 		sqlite3_stmt* pUpdate;
