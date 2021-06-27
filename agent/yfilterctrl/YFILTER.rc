@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,0,1,10
- PRODUCTVERSION 0,0,1,0
+ FILEVERSION 0,1,1,10
+ PRODUCTVERSION 0,1,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -65,21 +65,21 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "041204b0"
+        BLOCK "040004b0"
         BEGIN
             VALUE "CompanyName", "OrangeWorks.org"
             VALUE "FileDescription", "ORANGE YFILTER"
-            VALUE "FileVersion", "0.0.1.10"
-            VALUE "InternalName", "yfilterc.lib"
-            VALUE "LegalCopyright", "Copyright (C) 2020"
-            VALUE "OriginalFilename", "yfilterc.lib"
+            VALUE "FileVersion", "0.1.1.10"
+            VALUE "InternalName", "orange kernel filter driver"
+            VALUE "LegalCopyright", "ORANGEWORKS, INC. All rights reserved."
+            VALUE "OriginalFilename", "yfilter"
             VALUE "ProductName", "ORANGE"
-            VALUE "ProductVersion", "0.0.1.0"
+            VALUE "ProductVersion", "0.1.1.0"
         END
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x412, 1200
+        VALUE "Translation", 0x400, 1200
     END
 END
 

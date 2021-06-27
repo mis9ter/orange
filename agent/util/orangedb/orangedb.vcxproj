@@ -169,11 +169,15 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\..\build\$(PlatformTarget)"<
   <ItemGroup>
     <ClInclude Include="..\..\include\yagent.string.h" />
     <ClInclude Include="..\..\lib\zipvfs-sources\src\sqlite3.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\lib\zipvfs-sources\src\shell.c" />
     <ClCompile Include="..\..\lib\zipvfs-sources\src\sqlite3-zipvfs.c" />
     <ClCompile Include="orangedb.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="orangedb.exe.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

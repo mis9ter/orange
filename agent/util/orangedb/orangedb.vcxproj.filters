@@ -21,6 +21,9 @@
     <ClInclude Include="..\..\include\yagent.string.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\lib\zipvfs-sources\src\shell.c">
@@ -32,5 +35,10 @@
     <ClCompile Include="..\..\lib\zipvfs-sources\src\sqlite3-zipvfs.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="orangedb.exe.rc">
+      <Filter>리소스 파일</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

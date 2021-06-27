@@ -163,6 +163,30 @@ public:
 			DeleteFile(path.c_str());
 		}	
 	}
+	static	bool	IsFileReadable(PCWSTR pPath)
+	{
+		HANDLE		hFile = INVALID_HANDLE_VALUE;
+
+		hFile = CreateFile(pPath,GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,NULL,OPEN_EXISTING,0,NULL);
+		if(hFile == INVALID_HANDLE_VALUE)
+		{
+			return false;
+		}
+		CloseHandle(hFile);
+		return true;
+	}
+	static	bool	IsFileWrittable(PCWSTR pPath)
+	{
+		HANDLE		hFile = INVALID_HANDLE_VALUE;
+
+		hFile = CreateFile(pPath,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,NULL,OPEN_EXISTING,0,NULL);
+		if(hFile == INVALID_HANDLE_VALUE)
+		{
+			return false;
+		}
+		CloseHandle(hFile);
+		return true;
+	}
 	int					UpdateFile(bool bUpdate) {
 		Json::Value	&file	= Profile()["file"];
 
@@ -204,41 +228,52 @@ public:
 					std::wstring	apath	= szAPath;
 
 					if( bUpdate ) {
-						if( MoveFileEx(path.c_str(), apath.c_str(), MOVEFILE_REPLACE_EXISTING) ) {
-							FILETIME	creation, lastwrite;
-
-							creation.dwHighDateTime		= t["time"]["creation"]["high"].asInt();
-							creation.dwLowDateTime		= t["time"]["creation"]["low"].asInt();
-							lastwrite.dwHighDateTime	= t["time"]["lastwrite"]["high"].asInt();
-							lastwrite.dwLowDateTime		= t["time"]["lastwrite"]["low"].asInt();	
-
-							bool	bRet	= YAgent::RequestFile(fileurl.c_str(), path.c_str(), NULL, this,
-										[&](PVOID pContext, PCWSTR pPath, HANDLE hFile, DWORD dwTotalBytes, DWORD dwCurrentBytes)->bool {
-											if( dwTotalBytes == dwCurrentBytes ) {
-												printf("%-32s %d / %d\n", __func__, dwCurrentBytes, dwTotalBytes);
-												SetFileTime(hFile, &creation, NULL, &lastwrite);										
-											}
-											return true;
-										});
-							if( bRet ) {
-								if( DeleteFile(apath.c_str())) {
-								
-								}	
-								else {
-									MoveFileEx(apath.c_str(), NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
-								}
+						bool	bMoved	= false;
+						if( PathFileExists(path.c_str()) && !IsFileWrittable(path.c_str()) ) {
+							//	파일이 존재하고 쓰기 불가하면 이동
+							if( MoveFileEx(path.c_str(), apath.c_str(), MOVEFILE_REPLACE_EXISTING) ) {
+								//	이동됨
+								bMoved	= true;
 							}
 							else {
-								MoveFileEx(apath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);							
+								CErrorMessage	err(GetLastError());
+								printf("%-32s(1) %d %s\n", __func__, (DWORD)err, (PCSTR)err);
 							}
-							printf("%ws -> %ws [%d]", fileurl.c_str(), path.c_str(), bRet);
-							nUpdateRequired++;
-							printf("  updated.\n");					
+						}
+						FILETIME	creation, lastwrite;
+
+						creation.dwHighDateTime		= t["time"]["creation"]["high"].asInt();
+						creation.dwLowDateTime		= t["time"]["creation"]["low"].asInt();
+						lastwrite.dwHighDateTime	= t["time"]["lastwrite"]["high"].asInt();
+						lastwrite.dwLowDateTime		= t["time"]["lastwrite"]["low"].asInt();	
+
+						bool	bDownload	= YAgent::RequestFile(fileurl.c_str(), path.c_str(), NULL, this,
+									[&](PVOID pContext, PCWSTR pPath, HANDLE hFile, DWORD dwTotalBytes, DWORD dwCurrentBytes)->bool {
+										if( dwTotalBytes == dwCurrentBytes ) {
+											printf("%-32s %d / %d\n", __func__, dwCurrentBytes, dwTotalBytes);
+											SetFileTime(hFile, &creation, NULL, &lastwrite);										
+										}
+										return true;
+						});
+						if( bDownload ) {
+							if( bMoved ) {
+								MoveFileEx(apath.c_str(), NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+							}
+							else {
+
+							}
 						}
 						else {
-							CErrorMessage	err(GetLastError());
-							printf("%-32s %d %s\n", __func__, (DWORD)err, (PCSTR)err);
+							if( bMoved ) {
+								MoveFileEx(apath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);	
+							}
+							else {
+
+
+							}
 						}
+						printf("%ws -> %ws [%d]", fileurl.c_str(), path.c_str(), bDownload);
+						nUpdateRequired++;
 					}
 					else {
 						nUpdateRequired++;

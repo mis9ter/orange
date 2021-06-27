@@ -65,13 +65,13 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "041204b0"
+        BLOCK "040004b0"
         BEGIN
-            VALUE "CompanyName", "Orangeworks"
+            VALUE "CompanyName", "Orangeworks.org"
             VALUE "FileDescription", "updater"
             VALUE "FileVersion", "0.1.0.1"
             VALUE "InternalName", "update.exe"
-            VALUE "LegalCopyright", "Copyright (C) 2021"
+            VALUE "LegalCopyright", "ORANGEWORKS, INC. All rights reserved."
             VALUE "OriginalFilename", "update.exe"
             VALUE "ProductName", "ORANGE"
             VALUE "ProductVersion", "0.1.0.1"
@@ -79,7 +79,7 @@ BEGIN
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x412, 1200
+        VALUE "Translation", 0x400, 1200
     END
 END
 

@@ -266,6 +266,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <None Include="db\config.odb" />
     <None Include="db\event.odb" />
     <None Include="db\rcdata1.bin" />
+    <None Include="db\summary.odb" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="opensource.txt" />

@@ -204,6 +204,7 @@
       <Filter>Resource Files</Filter>
     </None>
     <None Include="db\config.odb" />
+    <None Include="db\summary.odb" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="opensource.txt">
