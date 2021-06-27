@@ -179,6 +179,9 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\..\build\$(PlatformTarget)"<
   <ItemGroup>
     <ResourceCompile Include="orangedb.exe.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\..\binary\image\app.ico" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
