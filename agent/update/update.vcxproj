@@ -195,6 +195,9 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
   <ItemGroup>
     <ResourceCompile Include="update.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\binary\image\orangeworks_web_icon.ico" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -73,6 +73,9 @@
     <ClInclude Include="CRegistryTable.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\yfilterctrl\resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Config.cpp">
@@ -127,5 +130,10 @@
     <Inf Include="orange.inf">
       <Filter>Driver Files</Filter>
     </Inf>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\binary\image\app.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

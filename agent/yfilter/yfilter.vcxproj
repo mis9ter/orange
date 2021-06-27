@@ -198,6 +198,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="..\include\yagent.define.h" />
     <ClInclude Include="..\module\crcspeed\crc64speed.h" />
     <ClInclude Include="..\module\crcspeed\crcspeed.h" />
+    <ClInclude Include="..\yfilterctrl\resource.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="CProcessTable.h" />
     <ClInclude Include="CQueue.h" />
@@ -225,6 +226,9 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\yfilterctrl\YFILTER.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\binary\image\app.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
