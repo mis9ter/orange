@@ -133,6 +133,8 @@ private:
 typedef UINT64	BootUID;
 
 namespace YAgent {
+	bool	DeleteDirectoryFiles(IN LPCTSTR lpPath);
+	bool	DeleteDirectory(IN LPCTSTR lpPath);
 	bool	Command(IN LPCTSTR lpPath, IN LPCTSTR szArgument, 
 		IN LPCTSTR lpRunPath,
 		IN DWORD dwType =SW_SHOW , 

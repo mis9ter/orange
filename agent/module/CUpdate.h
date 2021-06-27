@@ -143,18 +143,42 @@ public:
 
 
 	}
+	static		void	DeleteAFile(HMODULE hModule) {
+		WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
+		PWSTR	pName;
 
+		GetModuleFileName(hModule, szPath, _countof(szPath));
+		pName	= _tcsrchr(szPath, L'\\');
+		if( pName )	{
+			*pName++	= NULL;
+		}
+		else pName	= szPath;
+
+		if( L'@' != *pName ) {
+			std::wstring	path	= szPath;
+			path	+= L"\\";
+			path	+= L"@";
+			path	+= pName;
+			
+			DeleteFile(path.c_str());
+		}	
+	}
 	int					UpdateFile(bool bUpdate) {
 		Json::Value	&file	= Profile()["file"];
 
-		WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
+		WCHAR	szPath[AGENT_PATH_SIZE]			= L"";
+		WCHAR	szTempPath[AGENT_PATH_SIZE]		= L"";
+
 		int		nUpdateRequired			= 0;
 		YAgent::GetModulePath(szPath, sizeof(szPath));
+		StringCbPrintf(szTempPath, sizeof(szTempPath), L"%s\\temp", szPath);
+		if( PathIsDirectory(szTempPath) )	YAgent::DeleteDirectoryFiles(szTempPath);
+		else	YAgent::MakeDirectory(szTempPath);
+
 		for( auto & t : file ) {
 			try {
 				Json::Value		&update	= t["update"];
-				std::wstring	path	= szPath + (std::wstring)L"\\" + __utf16(t["path"].asCString());
-				std::wstring	apath	= szPath + (std::wstring)L"\\" + __utf16(t["apath"].asCString());
+				std::wstring	path	= szPath + (std::wstring)L"\\" + __utf16(t["path"].asCString());				
 				std::wstring	url		= __utf16(Profile()["url"].asString());
 				std::wstring	fileurl	= url + L"/" + __utf16(t["path"].asCString());
 
@@ -173,9 +197,14 @@ public:
 				}
 				printf("\n");
 				if( update.asBool() ) {
+					WCHAR	szAPath[AGENT_PATH_SIZE]	= L"";
+					GetTempFileName(szTempPath, __utf16(t["name"].asCString()), GetTickCount(), szAPath);
+
+					printf("%ws\n", szAPath);
+					std::wstring	apath	= szAPath;
+
 					if( bUpdate ) {
-						DeleteFile(apath.c_str());
-						if( MoveFile(path.c_str(), apath.c_str()) ) {
+						if( MoveFileEx(path.c_str(), apath.c_str(), MOVEFILE_REPLACE_EXISTING) ) {
 							FILETIME	creation, lastwrite;
 
 							creation.dwHighDateTime		= t["time"]["creation"]["high"].asInt();
@@ -192,7 +221,15 @@ public:
 											return true;
 										});
 							if( bRet ) {
-				
+								if( DeleteFile(apath.c_str())) {
+								
+								}	
+								else {
+									MoveFileEx(apath.c_str(), NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+								}
+							}
+							else {
+								MoveFileEx(apath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);							
 							}
 							printf("%ws -> %ws [%d]", fileurl.c_str(), path.c_str(), bRet);
 							nUpdateRequired++;
@@ -221,15 +258,14 @@ public:
 	int					Update() {
 		int		nCount = 0;
 
-		
-
 		std::wstring	url;
 
 		try {
 			LoadProfile(UPDATE_DIST_NAME);
 			if( Profile().isMember("url") && Profile()["url"].isString() )
 				url	= __utf16(Profile()["url"].asCString());
-			else 
+			
+			if( url.empty() )
 				url	= L"http://download.orangeworks.org";
 
 			if( DownloadProfile((url + L"/" UPDATE_DIST_NAME).c_str(), UPDATE_DIST_NAME) ) {
