@@ -2,7 +2,6 @@
 // Microsoft Visual C++에서 생성한 포함 파일입니다.
 // YFILTER.rc에서 사용되고 있습니다.
 //
-#define IDI_ICON1                       101
 
 // Next default values for new objects
 // 
