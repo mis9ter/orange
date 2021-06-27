@@ -99,7 +99,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;SQLITE_OMIT_ZLIB;SQLITE_ENABLE_ZIPVFS_VTAB;SQLITE_ENABLE_RTREE;SQLITE_THREADSAFE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\..\include;..\..\lib\zipvfs-sources;..\..\lib\zipvfs-sources\src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\include;..\..\module;..\..\lib\include;..\..\lib\zipvfs-sources;..\..\lib\zipvfs-sources\src</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
@@ -153,6 +153,7 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\..\build\$(PlatformTarget)"<
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>..\..\include;..\..\module;..\..\lib\include;..\..\lib\zipvfs-sources;..\..\lib\zipvfs-sources\src</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -166,12 +167,12 @@ copy /v /y "$(OutDir)$(TargetName)$(TargetExt)" "..\..\build\$(PlatformTarget)"<
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\include\orangedb.h" />
     <ClInclude Include="..\..\include\yagent.string.h" />
     <ClInclude Include="..\..\lib\zipvfs-sources\src\sqlite3.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\lib\zipvfs-sources\src\shell.c" />
+    <ClCompile Include="..\..\lib\zipvfs-sources\src\sqlite3-zipvfs.c" />
     <ClCompile Include="orangedb.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

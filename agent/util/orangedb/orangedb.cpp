@@ -2,7 +2,16 @@
 //
 
 #include <iostream>
-#include "orangedb.h"
+#include "sqlite3.h"
+
+#ifdef _WIN64	//_M_X64
+#pragma comment(lib, "lz4lib.x64.lib")
+
+#else
+#pragma comment(lib, "lz4lib.win32.lib")
+
+#endif
+
 
 const	char* _pname = "orange";
 
