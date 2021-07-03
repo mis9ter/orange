@@ -40,8 +40,11 @@ Return Value:
 
 	PAGED_CODE();
 
-	PT_DBG_PRINT(PTDBG_TRACE_ROUTINES,
-		("!InstanceSetup: Entered\n"));
+	if (VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM) {
+		return STATUS_FLT_DO_NOT_ATTACH;
+	}
+
+
 
 	return STATUS_SUCCESS;
 }

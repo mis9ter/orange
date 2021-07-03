@@ -125,9 +125,7 @@ public:
 	}
 	~CFltObjectReference()
 	{
-		if (m_bReference && m_pObject ) {
-			FltObjectDereference(m_pObject);
-		}
+		Dereference();
 	}
 	bool		Reference()
 	{
@@ -139,6 +137,13 @@ public:
 			}
 		}
 		return false;
+	}
+	void		Dereference()
+	{
+		if (m_bReference && m_pObject ) {
+			FltObjectDereference(m_pObject);
+			m_bReference	= false;
+		}
 	}
 private:
 	LPVOID			m_pObject;

@@ -184,6 +184,48 @@ NTSTATUS	GetProcessParams(IN HANDLE hProcessId,
 	return status;
 }
 */
+NTSTATUS	NTAPI	GetProcessSessionId(
+	HANDLE  PID, 
+	PULONG  pSessionId
+) 
+{
+	NTSTATUS	status	= STATUS_UNSUCCESSFUL;
+	HANDLE		process = NULL;
+	OBJECT_ATTRIBUTES oa = {0};
+	CLIENT_ID cid = {0};
+	ULONG	ReturnLength = 0;
+
+	if (PID <= (HANDLE)4)
+	{
+		return STATUS_INVALID_PARAMETER;
+	}
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL)
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
+	__try
+	{
+		oa.Length = sizeof(OBJECT_ATTRIBUTES);
+		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+		cid.UniqueProcess = PID;
+
+#ifndef PROCESS_QUERY_INFORMATION
+#define PROCESS_QUERY_INFORMATION (0x0400)
+#endif
+		status = ZwOpenProcess(&process, PROCESS_QUERY_INFORMATION, &oa, &cid);
+		if (!NT_SUCCESS(status))	__leave;
+		status = Config()->pZwQueryInformationProcess(process, ProcessSessionInformation, pSessionId, sizeof(ULONG), &ReturnLength);
+		if (NT_SUCCESS(status) == FALSE)	__leave;
+	} __finally {
+		if (process)
+		{
+			ZwClose(process);
+			process = NULL;
+		}
+	}
+	return status;    
+}
+
 NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID)
 {
 	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
@@ -213,58 +255,6 @@ NTSTATUS	GetParentProcessId(IN HANDLE hProcessId, OUT HANDLE* PPID)
 		status = pZwQueryInformationProcess(hProcess, ProcessBasicInformation, &info, sizeof(info), NULL);
 		if (NT_SUCCESS(status)) {
 			*PPID = (HANDLE)info.InheritedFromUniqueProcessId;
-		}
-	}
-	__finally
-	{
-		if (hProcess)
-		{
-			ZwClose(hProcess);
-			hProcess = NULL;
-		}
-	}
-	return status;
-}
-NTSTATUS	GetProcessSessionId(IN HANDLE PID, OUT PULONG pId)
-{
-	UNREFERENCED_PARAMETER(pId);
-	if( true )	STATUS_UNSUCCESSFUL;
-	
-	if (NULL == Config())	return STATUS_UNSUCCESSFUL;
-
-
-	FN_ZwQueryInformationProcess	pZwQueryInformationProcess = Config()->pZwQueryInformationProcess;
-	if (NULL == pZwQueryInformationProcess)	return STATUS_BAD_FUNCTION_TABLE;
-	if (KeGetCurrentIrql() > PASSIVE_LEVEL)	return STATUS_UNSUCCESSFUL;
-
-	NTSTATUS			status = STATUS_UNSUCCESSFUL;
-	HANDLE				hProcess = NULL;
-	OBJECT_ATTRIBUTES	oa = { 0 };
-	CLIENT_ID			cid = { 0 };
-
-	__try
-	{
-		oa.Length = sizeof(OBJECT_ATTRIBUTES);
-		InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
-		cid.UniqueProcess = PID;
-
-#ifndef PROCESS_QUERY_INFORMATION
-#define PROCESS_QUERY_INFORMATION (0x0400)
-#endif
-		status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
-		if (!NT_SUCCESS(status))	__leave;
-
-		PROCESS_BASIC_INFORMATION	info;
-		status = pZwQueryInformationProcess(hProcess, ProcessBasicInformation, &info, sizeof(info), NULL);
-		if (NT_SUCCESS(status)) {
-			//	PEB를 읽으면 BSOD 발생
-			//	PEB는 직접 참조할 수 없고 32비트의 경우 FS 레지스터를 통해 TEB를 얻은 후 
-			//	여기서 오프셋 0x30 즉 PEB 필드에 들어있는 값을 통하여 PEB의 주소를 얻는 방식이 사용된다.
-			//	https://sanseolab.tistory.com/category/%EC%95%85%EC%84%B1%EC%BD%94%EB%93%9C%20%EB%B6%84%EC%84%9D?page=4
-
-			//if( pId && info.PebBaseAddress ) {
-			//	*pId	= info.PebBaseAddress->SessionId;
-			//}
 		}
 	}
 	__finally

@@ -415,7 +415,9 @@ public:
 				i++;
 			}
 		}
-		__dlog("%-32s T:%d D:%d", __func__, RtlNumberGenericTableElements(&m_table), nCount);
+		nCount	= RtlNumberGenericTableElements(&m_table);
+		if( nCount > 100 )
+			__dlog("%-32s T:%d D:%d", __func__, RtlNumberGenericTableElements(&m_table), nCount);
 		Unlock(irql);
 	}
 	void		Clear()

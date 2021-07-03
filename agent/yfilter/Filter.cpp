@@ -2,12 +2,19 @@
 
 CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
 
+	{
+		IRP_MJ_CREATE,
+		FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO ,
+		PreCreate,
+		PostCreate 
+	},
+	{
+		IRP_MJ_CLEANUP,
+		FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO,
+		PreCleanup,
+		PostCleanup
+	},
 #if 0 // TODO - List all of the requests to filter.
-	{ IRP_MJ_CREATE,
-	  0,
-	  PreOperation,
-	  PostOperation },
-
 	{ IRP_MJ_CREATE_NAMED_PIPE,
 	  0,
 	  PreOperation,
@@ -209,27 +216,24 @@ CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
 
 CONST FLT_REGISTRATION FilterRegistration = {
 
-	sizeof(FLT_REGISTRATION),         //  Size
-	FLT_REGISTRATION_VERSION,           //  Version
-	0,                                  //  Flags
+	sizeof(FLT_REGISTRATION),		//  Size
+	FLT_REGISTRATION_VERSION,		//  Version
+	0,								//  Flags
+	ContextRegistration,			//  Context
+	Callbacks,						//  Operation callbacks
+	DriverUnload,					//  MiniFilterUnload
+	InstanceSetup,					//  InstanceSetup
+	InstanceQueryTeardown,			//  InstanceQueryTeardown
+	InstanceTeardownStart,			//  InstanceTeardownStart
+	InstanceTeardownComplete,		//  InstanceTeardownComplete
 
-	NULL,                               //  Context
-	Callbacks,                          //  Operation callbacks
-
-	DriverUnload,                       //  MiniFilterUnload
-
-	InstanceSetup,                    //  InstanceSetup
-	InstanceQueryTeardown,            //  InstanceQueryTeardown
-	InstanceTeardownStart,            //  InstanceTeardownStart
-	InstanceTeardownComplete,         //  InstanceTeardownComplete
-
-	NULL,                               //  GenerateFileName
-	NULL,                               //  GenerateDestinationFileName
-	NULL                                //  NormalizeNameComponent
+	NULL,							//  GenerateFileName
+	NULL,							//  GenerateDestinationFileName
+	NULL							//  NormalizeNameComponent
 
 };
 
-
+#if 0
 
 /*************************************************************************
 	MiniFilter callback routines.
@@ -500,3 +504,4 @@ Return Value:
 			(iopb->MinorFunction == IRP_MN_NOTIFY_CHANGE_DIRECTORY))
 			);
 }
+#endif

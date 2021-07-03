@@ -22,11 +22,13 @@
 #include "driver.common.h"
 #include "Config.h"
 #include "CThreadPool.h"
+#include "FilterContext.h"
 #include "md5.h"
 #include "crc64.h"
 
 #pragma comment(lib, "ntstrsafe.lib")
 #pragma comment(lib, "fltmgr.lib")
+#pragma comment(lib, "wdmsec.lib")
 
 #ifdef _WIN64
 #pragma warning(disable: 4390 4311 4302)
@@ -381,7 +383,7 @@ InstanceQueryTeardown(
 );
 
 FLT_PREOP_CALLBACK_STATUS
-PreOperation(
+PreCreate(
 	_Inout_ PFLT_CALLBACK_DATA Data,
 	_In_ PCFLT_RELATED_OBJECTS FltObjects,
 	_Flt_CompletionContext_Outptr_ PVOID *CompletionContext
@@ -396,7 +398,45 @@ OperationStatusCallback(
 );
 
 FLT_POSTOP_CALLBACK_STATUS
-PostOperation(
+PostCreate(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+);
+
+FLT_PREOP_CALLBACK_STATUS	PreCleanup(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
+FLT_POSTOP_CALLBACK_STATUS
+PostCleanup(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+);
+
+FLT_PREOP_CALLBACK_STATUS	PreRead(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
+FLT_POSTOP_CALLBACK_STATUS
+PostRead(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+);
+FLT_PREOP_CALLBACK_STATUS	PreWrite(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
+FLT_POSTOP_CALLBACK_STATUS
+PostWrite(
 	_Inout_ PFLT_CALLBACK_DATA Data,
 	_In_ PCFLT_RELATED_OBJECTS FltObjects,
 	_In_opt_ PVOID CompletionContext,

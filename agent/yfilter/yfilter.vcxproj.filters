@@ -76,15 +76,15 @@
     <ClInclude Include="..\yfilterctrl\resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="FilterContext.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Config.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Instance.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="minifilter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="port.cpp">
@@ -118,6 +118,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="md5.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="File.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Filter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FilterContext.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
