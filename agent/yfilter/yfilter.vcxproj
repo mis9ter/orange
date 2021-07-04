@@ -199,6 +199,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="..\module\crcspeed\crc64speed.h" />
     <ClInclude Include="..\module\crcspeed\crcspeed.h" />
     <ClInclude Include="..\yfilterctrl\resource.h" />
+    <ClInclude Include="CFileTable.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="CProcessTable.h" />
     <ClInclude Include="CQueue.h" />

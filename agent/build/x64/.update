@@ -1,0 +1,98 @@
+{
+	"action" : 
+	{
+		"post" : 
+		[
+			"sc start orange.driver"
+		],
+		"pre" : 
+		[
+			"sc.exe stop orange.driver",
+			"cmd.exe /c del *.ddl"
+		]
+	},
+	"file" : 
+	[
+		{
+			"apath" : "@orange.exe",
+			"hash" : 17568984212607141573,
+			"name" : "orange.exe",
+			"path" : "orange.exe",
+			"size" : 733184,
+			"time" : 
+			{
+				"creation" : 
+				{
+					"high" : 30894711,
+					"low" : -1086821477
+				},
+				"lastwrite" : 
+				{
+					"high" : 30894873,
+					"low" : 110926592
+				}
+			}
+		},
+		{
+			"apath" : "@orange.sys",
+			"hash" : 8056218864355256506,
+			"name" : "orange.sys",
+			"path" : "orange.sys",
+			"size" : 105656,
+			"time" : 
+			{
+				"creation" : 
+				{
+					"high" : 30893260,
+					"low" : 1355519126
+				},
+				"lastwrite" : 
+				{
+					"high" : 30896352,
+					"low" : 246576812
+				}
+			}
+		},
+		{
+			"apath" : "@orangedb.exe",
+			"hash" : 9438202820626402119,
+			"name" : "orangedb.exe",
+			"path" : "orangedb.exe",
+			"size" : 1509888,
+			"time" : 
+			{
+				"creation" : 
+				{
+					"high" : 30894864,
+					"low" : 1501823913
+				},
+				"lastwrite" : 
+				{
+					"high" : 30894871,
+					"low" : -215260611
+				}
+			}
+		},
+		{
+			"apath" : "@update.exe",
+			"hash" : 5959093438507843362,
+			"name" : "update.exe",
+			"path" : "update.exe",
+			"size" : 233984,
+			"time" : 
+			{
+				"creation" : 
+				{
+					"high" : 30894699,
+					"low" : -893071239
+				},
+				"lastwrite" : 
+				{
+					"high" : 30894871,
+					"low" : 1500861184
+				}
+			}
+		}
+	],
+	"url" : "http://download.orangeworks.org"
+}

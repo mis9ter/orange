@@ -7,7 +7,8 @@
 typedef GUID UUID;
 #endif UUID
 
-typedef	uint64_t				PROCUID;
+typedef uint64_t				UID;
+typedef	UID						PROCUID;
 
 #define AGENT_SERVICE_NAME		L"orange"
 #define AGENT_WINDOW_NAME		AGENT_SERVICE_NAME
@@ -106,6 +107,7 @@ namespace YFilter
 			Module,
 			Boot,
 			Registry,
+			File,
 			Count
 		};
 		enum SubType {
@@ -123,6 +125,10 @@ namespace YFilter
 			RegistryCreateKey,
 			RegistryDeleteKey,
 			RegistryRenameKey,
+			FileCreate,
+			FileRead,
+			FileWrite,
+			FileDelete,
 		};
 	};
 	namespace Object
@@ -352,6 +358,33 @@ typedef struct Y_PROCESS_ENTRY
 	STRUID						DevicePathUID;
 	STRUID						CommandUID;
 } Y_PROCESS_ENTRY, *PY_PROCESS_ENTRY;
+
+typedef struct Y_FILE_DATA
+	:
+	public Y_HEADER
+{
+	YFilter::Message::SubType	subType;
+	UID							FileUID;
+	UID							FilePUID;
+	ULONG64						nSize;
+	ULONG						nCount;
+} Y_FILE_DATA, *PY_FILE_DATA;
+
+typedef struct Y_FILE_STRING
+{
+	Y_STRING					Path;
+} Y_FILE_STRING, *PY_FILE_STRING;
+
+typedef struct Y_FILE_MESSAGE 
+	:
+	public	Y_FILE_DATA,
+	public	Y_FILE_STRING
+
+{
+
+} Y_FILE_MESSAGE, *PY_FILE_MESSAGE;
+
+
 
 typedef struct Y_REGISTRY_DATA
 	:

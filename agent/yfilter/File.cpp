@@ -5,9 +5,31 @@ typedef struct Y_FILE_CONTEXT {
 	LARGE_INTEGER		times[2];
 	HANDLE				PID;
 	HANDLE				TID;
+	ULONG				SID;
 } Y_FILE_CONTEXT, *PY_FILE_CONTEXT;
 
-PY_FILE_CONTEXT		CreateFileContext() {
+static	CFileTable		g_file;
+
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(NONPAGE, FileTable)
+#endif
+
+CFileTable *	FileTable()
+{
+	return &g_file;
+}
+void			CreateFileTable()
+{
+	g_file.Initialize(false);
+}
+void			DestroyFileTable()
+{
+	g_file.Destroy();
+}
+
+
+
+PY_FILE_CONTEXT			CreateFileContext() {
 	PY_FILE_CONTEXT		p	= (PY_FILE_CONTEXT)CMemory::Allocate(PagedPool, sizeof(Y_FILE_CONTEXT), 'elif');
 	if( p ) {
 		KeQuerySystemTime(&p->times[0]);
@@ -18,9 +40,123 @@ PY_FILE_CONTEXT		CreateFileContext() {
 	}
 	return p;
 }
-void				ReleaseFileContext(PY_FILE_CONTEXT p) {
+void					ReleaseFileContext(PY_FILE_CONTEXT p) {
 	if( p )	CMemory::Free(p);
 }
+PY_STREAMHANDLE_CONTEXT	CreateStreamHandle() {
+	if( NULL == Config() )	return NULL;
+	PY_STREAMHANDLE_CONTEXT		p	= NULL;
+
+	NTSTATUS		status;
+	status	= FltAllocateContext(Config()->pFilter, FLT_STREAMHANDLE_CONTEXT, 
+				sizeof(Y_STREAMHANDLE_CONTEXT), PagedPool, (PFLT_CONTEXT *)&p);
+	if( NT_SUCCESS(status))	{
+		RtlZeroMemory(p, sizeof(Y_STREAMHANDLE_CONTEXT));
+	}
+	else {
+		__dlog("%-32s FltAllocateContext() failed. result=%08x", __func__, status);
+	}
+	return p;
+}
+void					DeleteStreamHandleCallback(PY_STREAMHANDLE_CONTEXT p) {
+
+	CWSTRBuffer	buf;
+	if (p->pFileNameInfo) {
+		RtlStringCbCopyUnicodeString((PWSTR)buf, buf.CbSize(), &p->pFileNameInfo->Name);
+		FltReleaseFileNameInformation(p->pFileNameInfo);	
+		p->pFileNameInfo	= NULL;
+	}	
+	if( ProcessTable()->IsExisting(p->PID, p, [](
+		bool					bCreationSaved,
+		IN PPROCESS_ENTRY		pEntry,			
+		IN PVOID				pContext		
+		) {
+		UNREFERENCED_PARAMETER(bCreationSaved);
+		UNREFERENCED_PARAMETER(pEntry);
+		PY_STREAMHANDLE_CONTEXT		p	= (PY_STREAMHANDLE_CONTEXT)pContext;	
+		
+		UNREFERENCED_PARAMETER(p);
+	}) ) {
+	
+	}
+	else
+	{
+		__log("%-32s PID:%d is not found.", __func__, (DWORD)p->PID);		
+	}
+
+	if( false == p->bIsDirectory ) {
+		__log("%05d %ws", p->PID, (PWSTR)buf);
+		if( p->read.nCount ) {
+			__log("  read");
+			__log("  nCount:%d", p->read.nCount);
+			__log("  nBytes:%I64d", p->read.nBytes);
+		}
+		if( p->write.nCount ) {
+			__log("  write");
+			__log("  nCount:%d", p->write.nCount);
+			__log("  nBytes:%I64d", p->write.nBytes);
+		}
+	}
+
+}
+void		CreateFileMessage(
+	PFILE_ENTRY			p,
+	PY_FILE_MESSAGE		*pOut
+)
+{
+	WORD	wDataSize	= sizeof(Y_FILE_DATA);
+	WORD	wStringSize	= sizeof(Y_FILE_STRING);
+	wStringSize		+=	GetStringDataSize(&p->FilePath);
+
+	PY_FILE_MESSAGE		pMsg	= NULL;
+	HANDLE				PPID	= GetParentProcessId(p->PID);
+
+	pMsg = (PY_FILE_MESSAGE)CMemory::Allocate(PagedPool, wDataSize+wStringSize, TAG_PROCESS);
+	if (pMsg) 
+	{
+		//__dlog("%-32s message size:%d", __func__, wPacketSize);
+		//__dlog("  header :%d", sizeof(Y_HEADER));
+		//__dlog(" struct  :%d", sizeof(Y_REGISTRY));
+		//__dlog(" regpath :%d", GetStringDataSize(pRegPath));
+		//__dlog(" value   :%d", GetStringDataSize(pRegValueName));
+
+		RtlZeroMemory(pMsg, wDataSize+wStringSize);
+
+		pMsg->mode		= YFilter::Message::Mode::Event;
+		pMsg->category	= YFilter::Message::Category::Registry;
+		//pMsg->subType	= FileTable()->Class2SubType(p->nClass);
+		pMsg->wDataSize	= wDataSize;
+		pMsg->wStringSize	= wStringSize;
+		pMsg->wRevision	= 1;
+
+		pMsg->PUID		= p->PUID;
+		pMsg->PID		= (DWORD)p->PID;
+		pMsg->CPID		= (DWORD)p->PID;
+		pMsg->RPID		= (DWORD)0;
+		pMsg->PPID		= (DWORD)PPID;
+		pMsg->CTID		= (DWORD)p->TID;
+		pMsg->TID		= pMsg->CTID;
+
+		pMsg->FileUID	= p->FileUID;
+		pMsg->FilePUID	= p->FilePUID;
+		pMsg->nCount	= p->nCount;
+		pMsg->nSize		= p->dwSize;
+		WORD		dwStringOffset	= (WORD)(sizeof(Y_REGISTRY_MESSAGE));
+
+		pMsg->Path.wOffset	= dwStringOffset;
+		pMsg->Path.wSize	= GetStringDataSize(&p->FilePath);
+		pMsg->Path.pBuf		= (WCHAR *)((char *)pMsg + dwStringOffset);
+		RtlStringCbCopyUnicodeString(pMsg->Path.pBuf, pMsg->Path.wSize, &p->FilePath);
+		if( pOut ) {
+			*pOut	= pMsg;
+		}
+		else {
+			CMemory::Free(pMsg);
+		}
+	}
+}
+
+
 inline bool	IsNegligibleIO(PETHREAD CONST Thread)
 {
 	//	무시 가능한 녀석들
@@ -261,6 +397,190 @@ BOOLEAN	FLTAPI	IsReadIO(
 	return bReadIo;
 }
 
+FLT_PREOP_CALLBACK_STATUS	PreRead(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
+{
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+	
+	//return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+}
+FLT_POSTOP_CALLBACK_STATUS	PostReadSafe(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+)
+{
+	UNREFERENCED_PARAMETER(Flags);
+	UNREFERENCED_PARAMETER(CompletionContext);
+	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
+	HANDLE						PID		= (HANDLE)FltGetRequestorProcess(Data);
+	PY_STREAMHANDLE_CONTEXT		pStreamHandleContext	= NULL;
+
+	UNREFERENCED_PARAMETER(PID);
+
+	LARGE_INTEGER				offset	= {0,};
+	ULONG						nBytes	= 0;
+
+	__try {
+		//	[TODO]	delete stream handle
+		if( NT_SUCCESS(FltGetStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject, 
+			(PFLT_CONTEXT *)&pStreamHandleContext)) ) {
+
+		}
+		else {
+			__leave;
+		}
+
+		switch( Data->Iopb->MajorFunction ) {
+			case IRP_MJ_MDL_READ:
+				offset.QuadPart		= Data->Iopb->Parameters.MdlRead.FileOffset.QuadPart;
+				nBytes				= Data->Iopb->Parameters.MdlRead.Length;
+			break;
+
+			case IRP_MJ_READ:
+				offset.QuadPart		= Data->Iopb->Parameters.Read.ByteOffset.QuadPart;
+				nBytes				= (ULONG)Data->IoStatus.Information;
+			break;
+		
+		}
+		if( pStreamHandleContext->read.nCount ) {
+			KeQuerySystemTime(&pStreamHandleContext->read.firstTime);		
+		}
+		InterlockedIncrement(&pStreamHandleContext->read.nCount);
+		InterlockedAdd64(&pStreamHandleContext->read.nBytes, nBytes);
+		KeQuerySystemTime(&pStreamHandleContext->read.lastTime);	
+		if( NT_SUCCESS(Data->IoStatus.Status) ) {
+			if( pStreamHandleContext->read.nLastOffset < offset.QuadPart + nBytes)
+				InterlockedExchange64(&pStreamHandleContext->read.nLastOffset, offset.QuadPart+nBytes);
+			if( pStreamHandleContext->read.nStartOffset > offset.QuadPart )
+				InterlockedExchange64(&pStreamHandleContext->read.nStartOffset, offset.QuadPart);
+		}
+	}
+	__finally {
+		if( pStreamHandleContext )		FltReleaseContext(pStreamHandleContext);
+
+	}
+	return status;
+}
+FLT_POSTOP_CALLBACK_STATUS	PostRead(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+)
+{
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+	UNREFERENCED_PARAMETER(Flags);
+
+	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
+	__try
+	{
+		if( FLT_IS_FASTIO_OPERATION(Data) ) {
+			//__dlog("%-32s FLT_IS_FASTIO_OPERATION", __func__);
+			status	= PostReadSafe(Data, FltObjects, CompletionContext, Flags);		
+			__leave;
+		}
+		if( FALSE == FltDoCompletionProcessingWhenSafe(Data, FltObjects, CompletionContext, Flags, 
+			PostReadSafe, &status) ) {
+			Data->IoStatus.Status = STATUS_UNSUCCESSFUL;
+			Data->IoStatus.Information = 0;
+		}
+	}
+	__finally {
+	
+	
+	}
+	return status;
+}
+FLT_PREOP_CALLBACK_STATUS	PreWrite(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
+{
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+
+	//return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+}
+FLT_POSTOP_CALLBACK_STATUS	PostWriteSafe(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+)
+{
+	UNREFERENCED_PARAMETER(Flags);
+	UNREFERENCED_PARAMETER(CompletionContext);
+	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
+	HANDLE						PID		= (HANDLE)FltGetRequestorProcess(Data);
+	PY_STREAMHANDLE_CONTEXT		p	= NULL;
+
+	UNREFERENCED_PARAMETER(PID);
+
+	__try {
+		if( NT_SUCCESS(FltGetStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject, 
+			(PFLT_CONTEXT *)&p)) ) {
+
+		}
+		else {
+			//__dlog("%-32s pStreamHandleContext:NULL", __func__);
+			__leave;
+		}
+
+		if( NT_SUCCESS(Data->IoStatus.Status) ) {
+			InterlockedIncrement(&p->write.nCount);
+			InterlockedAdd64(&p->write.nBytes, Data->Iopb->Parameters.Write.Length);
+		}
+		else {
+			//__log("%-32s FAILED", __func__);
+		}
+	}
+	__finally {
+		if( p )		FltReleaseContext(p);
+
+	}
+	return status;
+}
+FLT_POSTOP_CALLBACK_STATUS	PostWrite(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+)
+{
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+	UNREFERENCED_PARAMETER(Flags);
+
+	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
+
+	__try
+	{
+		if( FALSE == FltDoCompletionProcessingWhenSafe(Data, FltObjects, CompletionContext, Flags, 
+			PostWriteSafe, &status) ) {
+			Data->IoStatus.Status = STATUS_UNSUCCESSFUL;
+			Data->IoStatus.Information = 0;
+		}
+	}
+	__finally {
+
+
+	}
+	return status;
+}
 
 FLT_PREOP_CALLBACK_STATUS	PreCreate(
 	_Inout_ PFLT_CALLBACK_DATA Data,
@@ -291,10 +611,12 @@ FLT_PREOP_CALLBACK_STATUS	PreCreate(
 			if (false == IsWriteIO(accessMask, disposition, createOption))		__leave;		
 			PY_FILE_CONTEXT		p	= CreateFileContext();
 
-			*((PY_FILE_CONTEXT *)CompletionContext)	= p;
-			//pFileNameInfo = FltGetFileName(Data, FltObjects, &bIsDirectory);
-			//if( NULL == pFileNameInfo || NULL == pFileNameInfo->Name.Buffer )	__leave;
-			//__log("%-32s %wZ", __func__, pFileNameInfo->Name);
+			if( p ) {
+				*((PY_FILE_CONTEXT *)CompletionContext)	= p;
+				p->PID	= (HANDLE)FltGetRequestorProcessId(Data);
+				FltGetRequestorSessionId(Data, &p->SID);
+				p->TID	= PsGetThreadId(Data->Thread);
+			}
 		}
 		__finally {
 			if (pFileNameInfo)	FltReleaseFileNameInformation(pFileNameInfo);
@@ -315,43 +637,63 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 	UNREFERENCED_PARAMETER(CompletionContext);
 	UNREFERENCED_PARAMETER(Flags);
 
-	PFILE_OBJECT			pFileObject		= NULL;
-	PDEVICE_OBJECT			pDeviceObject	= NULL;
+	FLT_POSTOP_CALLBACK_STATUS	ret	= FLT_POSTOP_FINISHED_PROCESSING;
+	PY_FILE_CONTEXT				pContext		= (PY_FILE_CONTEXT)CompletionContext;
+	PY_STREAMHANDLE_CONTEXT		p	= NULL;
+	NTSTATUS					status	= STATUS_SUCCESS;
+	PFLT_FILE_NAME_INFORMATION	pFileNameInfo	= NULL;
 
-	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
-	PFLT_FILE_NAME_INFORMATION	pFileNameInfo = NULL;
+	FILE_CALLBACK_ARG			arg	= {NULL,};
 
-	PY_FILE_CONTEXT				pContext	= (PY_FILE_CONTEXT)CompletionContext;
-	CFltObjectReference			filter(Config()->pFilter);
+	arg.PID		= (HANDLE)FltGetRequestorProcessId(Data);
+	FltGetRequestorSessionId(Data, &arg.SID);
+	arg.TID		= PsGetThreadId(Data->Thread);
 
 	__try {
-		pFileObject		= Data->Iopb->TargetFileObject;
-		if( pFileObject ) {
-			pDeviceObject	= IoGetRelatedDeviceObject(pFileObject);
-			if( pDeviceObject ) {
-				if( FILE_DEVICE_MAILSLOT == pDeviceObject->DeviceType	||
-					FILE_DEVICE_NAMED_PIPE == pDeviceObject->DeviceType )
-					__leave;
-			}	
-		}
 		if (!NT_SUCCESS( Data->IoStatus.Status ) || (STATUS_REPARSE == Data->IoStatus.Status)) 
 			__leave;
 
-		bool						bIsDirectory;		
-		if( filter.Reference() ) {
-			ACCESS_MASK accessMask = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
-			ULONG		disposition = (Data->Iopb->Parameters.Create.Options >> 24) & 0xFF;
-			ULONG		createOption = Data->Iopb->Parameters.Create.Options & 0x00FFFFFF;
+		if( !ProcessTable()->IsExisting(arg.PID, &arg, [](
+			bool					bCreationSaved,
+			IN PPROCESS_ENTRY		pEntry,			
+			IN PVOID				pContext		
+		) {
+			UNREFERENCED_PARAMETER(bCreationSaved);
+			PFILE_CALLBACK_ARG		p	= (PFILE_CALLBACK_ARG)pContext;			
+			p->PUID		= pEntry->PUID;
+		}) ) {
+			__log("%-32s PID:%d is not found.", __func__, (DWORD)arg.PID);		
+		}
+		status = FltGetFileNameInformation(
+					Data, FLT_FILE_NAME_OPENED | FLT_FILE_NAME_QUERY_ALWAYS_ALLOW_CACHE_LOOKUP,
+					&pFileNameInfo);
+		if( NT_FAILED(status))	__leave;
+		status	= FltParseFileNameInformation(pFileNameInfo);
+		if( NT_FAILED(status))	__leave;
 
-			UNREFERENCED_PARAMETER(accessMask);
-			UNREFERENCED_PARAMETER(disposition);
-			UNREFERENCED_PARAMETER(createOption);
+		p	= CreateStreamHandle();
+		if( NULL == p )	__leave;
 
-			pFileNameInfo = FltGetFileName(Data, FltObjects, &bIsDirectory);
-			if( NULL == pFileNameInfo || NULL == pFileNameInfo->Name.Buffer )	{
-				//__dlog("%-32s FltGetFileName() failed.", __func__);
-				__leave;
-			}
+		status = FltSetStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject,
+					FLT_SET_CONTEXT_REPLACE_IF_EXISTS, p, NULL);
+		if( NT_FAILED(status)) {
+			FltReleaseContext(p);	
+			p	= NULL;
+			__leave;
+		}	
+		p->PID				= arg.PID;
+		p->PUID				= arg.PUID;
+		p->TID				= arg.TID;
+		p->pFileNameInfo	= pFileNameInfo;
+		FltReferenceFileNameInformation(p->pFileNameInfo);
+
+		FltIsDirectory(Data->Iopb->TargetFileObject, FltObjects->Instance, &p->bIsDirectory);
+		p->accessMask	= Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+		p->disposition	= (Data->Iopb->Parameters.Create.Options >> 24) & 0xFF;
+		p->createOption	= Data->Iopb->Parameters.Create.Options & 0x00FFFFFF;
+
+			//p->pFileNameInfo	= pFileNameInfo;
+			//pFileNameInfo		= NULL;
 			/*
 			BOOLEAN RtlTimeToSecondsSince1970(
   PLARGE_INTEGER Time,
@@ -359,30 +701,26 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 );
 			
 			*/
-			if( pContext ) {
-				KeQuerySystemTime(&pContext->times[1]);
-				if( false == bIsDirectory )	{
-					//RtlTimeToSecondsSince1970()
-					DWORD	s	= (DWORD)(pContext->times[1].QuadPart-pContext->times[0].QuadPart);
-					if( s > 1000 ) {
-						__log("%-32s %wZ", __func__, pFileNameInfo->Name);
-						__log("  time       :%07d", s);
-						__log("  access     :%08x", accessMask);
-						__log("  disposition:%08x", disposition);
-						__log("  create     :%08x", createOption);
-					}
+		if( pContext ) {
+			KeQuerySystemTime(&pContext->times[1]);
+			if( false == p->bIsDirectory )	{
+				//RtlTimeToSecondsSince1970()
+				DWORD	s	= (DWORD)(pContext->times[1].QuadPart-pContext->times[0].QuadPart);
+				if( s > 1000 ) {
+					__log("%-32s %wZ", __func__, p->pFileNameInfo->Name);
+					__log("  time       :%07d", s);
+					__log("  access     :%08x", p->accessMask);
+					__log("  disposition:%08x", p->disposition);
+					__log("  create     :%08x", p->createOption);
 				}
 			}
 		}
 	} __finally {
 	
-		if (pFileNameInfo)			FltReleaseFileNameInformation(pFileNameInfo);
-		if( CompletionContext )		{
-		
-			CMemory::Free(CompletionContext);
-		}
+		if (pFileNameInfo)	FltReleaseFileNameInformation(pFileNameInfo);
+		if( p)				FltReleaseContext(p);
 	}
-	return status;
+	return ret;
 }
 FLT_POSTOP_CALLBACK_STATUS	PostCreate(
 	_Inout_ PFLT_CALLBACK_DATA Data,
@@ -397,17 +735,36 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreate(
 	UNREFERENCED_PARAMETER(Flags);
 
 	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
+	PFILE_OBJECT			pFileObject		= NULL;
+	PDEVICE_OBJECT			pDeviceObject	= NULL;
+
 	__try {
 		if( FlagOn(Flags, FLTFL_POST_OPERATION_DRAINING)	||
 			IsNegligibleIO(Data->Thread) )
 			__leave;
 
+		pFileObject		= Data->Iopb->TargetFileObject;
+		if( pFileObject ) {
+			pDeviceObject	= IoGetRelatedDeviceObject(pFileObject);
+			if( pDeviceObject ) {
+				if( FILE_DEVICE_MAILSLOT == pDeviceObject->DeviceType	||
+					FILE_DEVICE_NAMED_PIPE == pDeviceObject->DeviceType ) {
+					//	[TODO]
+					//	IRP_MJ_CREATE_MAILSLOT이 따로 있는데요?
+
+					__dlog("%-32s DeviceType:%d", __func__, pDeviceObject->DeviceType);
+					__leave;
+				}
+			}	
+		}
 		if( FALSE == FltDoCompletionProcessingWhenSafe(Data, FltObjects, CompletionContext, Flags, 
 			PostCreateSafe, &status) ) {
 			Data->IoStatus.Status = STATUS_UNSUCCESSFUL;
 			Data->IoStatus.Information = 0;
 		}
 	} __finally {
+		if( CompletionContext )
+			ReleaseFileContext((PY_FILE_CONTEXT)CompletionContext);
 
 	}
 	return status;
@@ -456,14 +813,28 @@ FLT_POSTOP_CALLBACK_STATUS	PostCleanupSafe (
 
 	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
 	HANDLE						PID		= (HANDLE)FltGetRequestorProcess(Data);
+	PY_STREAMHANDLE_CONTEXT		pStreamHandleContext	= NULL;
 
 	UNREFERENCED_PARAMETER(PID);
 
 	__try {
+		//	[TODO]	delete stream handle
+		if( NT_SUCCESS(FltDeleteStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject, 
+			(PFLT_CONTEXT *)&pStreamHandleContext)) ) {
+			
+		}
+		else {
+			__leave;
+		}
 
+		if (!NT_SUCCESS( Data->IoStatus.Status ) || (STATUS_REPARSE == Data->IoStatus.Status)) {
+			__leave;
+		}
 
 	} __finally {
-
+		if( pStreamHandleContext ) {
+			FltReleaseContext(pStreamHandleContext);
+		}
 	}
 	return status;
 

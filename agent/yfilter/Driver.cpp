@@ -204,6 +204,7 @@ Return Value:
 		SetMessageThreadCallback(NULL);
 		CreateProcessTable();
 		CreateRegistryTable();
+		CreateFileTable();
 		//pDriverObject->DriverUnload = LegacyDriverUnload;
 		status	= IoCreateDevice(pDriverObject, 0, &Config()->deviceName,
 			FILE_DEVICE_UNKNOWN, 0, TRUE, &Config()->pDeviceObject);
@@ -326,6 +327,7 @@ Return Value:
 			Config()->pFilter = NULL;
 		}
 		MessageThreadPool()->Destroy();
+		DestroyFileTable();
 		DestroyRegistryTable();
 		DestroyProcessTable();
 		DestroyConfig();

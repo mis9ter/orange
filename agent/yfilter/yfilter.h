@@ -496,6 +496,7 @@ NTSTATUS	EventMessage
 EXTERN_C_END
 
 #include "CProcessTable.h"
+#include "CFileTable.h"
 #include "CRegistryTable.h"
 //
 //  Assign text sections for each routine.

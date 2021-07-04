@@ -14,6 +14,31 @@ CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
 		PreCleanup,
 		PostCleanup
 	},
+	{ 
+		IRP_MJ_READ,
+		FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO,
+		PreRead,
+		PostRead
+	},
+	{ 
+		IRP_MJ_MDL_READ,
+		FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO,
+		PreRead,
+		PostRead 
+	},
+	{ 
+		IRP_MJ_MDL_READ_COMPLETE,
+		0,
+		NULL,
+		NULL 
+	},
+	{ 
+		IRP_MJ_WRITE,
+		FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO,
+		PreWrite,
+		PostWrite
+	},
+
 #if 0 // TODO - List all of the requests to filter.
 	{ IRP_MJ_CREATE_NAMED_PIPE,
 	  0,
@@ -25,10 +50,6 @@ CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
 	  PreOperation,
 	  PostOperation },
 
-	{ IRP_MJ_READ,
-	  0,
-	  PreOperation,
-	  PostOperation },
 
 	{ IRP_MJ_WRITE,
 	  0,
@@ -96,11 +117,6 @@ CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
 	  NULL },                               //post operations not supported
 
 	{ IRP_MJ_LOCK_CONTROL,
-	  0,
-	  PreOperation,
-	  PostOperation },
-
-	{ IRP_MJ_CLEANUP,
 	  0,
 	  PreOperation,
 	  PostOperation },
