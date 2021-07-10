@@ -84,7 +84,7 @@ public:
 		}
 		return YFilter::Message::SubType::RegistryUnknown;
 	}
-	ULONG	Flush(HANDLE PID)
+	ULONG			Flush(HANDLE PID)
 	{
 		struct FLUSH_INFO
 		{
@@ -98,6 +98,10 @@ public:
 		info.PID		= PID;
 		KeQueryTickCount(&info.nTicks);
 		info.nCount		= 0;
+
+		__dlog("CFileTable::Flush");
+		if( true )	return 0;
+
 
 		Flush(&info, [](PFILE_ENTRY pEntry, PVOID pContext, bool *pDelete) {
 			struct FLUSH_INFO	*p	= (struct FLUSH_INFO *)pContext;
@@ -166,17 +170,20 @@ public:
 	bool		Add
 	(
 		PFILE_CALLBACK_ARG		p,
-		OUT ULONG				&nCount
+		OUT ULONG				*pnCount
 	)
 	{
-		if (false == IsPossible())	return false;
+		if (false == IsPossible())	{
+			__dlog("%-32s IsPossible()==%d", __func__, false);
+			return false;
+		}
 		BOOLEAN			bRet = false;
 		FILE_ENTRY		entry;
 		PFILE_ENTRY		pEntry = NULL;
 		KIRQL			irql = KeGetCurrentIrql();
 
 		if (irql >= DISPATCH_LEVEL) {
-			__dlog("%s DISPATCH_LEVEL", __FUNCTION__);
+			__dlog("%s DISPATCH_LEVEL", __func__);
 			return false;
 		}
 		RtlZeroMemory(&entry, sizeof(FILE_ENTRY));
@@ -195,6 +202,8 @@ public:
 		KeQueryTickCount(&entry.dwTicks);
 		//	TIME_FIELDS
 		//RtlTimeToTimeFields;
+
+		//__log("%-32s %wZ", __func__, p->pFilePath);
 		__try 
 		{
 			Lock(&irql);
@@ -207,7 +216,7 @@ public:
 				pClass->Update(pEntry, (DWORD)p->dwSize);
 			
 			})) {
-			
+				//__dlog("%-32s %p IsExisting==%d", __func__, entry.PUID, true);
 			
 			}
 			else {
@@ -224,10 +233,16 @@ public:
 				//	If no matching element is found, but the new element cannot be inserted
 				//	(for example, because the AllocateRoutine fails), RtlInsertElementGenericTable returns NULL.
 				//	if( bRet && pEntry ) PrintProcessEntry(__FUNCTION__, pEntry);
+				//__dlog("%-32s RtlInsertElementGenericTable==%d", __func__, bRet);
 				pEntry->nCount++;
-				if( false == bRet && pEntry ) {
-					Update(pEntry, p->nSize);			
-					nCount	= pEntry->nCount;
+				if( pnCount )	*pnCount = RtlNumberGenericTableElements(&m_table);
+				if( bRet ) {
+					
+				}
+				else {
+					if( pEntry ) {
+						Update(pEntry, p->nSize);			
+					}
 				}
 			}
 			Unlock(irql);
@@ -314,6 +329,7 @@ public:
 	{
 		if (false == IsPossible())
 		{
+			__dlog("%-32s IsPossible() == false", __func__);
 			return false;
 		}
 		bool			bRet	= false;
@@ -339,7 +355,7 @@ public:
 		else
 		{
 			//__dlog("%10d not existing");
-			if (pCallback) pCallback(&entry, pCallbackPtr);
+			if (pCallback) pCallback(NULL, pCallbackPtr);
 		}
 		if (bLock)	Unlock(irql);
 		return bRet;
@@ -382,7 +398,7 @@ public:
 		}
 		nCount	= RtlNumberGenericTableElements(&m_table);
 		if( nCount > 100 )
-			__dlog("%-32s T:%d D:%d", __func__, RtlNumberGenericTableElements(&m_table), nCount);
+			__dlog("%-32s T:%d D:%d", "CFileTable::Flush", RtlNumberGenericTableElements(&m_table), nCount);
 		Unlock(irql);
 	}
 	void		Clear()

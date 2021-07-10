@@ -27,6 +27,8 @@ void			DestroyFileTable()
 	g_file.Destroy();
 }
 
+volatile	LONG	g_nStreamHandle;
+volatile	LONG	g_nFileContext;
 
 
 PY_FILE_CONTEXT			CreateFileContext() {
@@ -37,12 +39,18 @@ PY_FILE_CONTEXT			CreateFileContext() {
 		p->times[1].QuadPart	= 0;
 		p->PID					= PsGetCurrentProcessId();
 		p->TID					= PsGetCurrentThreadId();	
+
+		//__dlog("%-32s %06d	%p", __func__, InterlockedIncrement(&g_nFileContext), p);
 	}
 	return p;
 }
 void					ReleaseFileContext(PY_FILE_CONTEXT p) {
-	if( p )	CMemory::Free(p);
+	if( p )	{
+		CMemory::Free(p);
+		//__dlog("%-32s %06d	%p", __func__, InterlockedDecrement(&g_nFileContext), p);
+	}
 }
+
 PY_STREAMHANDLE_CONTEXT	CreateStreamHandle() {
 	if( NULL == Config() )	return NULL;
 	PY_STREAMHANDLE_CONTEXT		p	= NULL;
@@ -52,6 +60,8 @@ PY_STREAMHANDLE_CONTEXT	CreateStreamHandle() {
 				sizeof(Y_STREAMHANDLE_CONTEXT), PagedPool, (PFLT_CONTEXT *)&p);
 	if( NT_SUCCESS(status))	{
 		RtlZeroMemory(p, sizeof(Y_STREAMHANDLE_CONTEXT));
+
+		//__log("%-32s %06d	%p", __func__, InterlockedIncrement(&g_nStreamHandle), p);
 	}
 	else {
 		__dlog("%-32s FltAllocateContext() failed. result=%08x", __func__, status);
@@ -85,19 +95,21 @@ void					DeleteStreamHandleCallback(PY_STREAMHANDLE_CONTEXT p) {
 	}
 
 	if( false == p->bIsDirectory ) {
-		__log("%05d %ws", p->PID, (PWSTR)buf);
-		if( p->read.nCount ) {
-			__log("  read");
-			__log("  nCount:%d", p->read.nCount);
-			__log("  nBytes:%I64d", p->read.nBytes);
-		}
-		if( p->write.nCount ) {
-			__log("  write");
-			__log("  nCount:%d", p->write.nCount);
-			__log("  nBytes:%I64d", p->write.nBytes);
+		if( false ) {
+			__log("%05d %ws", p->PID, (PWSTR)buf);
+			if( p->read.nCount ) {
+				__log("  read");
+				__log("  nCount:%d", p->read.nCount);
+				__log("  nBytes:%I64d", p->read.nBytes);
+			}
+			if( p->write.nCount ) {
+				__log("  write");
+				__log("  nCount:%d", p->write.nCount);
+				__log("  nBytes:%I64d", p->write.nBytes);
+			}
 		}
 	}
-
+	//__log("%-32s %06d	%p", __func__, InterlockedDecrement(&g_nStreamHandle), p);
 }
 void		CreateFileMessage(
 	PFILE_ENTRY			p,
@@ -155,8 +167,6 @@ void		CreateFileMessage(
 		}
 	}
 }
-
-
 inline bool	IsNegligibleIO(PETHREAD CONST Thread)
 {
 	//	무시 가능한 녀석들
@@ -624,7 +634,6 @@ FLT_PREOP_CALLBACK_STATUS	PreCreate(
 	}
 	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
-
 FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 	_Inout_ PFLT_CALLBACK_DATA Data,
 	_In_ PCFLT_RELATED_OBJECTS FltObjects,
@@ -653,19 +662,8 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 		if (!NT_SUCCESS( Data->IoStatus.Status ) || (STATUS_REPARSE == Data->IoStatus.Status)) 
 			__leave;
 
-		if( !ProcessTable()->IsExisting(arg.PID, &arg, [](
-			bool					bCreationSaved,
-			IN PPROCESS_ENTRY		pEntry,			
-			IN PVOID				pContext		
-		) {
-			UNREFERENCED_PARAMETER(bCreationSaved);
-			PFILE_CALLBACK_ARG		p	= (PFILE_CALLBACK_ARG)pContext;			
-			p->PUID		= pEntry->PUID;
-		}) ) {
-			__log("%-32s PID:%d is not found.", __func__, (DWORD)arg.PID);		
-		}
 		status = FltGetFileNameInformation(
-					Data, FLT_FILE_NAME_OPENED | FLT_FILE_NAME_QUERY_ALWAYS_ALLOW_CACHE_LOOKUP,
+					Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_ALWAYS_ALLOW_CACHE_LOOKUP,
 					&pFileNameInfo);
 		if( NT_FAILED(status))	__leave;
 		status	= FltParseFileNameInformation(pFileNameInfo);
@@ -681,6 +679,19 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 			p	= NULL;
 			__leave;
 		}	
+		arg.pFilePath	= &pFileNameInfo->Name;
+		if( !ProcessTable()->IsExisting(arg.PID, &arg, [](
+			bool					bCreationSaved,
+			IN PPROCESS_ENTRY		pEntry,			
+			IN PVOID				pContext		
+			) {
+			UNREFERENCED_PARAMETER(bCreationSaved);
+			PFILE_CALLBACK_ARG		p	= (PFILE_CALLBACK_ARG)pContext;			
+			p->PUID		= pEntry->PUID;
+		}) ) {
+			__log("%-32s PID:%d is not found.", __func__, (DWORD)arg.PID);		
+		}
+
 		p->PID				= arg.PID;
 		p->PUID				= arg.PUID;
 		p->TID				= arg.TID;
@@ -706,7 +717,7 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 			if( false == p->bIsDirectory )	{
 				//RtlTimeToSecondsSince1970()
 				DWORD	s	= (DWORD)(pContext->times[1].QuadPart-pContext->times[0].QuadPart);
-				if( s > 1000 ) {
+				if( false || s > 10000 ) {
 					__log("%-32s %wZ", __func__, p->pFileNameInfo->Name);
 					__log("  time       :%07d", s);
 					__log("  access     :%08x", p->accessMask);
@@ -714,6 +725,15 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 					__log("  create     :%08x", p->createOption);
 				}
 			}
+		}
+
+		ULONG	nCount	= 0;
+		if( FileTable()->Add(&arg, &nCount) ) {
+			//__log("%-32s %d", "File::PostCreateSafe", nCount);
+
+		}
+		else {
+			//__log("%-32s FileTable()->Add() failed.", __func__);		
 		}
 	} __finally {
 	
@@ -781,12 +801,16 @@ FLT_PREOP_CALLBACK_STATUS	PreCleanup(
 	// 필터링 중지거나 커널 쓰레드인 경우 체크하지 않음 
 	//	(추후 커널레벨에서의 방어가 필요한 경우 IoIsSystemThread 처리 부분 제거)
 
+	//__log("%-32s", __func__);
+
 	if( IsNegligibleIO(Data->Thread)		||
 		KernelMode == Data->RequestorMode	||
 		FlagOn(Data->Iopb->OperationFlags, SL_OPEN_PAGING_FILE)
-		)	
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		) {
+		__log("%-32s skip", __func__);
 
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	}
 	CFltObjectReference		filter(Config()->pFilter);
 	if( filter.Reference() ) {
 
@@ -811,19 +835,23 @@ FLT_POSTOP_CALLBACK_STATUS	PostCleanupSafe (
 	UNREFERENCED_PARAMETER(CompletionContext);
 	UNREFERENCED_PARAMETER(Flags);
 
-	FLT_POSTOP_CALLBACK_STATUS	status	= FLT_POSTOP_FINISHED_PROCESSING;
-	HANDLE						PID		= (HANDLE)FltGetRequestorProcess(Data);
-	PY_STREAMHANDLE_CONTEXT		pStreamHandleContext	= NULL;
+	FLT_POSTOP_CALLBACK_STATUS	status		= FLT_POSTOP_FINISHED_PROCESSING;
+	HANDLE						PID			= (HANDLE)FltGetRequestorProcess(Data);
+	PY_STREAMHANDLE_CONTEXT		pContext	= NULL;
 
 	UNREFERENCED_PARAMETER(PID);
-
 	__try {
+		if (FlagOn(Flags, FLTFL_POST_OPERATION_DRAINING))
+		{
+			__leave;
+		}
 		//	[TODO]	delete stream handle
 		if( NT_SUCCESS(FltDeleteStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject, 
-			(PFLT_CONTEXT *)&pStreamHandleContext)) ) {
-			
+			(PFLT_CONTEXT *)&pContext)) ) {
+			//__log("%-32s %wZ", __func__, &pContext->pFileNameInfo->Name);
 		}
 		else {
+			//__log("%-32s FltDeleteStreamHandleContext() failed.", __func__);
 			__leave;
 		}
 
@@ -832,8 +860,20 @@ FLT_POSTOP_CALLBACK_STATUS	PostCleanupSafe (
 		}
 
 	} __finally {
-		if( pStreamHandleContext ) {
-			FltReleaseContext(pStreamHandleContext);
+		if( pContext ) {			
+			FileTable()->Remove(pContext->PUID, true, pContext, 
+				[](PFILE_ENTRY pEntry,PVOID	p) {
+				UNREFERENCED_PARAMETER(pEntry);
+				PY_STREAMHANDLE_CONTEXT	pContext	= (PY_STREAMHANDLE_CONTEXT)p;
+				if( pContext ) {
+					
+				
+				}
+				if( pEntry )
+					__dlog("%-32s %p removed", __func__, pEntry->PUID);
+			
+			});
+			FltReleaseContext(pContext);
 		}
 	}
 	return status;
