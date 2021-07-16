@@ -3,12 +3,11 @@
 	{
 		"post" : 
 		[
-			"sc start orange.driver"
+			"sc.exe start orange.driver"
 		],
 		"pre" : 
 		[
-			"sc.exe stop orange.driver",
-			"cmd.exe /c del *.ddl"
+			"sc.exe stop orange.driver"
 		]
 	},
 	"file" : 
@@ -35,10 +34,10 @@
 		},
 		{
 			"apath" : "@orange.sys",
-			"hash" : 17769089374806596536,
+			"hash" : 1212078303302702688,
 			"name" : "orange.sys",
 			"path" : "orange.sys",
-			"size" : 108752,
+			"size" : 111312,
 			"time" : 
 			{
 				"creation" : 
@@ -48,8 +47,8 @@
 				},
 				"lastwrite" : 
 				{
-					"high" : 30897544,
-					"low" : 1020387587
+					"high" : 30898666,
+					"low" : 841102166
 				}
 			}
 		},

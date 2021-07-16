@@ -30,7 +30,6 @@ void			DestroyFileTable()
 volatile	LONG	g_nStreamHandle;
 volatile	LONG	g_nFileContext;
 
-
 PY_FILE_CONTEXT			CreateFileContext() {
 	PY_FILE_CONTEXT		p	= (PY_FILE_CONTEXT)CMemory::Allocate(PagedPool, sizeof(Y_FILE_CONTEXT), 'elif');
 	if( p ) {
@@ -50,7 +49,6 @@ void					ReleaseFileContext(PY_FILE_CONTEXT p) {
 		//__dlog("%-32s %06d	%p", __func__, InterlockedDecrement(&g_nFileContext), p);
 	}
 }
-
 PY_STREAMHANDLE_CONTEXT	CreateStreamHandle() {
 	if( NULL == Config() )	return NULL;
 	PY_STREAMHANDLE_CONTEXT		p	= NULL;
@@ -111,7 +109,7 @@ void					DeleteStreamHandleCallback(PY_STREAMHANDLE_CONTEXT p) {
 	}
 	//__log("%-32s %06d	%p", __func__, InterlockedDecrement(&g_nStreamHandle), p);
 }
-void		CreateFileMessage(
+void					CreateFileMessage(
 	PFILE_ENTRY			p,
 	PY_FILE_MESSAGE		*pOut
 )
@@ -149,10 +147,10 @@ void		CreateFileMessage(
 		pMsg->CTID		= (DWORD)p->TID;
 		pMsg->TID		= pMsg->CTID;
 
-		pMsg->FileUID	= p->FileUID;
-		pMsg->FilePUID	= p->FilePUID;
+		pMsg->FUID		= p->FUID;
+		pMsg->FPUID		= p->FPUID;
 		pMsg->nCount	= p->nCount;
-		pMsg->nSize		= p->dwSize;
+		pMsg->nSize		= p->nSize;
 		WORD		dwStringOffset	= (WORD)(sizeof(Y_REGISTRY_MESSAGE));
 
 		pMsg->Path.wOffset	= dwStringOffset;
@@ -167,7 +165,7 @@ void		CreateFileMessage(
 		}
 	}
 }
-inline bool	IsNegligibleIO(PETHREAD CONST Thread)
+inline bool				IsNegligibleIO(PETHREAD CONST Thread)
 {
 	//	무시 가능한 녀석들
 	//	필터링 중지거나 커널 쓰레드인 경우 체크하지 않음 
@@ -187,7 +185,7 @@ inline bool	IsNegligibleIO(PETHREAD CONST Thread)
 	}
 	return false;
 }
-inline bool	IsWriteIO(
+inline bool				IsWriteIO(
 	ACCESS_MASK     accessMask,
 	ULONG           disposition,
 	ULONG			createOption
@@ -359,8 +357,7 @@ PFLT_FILE_NAME_INFORMATION	FltGetFileName(
 	}
 	return pFileNameInfo;
 }
-
-BOOLEAN	FLTAPI	IsWriteIONew
+BOOLEAN	FLTAPI			IsWriteIONew
 (
 	ACCESS_MASK     accessMask,
 	ULONG           disposition,
@@ -386,7 +383,7 @@ BOOLEAN	FLTAPI	IsWriteIONew
 	}
 	return bWriteIo;
 }
-BOOLEAN	FLTAPI	IsReadIO(
+BOOLEAN	FLTAPI			IsReadIO(
 	ACCESS_MASK     accessMask,
 	ULONG           disposition,
 	ULONG			createOption
@@ -406,7 +403,6 @@ BOOLEAN	FLTAPI	IsReadIO(
 	}
 	return bReadIo;
 }
-
 FLT_PREOP_CALLBACK_STATUS	PreRead(
 	_Inout_ PFLT_CALLBACK_DATA Data,
 	_In_ PCFLT_RELATED_OBJECTS FltObjects,
@@ -439,7 +435,6 @@ FLT_POSTOP_CALLBACK_STATUS	PostReadSafe(
 	ULONG						nBytes	= 0;
 
 	__try {
-		//	[TODO]	delete stream handle
 		if( NT_SUCCESS(FltGetStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject, 
 			(PFLT_CONTEXT *)&pStreamHandleContext)) ) {
 
@@ -457,20 +452,30 @@ FLT_POSTOP_CALLBACK_STATUS	PostReadSafe(
 			case IRP_MJ_READ:
 				offset.QuadPart		= Data->Iopb->Parameters.Read.ByteOffset.QuadPart;
 				nBytes				= (ULONG)Data->IoStatus.Information;
-			break;
-		
+			break;		
 		}
-		if( pStreamHandleContext->read.nCount ) {
+		if( 0 == pStreamHandleContext->read.nCount ) {
 			KeQuerySystemTime(&pStreamHandleContext->read.firstTime);		
 		}
 		InterlockedIncrement(&pStreamHandleContext->read.nCount);
 		InterlockedAdd64(&pStreamHandleContext->read.nBytes, nBytes);
+		InterlockedAdd64(&pStreamHandleContext->nBytes, nBytes);
 		KeQuerySystemTime(&pStreamHandleContext->read.lastTime);	
+
+		//	STATUS_FLT_DISALLOW_FAST_IO
 		if( NT_SUCCESS(Data->IoStatus.Status) ) {
 			if( pStreamHandleContext->read.nLastOffset < offset.QuadPart + nBytes)
 				InterlockedExchange64(&pStreamHandleContext->read.nLastOffset, offset.QuadPart+nBytes);
 			if( pStreamHandleContext->read.nStartOffset > offset.QuadPart )
 				InterlockedExchange64(&pStreamHandleContext->read.nStartOffset, offset.QuadPart);
+		}
+		else if( STATUS_FLT_DISALLOW_FAST_IO == Data->IoStatus.Status ) {
+			__log("STATUS_FLT_DISALLOW_FAST_IO %d", nBytes);
+
+		
+		}
+		else {
+			__log("%-32s status %08x", __func__, Data->IoStatus.Status);
 		}
 	}
 	__finally {
@@ -552,9 +557,10 @@ FLT_POSTOP_CALLBACK_STATUS	PostWriteSafe(
 		if( NT_SUCCESS(Data->IoStatus.Status) ) {
 			InterlockedIncrement(&p->write.nCount);
 			InterlockedAdd64(&p->write.nBytes, Data->Iopb->Parameters.Write.Length);
+			InterlockedAdd64(&p->nBytes, Data->Iopb->Parameters.Write.Length);
 		}
 		else {
-			//__log("%-32s FAILED", __func__);
+			__log("%-32s Status:%08x", __func__, Data->IoStatus.Status);
 		}
 	}
 	__finally {
@@ -591,7 +597,6 @@ FLT_POSTOP_CALLBACK_STATUS	PostWrite(
 	}
 	return status;
 }
-
 FLT_PREOP_CALLBACK_STATUS	PreCreate(
 	_Inout_ PFLT_CALLBACK_DATA Data,
 	_In_ PCFLT_RELATED_OBJECTS FltObjects,
@@ -610,23 +615,34 @@ FLT_PREOP_CALLBACK_STATUS	PreCreate(
 	)	
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
-	CFltObjectReference		filter(Config()->pFilter);
-	if( filter.Reference() ) {
+	//CFltObjectReference		filter(Config()->pFilter);
+	//if( filter.Reference() ) 
+	{
 		ACCESS_MASK accessMask = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
 		ULONG		disposition = (Data->Iopb->Parameters.Create.Options >> 24) & 0xFF;
 		ULONG		createOption = Data->Iopb->Parameters.Create.Options & 0x00FFFFFF;
 
 		PFLT_FILE_NAME_INFORMATION	pFileNameInfo = NULL;
 		__try {
-			if (false == IsWriteIO(accessMask, disposition, createOption))		__leave;		
+			if (false == IsWriteIO(accessMask, disposition, createOption))		__leave;	
+			/*
+			* 딱히 PreCreate 단계에서 생성할 거리가 없어서 일단 보류
 			PY_FILE_CONTEXT		p	= CreateFileContext();
-
 			if( p ) {
 				*((PY_FILE_CONTEXT *)CompletionContext)	= p;
 				p->PID	= (HANDLE)FltGetRequestorProcessId(Data);
 				FltGetRequestorSessionId(Data, &p->SID);
-				p->TID	= PsGetThreadId(Data->Thread);
+
+				//	https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/ns-fltkernel-_flt_callback_data
+				//	Data->Thread는 NULL일 수 있다. 
+				if( Data->Thread ) 
+					p->TID	= PsGetThreadId(Data->Thread);
+				else {
+					__log("%-32s Data->Thread == NULL", __func__);
+					p->TID	= NULL;
+				}
 			}
+			*/
 		}
 		__finally {
 			if (pFileNameInfo)	FltReleaseFileNameInformation(pFileNameInfo);
@@ -648,11 +664,10 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 
 	FLT_POSTOP_CALLBACK_STATUS	ret	= FLT_POSTOP_FINISHED_PROCESSING;
 	PY_FILE_CONTEXT				pContext		= (PY_FILE_CONTEXT)CompletionContext;
-	PY_STREAMHANDLE_CONTEXT		p	= NULL;
-	NTSTATUS					status	= STATUS_SUCCESS;
+	PY_STREAMHANDLE_CONTEXT		pStreamHandle	= NULL;
+	NTSTATUS					status			= STATUS_SUCCESS;
 	PFLT_FILE_NAME_INFORMATION	pFileNameInfo	= NULL;
-
-	FILE_CALLBACK_ARG			arg	= {NULL,};
+	FILE_CALLBACK_ARG			arg				= {NULL,};
 
 	arg.PID		= (HANDLE)FltGetRequestorProcessId(Data);
 	FltGetRequestorSessionId(Data, &arg.SID);
@@ -661,24 +676,31 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 	__try {
 		if (!NT_SUCCESS( Data->IoStatus.Status ) || (STATUS_REPARSE == Data->IoStatus.Status)) 
 			__leave;
-
 		status = FltGetFileNameInformation(
 					Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_ALWAYS_ALLOW_CACHE_LOOKUP,
 					&pFileNameInfo);
 		if( NT_FAILED(status))	__leave;
-		status	= FltParseFileNameInformation(pFileNameInfo);
-		if( NT_FAILED(status))	__leave;
 
-		p	= CreateStreamHandle();
-		if( NULL == p )	__leave;
+		pStreamHandle	= CreateStreamHandle();
+		if( NULL == pStreamHandle )	__leave;
 
 		status = FltSetStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject,
-					FLT_SET_CONTEXT_REPLACE_IF_EXISTS, p, NULL);
+					FLT_SET_CONTEXT_REPLACE_IF_EXISTS, pStreamHandle, NULL);
 		if( NT_FAILED(status)) {
-			FltReleaseContext(p);	
-			p	= NULL;
+			FltReleaseContext(pStreamHandle);	
+			pStreamHandle	= NULL;
 			__leave;
 		}	
+		arg.PID	= (HANDLE)FltGetRequestorProcessId(Data);
+		FltGetRequestorSessionId(Data, &arg.SID);
+		//	https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/ns-fltkernel-_flt_callback_data
+		//	Data->Thread는 NULL일 수 있다. 
+		if( Data->Thread ) 
+			arg.TID	= PsGetThreadId(Data->Thread);
+		else {
+			__log("%-32s Data->Thread == NULL", __func__);
+			arg.TID	= NULL;
+		}
 		arg.pFilePath	= &pFileNameInfo->Name;
 		if( !ProcessTable()->IsExisting(arg.PID, &arg, [](
 			bool					bCreationSaved,
@@ -691,19 +713,27 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 		}) ) {
 			__log("%-32s PID:%d is not found.", __func__, (DWORD)arg.PID);		
 		}
+		pStreamHandle->PID				= arg.PID;
+		pStreamHandle->PUID				= arg.PUID;
+		pStreamHandle->TID				= arg.TID;
+		pStreamHandle->pFileNameInfo	= pFileNameInfo;
+		FltReferenceFileNameInformation(pStreamHandle->pFileNameInfo);
+		FltIsDirectory(Data->Iopb->TargetFileObject, FltObjects->Instance, &pStreamHandle->bIsDirectory);
+		pStreamHandle->accessMask	= Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+		pStreamHandle->disposition	= (Data->Iopb->Parameters.Create.Options >> 24) & 0xFF;
+		pStreamHandle->createOption	= Data->Iopb->Parameters.Create.Options & 0x00FFFFFF;
 
-		p->PID				= arg.PID;
-		p->PUID				= arg.PUID;
-		p->TID				= arg.TID;
-		p->pFileNameInfo	= pFileNameInfo;
-		FltReferenceFileNameInformation(p->pFileNameInfo);
-
-		FltIsDirectory(Data->Iopb->TargetFileObject, FltObjects->Instance, &p->bIsDirectory);
-		p->accessMask	= Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
-		p->disposition	= (Data->Iopb->Parameters.Create.Options >> 24) & 0xFF;
-		p->createOption	= Data->Iopb->Parameters.Create.Options & 0x00FFFFFF;
-
-			//p->pFileNameInfo	= pFileNameInfo;
+		if( FILE_CREATED == Data->IoStatus.Information ) {
+			pStreamHandle->bCreate	= true;
+		} else {
+			
+		}
+		if( pStreamHandle->bCreate ) {
+			__log("%-32s create", __func__);
+			__log("  %wZ", &pStreamHandle->pFileNameInfo->Name);
+			__log("  PID:%d", pStreamHandle->PID);
+		}
+		//p->pFileNameInfo	= pFileNameInfo;
 			//pFileNameInfo		= NULL;
 			/*
 			BOOLEAN RtlTimeToSecondsSince1970(
@@ -713,32 +743,33 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 			
 			*/
 		if( pContext ) {
+			//	Pre / Post 간 시간 측정을 위해서 
 			KeQuerySystemTime(&pContext->times[1]);
-			if( false == p->bIsDirectory )	{
+			if( false == pStreamHandle->bIsDirectory )	{
 				//RtlTimeToSecondsSince1970()
 				DWORD	s	= (DWORD)(pContext->times[1].QuadPart-pContext->times[0].QuadPart);
 				if( false || s > 10000 ) {
-					__log("%-32s %wZ", __func__, p->pFileNameInfo->Name);
+					__log("%-32s %wZ", __func__, pStreamHandle->pFileNameInfo->Name);
 					__log("  time       :%07d", s);
-					__log("  access     :%08x", p->accessMask);
-					__log("  disposition:%08x", p->disposition);
-					__log("  create     :%08x", p->createOption);
+					__log("  access     :%08x", pStreamHandle->accessMask);
+					__log("  disposition:%08x", pStreamHandle->disposition);
+					__log("  create     :%08x", pStreamHandle->createOption);
 				}
 			}
 		}
-
 		ULONG	nCount	= 0;
-		if( FileTable()->Add(&arg, &nCount) ) {
+		if( FileTable()->Add(Data->Iopb->TargetFileObject, &arg, &nCount) ) {
 			//__log("%-32s %d", "File::PostCreateSafe", nCount);
-
 		}
 		else {
-			//__log("%-32s FileTable()->Add() failed.", __func__);		
+			__log("%-32s %p can not add.", __func__, Data->Iopb->TargetFileObject);		
 		}
+		pStreamHandle->FPUID	= arg.FPUID;
+		pStreamHandle->FUID		= arg.FUID;
 	} __finally {
 	
 		if (pFileNameInfo)	FltReleaseFileNameInformation(pFileNameInfo);
-		if( p)				FltReleaseContext(p);
+		if( pStreamHandle)	FltReleaseContext(pStreamHandle);
 	}
 	return ret;
 }
@@ -762,6 +793,10 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreate(
 		if( FlagOn(Flags, FLTFL_POST_OPERATION_DRAINING)	||
 			IsNegligibleIO(Data->Thread) )
 			__leave;
+		if( !NT_SUCCESS(Data->IoStatus.Status)	||
+			(STATUS_REPARSE == Data->IoStatus.Status) ) {
+			__leave;
+		}
 
 		pFileObject		= Data->Iopb->TargetFileObject;
 		if( pFileObject ) {
@@ -861,18 +896,35 @@ FLT_POSTOP_CALLBACK_STATUS	PostCleanupSafe (
 
 	} __finally {
 		if( pContext ) {			
-			FileTable()->Remove(pContext->PUID, true, pContext, 
+			if( FileTable()->Remove(Data->Iopb->TargetFileObject, true, pContext, 
 				[](PFILE_ENTRY pEntry,PVOID	p) {
 				UNREFERENCED_PARAMETER(pEntry);
 				PY_STREAMHANDLE_CONTEXT	pContext	= (PY_STREAMHANDLE_CONTEXT)p;
 				if( pContext ) {
 					
 				
+				}			
+			}) ) {
+				//if( !pContext->bIsDirectory && pContext->nBytes ) 
+				if( false )
+				{
+					__log("%-32s %wZ", __func__, &pContext->pFileNameInfo->Name);
+					__log("  PID         %d", pContext->PID);
+					__log("  Object      %p", Data->Iopb->TargetFileObject);
+					__log("  create      %d", pContext->bCreate);
+					__log("  read.count  %d", pContext->read.nCount);
+					__log("  read.size   %d", (int)(pContext->read.nBytes));
+					__log("  write.count %d", pContext->write.nCount);
+					__log("  write.size  %d", (int)(pContext->write.nBytes));
+				}	
+				if( pContext->bCreate ) {
+					__log("%-32s %wZ", __func__, &pContext->pFileNameInfo->Name);
 				}
-				if( pEntry )
-					__dlog("%-32s %p removed", __func__, pEntry->PUID);
+			}
+			else {
+				__log("%-32s %p can not remove.", __func__, Data->Iopb->TargetFileObject);
 			
-			});
+			}
 			FltReleaseContext(pContext);
 		}
 	}

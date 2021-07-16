@@ -364,8 +364,8 @@ typedef struct Y_FILE_DATA
 	public Y_HEADER
 {
 	YFilter::Message::SubType	subType;
-	UID							FileUID;
-	UID							FilePUID;
+	UID							FPUID;
+	UID							FUID;
 	ULONG64						nSize;
 	ULONG						nCount;
 } Y_FILE_DATA, *PY_FILE_DATA;

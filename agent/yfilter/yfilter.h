@@ -204,7 +204,7 @@ typedef struct PROCESS_ENTRY
 	PVOID				key;				//	[TODO]	뭐에 쓰는 물건인가요?
 	bool				bFree;				//	해제 대상
 	bool				bCallback;			//	콜백에 의해 수집
-											//DWORD64				dwTerminate;
+	DWORD64				dwTerminate;		//	종료시 틱
 	KERNEL_USER_TIMES	times;
 	REG_COUNT			registry;
 } PROCESS_ENTRY, * PPROCESS_ENTRY;

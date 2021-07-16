@@ -353,7 +353,7 @@ private:
 	{
 		return m_pooltype;
 	}
-	bool	IsPossible()
+	bool		IsPossible()
 	{
 		if (false == m_bInitialize)	return false;
 		if (false == m_bSupportDIRQL &&

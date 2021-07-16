@@ -5,14 +5,15 @@
 
 typedef struct FILE_ENTRY
 {
-	UID					FilePUID;
-	UID					FileUID;
+	PVOID				pKey;
+	UID					FPUID;
+	UID					FUID;
 	HANDLE				PID;
 	PROCUID				PUID;
 	HANDLE				TID;
-	ULONG				nCount;
 	UNICODE_STRING		FilePath;
-	DWORD64				dwSize;
+	ULONG				nCount;
+	ULONG64				nSize;
 	DWORD64				dwTicks;
 	PVOID				pContext;
 } FILE_ENTRY, * PFILE_ENTRY;
@@ -21,6 +22,8 @@ typedef struct {
 	HANDLE				TID;
 	ULONG				SID;
 	PROCUID				PUID;
+	UID					FPUID;
+	UID					FUID;
 	PUNICODE_STRING		pFilePath;
 	NTSTATUS			status;
 	ULONG				nSize;
@@ -99,9 +102,8 @@ public:
 		KeQueryTickCount(&info.nTicks);
 		info.nCount		= 0;
 
-		__dlog("CFileTable::Flush");
+		__dlog("CFileTable::Flush	%d", Count());
 		if( true )	return 0;
-
 
 		Flush(&info, [](PFILE_ENTRY pEntry, PVOID pContext, bool *pDelete) {
 			struct FLUSH_INFO	*p	= (struct FLUSH_INFO *)pContext;
@@ -152,7 +154,7 @@ public:
 		CFileTable	*pClass	= (CFileTable *)pContext;
 		pClass->Flush(NULL);
 	}
-	void	Destroy()
+	void		Destroy()
 	{
 		__log(__FUNCTION__);
 		if (m_bInitialize) {
@@ -164,13 +166,14 @@ public:
 	void		Update(PFILE_ENTRY pEntry, DWORD dwSize) {
 		pEntry->nCount++;
 		KeQueryTickCount(&pEntry->dwTicks);
-		pEntry->dwSize	+= dwSize;
+		pEntry->nSize	+= dwSize;
 	
 	}
 	bool		Add
 	(
+		PVOID					pKey,
 		PFILE_CALLBACK_ARG		p,
-		OUT ULONG				*pnCount
+		ULONG					*pnCount
 	)
 	{
 		if (false == IsPossible())	{
@@ -188,21 +191,22 @@ public:
 		}
 		RtlZeroMemory(&entry, sizeof(FILE_ENTRY));
 
-		entry.FileUID	= GetFileUID(p->pFilePath);
-		entry.FilePUID	= GetFilePUID(p->PID, p->subType, p->pFilePath);
-
+		entry.pKey		= pKey;
+		entry.FUID		= GetFileUID(p->pFilePath);
+		entry.FPUID		= GetFilePUID(p->PID, p->subType, p->pFilePath);
 		entry.PID		= p->PID;
 		entry.TID		= p->TID;
 		entry.PUID		= p->PUID;
 		entry.nCount	= 0;
-		entry.dwSize	= p->nSize;
+		entry.nSize		= p->nSize;
 		entry.pContext	= this;
 		
+		p->FPUID		= entry.FPUID;
+		p->FUID			= entry.FUID;
 		//KeQuerySystemTime(&entry.times[0]);
 		KeQueryTickCount(&entry.dwTicks);
 		//	TIME_FIELDS
 		//RtlTimeToTimeFields;
-
 		//__log("%-32s %wZ", __func__, p->pFilePath);
 		__try 
 		{
@@ -210,10 +214,10 @@ public:
 			//ULONG	nTableCount = RtlNumberGenericTableElements(&m_table);
 			//__dlog("RegistryTable:%d", nTableCount);
 
-			if( IsExisting(entry.FilePUID, false, &entry, [](PFILE_ENTRY pEntry, PVOID pContext) {
+			if( IsExisting(pKey, false, &entry, [](PFILE_ENTRY pEntry, PVOID pContext) {
 				PFILE_ENTRY	p	= (PFILE_ENTRY)pContext;
 				CFileTable	*pClass	= (CFileTable *)p->pContext;
-				pClass->Update(pEntry, (DWORD)p->dwSize);
+				pClass->Update(pEntry, (DWORD)p->nSize);
 			
 			})) {
 				//__dlog("%-32s %p IsExisting==%d", __func__, entry.PUID, true);
@@ -234,7 +238,10 @@ public:
 				//	(for example, because the AllocateRoutine fails), RtlInsertElementGenericTable returns NULL.
 				//	if( bRet && pEntry ) PrintProcessEntry(__FUNCTION__, pEntry);
 				//__dlog("%-32s RtlInsertElementGenericTable==%d", __func__, bRet);
-				pEntry->nCount++;
+				if( pEntry ) {
+					pEntry->nCount++;
+					//__dlog("%-32s %p", __func__, pEntry->FPUID);
+				}
 				if( pnCount )	*pnCount = RtlNumberGenericTableElements(&m_table);
 				if( bRet ) {
 					
@@ -263,65 +270,12 @@ public:
 				//__dlog("%10d failed. IRQL=%d", (int)h, KeGetCurrentIrql());
 				FreeEntryData(&entry, false);
 			}
+			//if( bRet )	__dlog("%-32s %d %p %d", "CFileTable::Add", bRet, p->FPUID, Count());
 		}
-		return bRet;
-	}
-
-	ULONG		Count()
-	{
-		if (false == IsPossible())	return 0;
-		KIRQL			irql = KeGetCurrentIrql();
-
-		if (irql >= DISPATCH_LEVEL) {
-			__dlog("%s DISPATCH_LEVEL", __FUNCTION__);
-			return 0;
-		}
-		ULONG	nCount = 0;
-		Lock(&irql);
-		nCount = RtlNumberGenericTableElements(&m_table);
-		Unlock(irql);
-		
-		return nCount;
-	}
-	bool		IsExisting(
-		IN	UID					FilePUID,
-		IN	bool				bLock,
-		IN	PVOID				pCallbackPtr = NULL,
-		IN	PFileTableCallback	pCallback = NULL
-	)
-	{
-		if (false == IsPossible())
-		{
-			__dlog("%s IsPossible() = false", __FUNCTION__);
-			return false;
-		}
-		bool			bRet	= false;
-		KIRQL			irql	= KeGetCurrentIrql();
-		FILE_ENTRY		entry;
-		entry.FilePUID	= FilePUID;
-
-		if( bLock )	Lock(&irql);
-		LPVOID			p = RtlLookupElementGenericTable(&m_table, &entry);
-		if (p)
-		{
-			if (pCallback) {
-				pCallback((PFILE_ENTRY)p, pCallbackPtr);
-			}
-			else
-			{
-				__log("%s pCallback is NULL.", __FUNCTION__);
-			}
-			bRet = true;
-		}
-		else
-		{
-			__log("%-32s %I64d not found.", __FUNCTION__, FilePUID);
-		}
-		if( bLock )	Unlock(irql);
 		return bRet;
 	}
 	bool		Remove(
-		IN UID				FilePUID,
+		IN PVOID			pKey,
 		IN bool				bLock,
 		IN PVOID			pCallbackPtr,
 		PFileTableCallback	pCallback
@@ -336,7 +290,7 @@ public:
 		FILE_ENTRY		entry	= { 0, };
 		KIRQL			irql	= KeGetCurrentIrql();
 
-		entry.FilePUID	= FilePUID;
+		entry.pKey	= pKey;
 		if (bLock)	Lock(&irql);
 		PFILE_ENTRY	pEntry = (PFILE_ENTRY)RtlLookupElementGenericTable(&m_table, &entry);
 		if (pEntry)
@@ -354,10 +308,64 @@ public:
 		}
 		else
 		{
-			//__dlog("%10d not existing");
+			__dlog("%p not existing", pKey);
 			if (pCallback) pCallback(NULL, pCallbackPtr);
 		}
 		if (bLock)	Unlock(irql);
+		//if( bRet )	__dlog("%-32s %d %p %d", "CFileTable::Remove", bRet, FPUID, Count());
+		return bRet;
+	}
+	ULONG		Count()
+	{
+		if (false == IsPossible())	return 0;
+		KIRQL			irql = KeGetCurrentIrql();
+
+		if (irql >= DISPATCH_LEVEL) {
+			__dlog("%s DISPATCH_LEVEL", __FUNCTION__);
+			return 0;
+		}
+		ULONG	nCount = 0;
+		Lock(&irql);
+		nCount = RtlNumberGenericTableElements(&m_table);
+		Unlock(irql);
+		
+		return nCount;
+	}
+	bool		IsExisting(
+		IN	PVOID				pKey,
+		IN	bool				bLock,
+		IN	PVOID				pCallbackPtr = NULL,
+		IN	PFileTableCallback	pCallback = NULL
+	)
+	{
+		if (false == IsPossible())
+		{
+			__dlog("%s IsPossible() = false", __FUNCTION__);
+			return false;
+		}
+		bool			bRet	= false;
+		KIRQL			irql	= KeGetCurrentIrql();
+		FILE_ENTRY		entry;
+		entry.pKey	= pKey;
+
+		if( bLock )	Lock(&irql);
+		LPVOID			p = RtlLookupElementGenericTable(&m_table, &entry);
+		if (p)
+		{
+			if (pCallback) {
+				pCallback((PFILE_ENTRY)p, pCallbackPtr);
+			}
+			else
+			{
+				__log("%s pCallback is NULL.", __FUNCTION__);
+			}
+			bRet = true;
+		}
+		else
+		{
+			__log("%-32s %I64d not found.", __FUNCTION__, pKey);
+		}
+		if( bLock )	Unlock(irql);
 		return bRet;
 	}
 	void		FreeEntryData(PFILE_ENTRY pEntry, bool bLog = false)
@@ -416,7 +424,7 @@ public:
 			pEntry = (PFILE_ENTRY)RtlGetElementGenericTable(&m_table, 0);
 			if (pEntry)
 			{
-				//__dlog("%s %d", __FUNCTION__, pEntry->handle);
+				__dlog("%-32s %p", __func__, pEntry->FPUID);
 				//__dlog("  path    %p(%d)", pEntry->path.Buffer, pEntry->path.Length);
 				//__dlog("  command %p(%d)", pEntry->command.Buffer, pEntry->command.Length);
 				FreeEntryData(pEntry, false);
@@ -485,10 +493,10 @@ private:
 		PFILE_ENTRY	pSecond = (PFILE_ENTRY)SecondStruct;
 		if (pFirst && pSecond)
 		{
-			if (pFirst->FilePUID > pSecond->FilePUID ) {
+			if (pFirst->pKey > pSecond->pKey ) {
 				return GenericGreaterThan;
 			}
-			else if (pFirst->FilePUID < pSecond->FilePUID) {
+			else if (pFirst->pKey < pSecond->pKey) {
 				return GenericLessThan;
 			}
 		}

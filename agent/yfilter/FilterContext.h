@@ -12,16 +12,16 @@ typedef struct Y_OPERATION {
 	volatile	LONG64	nStartOffset;
 	volatile	LONG64	nLastOffset;
 	volatile	LONG64	nSize;
-
 	LARGE_INTEGER		firstTime;
 	LARGE_INTEGER		lastTime;
 } Y_OPERATION;
 typedef struct Y_STREAMHANDLE_CONTEXT
 {
-	//LIST_ENTRY		ListEntry;
-	HANDLE			PID;
-	HANDLE			TID;
-	UID				PUID;
+	UID				FPUID;
+	UID				FUID;
+	HANDLE			PID;			//	Process ID
+	HANDLE			TID;			//	Thread
+	UID				PUID;			//	Process UID
 
 	ACCESS_MASK		accessMask;
 	ULONG			disposition;
@@ -29,7 +29,8 @@ typedef struct Y_STREAMHANDLE_CONTEXT
 
 	PFLT_FILE_NAME_INFORMATION	pFileNameInfo;
 	BOOLEAN			bIsDirectory;
-	UINT64			nSize;
+	bool			bCreate;
+	LONG64			nBytes;
 
 	LARGE_INTEGER	createTime;
 	Y_OPERATION		read;
