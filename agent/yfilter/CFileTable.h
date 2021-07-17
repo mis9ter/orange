@@ -44,11 +44,11 @@ void		CreateFileMessage(
 class CFileTable
 {
 public:
-	bool	IsInitialized()
+	bool			IsInitialized()
 	{
 		return m_bInitialize;
 	}
-	void	Initialize(IN bool bSupportDIRQL = true)
+	void			Initialize(IN bool bSupportDIRQL = true)
 	{
 		__log(__FUNCTION__);
 		RtlZeroMemory(this, sizeof(CProcessTable));
@@ -102,7 +102,7 @@ public:
 		KeQueryTickCount(&info.nTicks);
 		info.nCount		= 0;
 
-		__dlog("CFileTable::Flush	%d", Count());
+		//__dlog("CFileTable::Flush	%d", Count());
 		if( true )	return 0;
 
 		Flush(&info, [](PFILE_ENTRY pEntry, PVOID pContext, bool *pDelete) {
@@ -154,7 +154,7 @@ public:
 		CFileTable	*pClass	= (CFileTable *)pContext;
 		pClass->Flush(NULL);
 	}
-	void		Destroy()
+	void			Destroy()
 	{
 		__log(__FUNCTION__);
 		if (m_bInitialize) {
@@ -163,13 +163,13 @@ public:
 			m_bInitialize = false;
 		}
 	}
-	void		Update(PFILE_ENTRY pEntry, DWORD dwSize) {
+	void			Update(PFILE_ENTRY pEntry, DWORD dwSize) {
 		pEntry->nCount++;
 		KeQueryTickCount(&pEntry->dwTicks);
 		pEntry->nSize	+= dwSize;
 	
 	}
-	bool		Add
+	bool			Add
 	(
 		PVOID					pKey,
 		PFILE_CALLBACK_ARG		p,
@@ -274,7 +274,7 @@ public:
 		}
 		return bRet;
 	}
-	bool		Remove(
+	bool			Remove(
 		IN PVOID			pKey,
 		IN bool				bLock,
 		IN PVOID			pCallbackPtr,
@@ -315,7 +315,7 @@ public:
 		//if( bRet )	__dlog("%-32s %d %p %d", "CFileTable::Remove", bRet, FPUID, Count());
 		return bRet;
 	}
-	ULONG		Count()
+	ULONG			Count()
 	{
 		if (false == IsPossible())	return 0;
 		KIRQL			irql = KeGetCurrentIrql();
@@ -331,7 +331,7 @@ public:
 		
 		return nCount;
 	}
-	bool		IsExisting(
+	bool			IsExisting(
 		IN	PVOID				pKey,
 		IN	bool				bLock,
 		IN	PVOID				pCallbackPtr = NULL,
@@ -368,14 +368,14 @@ public:
 		if( bLock )	Unlock(irql);
 		return bRet;
 	}
-	void		FreeEntryData(PFILE_ENTRY pEntry, bool bLog = false)
+	void			FreeEntryData(PFILE_ENTRY pEntry, bool bLog = false)
 	{
 		if (bLog)	__function_log;
 		if (NULL == pEntry)	return;
 		if( bLog )	__dlog("%-32s FilePath", __func__);
 		CMemory::FreeUnicodeString(&pEntry->FilePath, bLog);
 	}
-	void		Flush(PVOID pContext, void (*pCallback)(
+	void			Flush(PVOID pContext, void (*pCallback)(
 					PFILE_ENTRY pEntry, PVOID pContext, bool *pDelete))
 	{
 		//__dlog("%s IRQL=%d", __FUNCTION__, KeGetCurrentIrql());
@@ -409,7 +409,7 @@ public:
 			__dlog("%-32s T:%d D:%d", "CFileTable::Flush", RtlNumberGenericTableElements(&m_table), nCount);
 		Unlock(irql);
 	}
-	void		Clear()
+	void			Clear()
 	{
 		//__dlog("%s IRQL=%d", __FUNCTION__, KeGetCurrentIrql());
 		if (false == IsPossible() || false == m_bInitialize)
@@ -433,7 +433,7 @@ public:
 		}
 		Unlock(irql);
 	}
-	void		Lock(OUT KIRQL* pOldIrql)
+	void			Lock(OUT KIRQL* pOldIrql)
 	{
 		/*
 			KeAcquireSpinLock first resets the IRQL to DISPATCH_LEVEL and then acquires the lock.
@@ -450,7 +450,7 @@ public:
 		else
 			ExAcquireFastMutex(&m_mutex);
 	}
-	void		Unlock(IN KIRQL oldIrql)
+	void			Unlock(IN KIRQL oldIrql)
 	{
 		if (false == m_bInitialize)	return;
 		if (m_bSupportDIRQL)	KeReleaseSpinLock(&m_lock, oldIrql);
@@ -466,12 +466,12 @@ private:
 	POOL_TYPE			m_pooltype;
 	CThread				m_thread;
 
-	POOL_TYPE	PoolType()
+	POOL_TYPE		PoolType()
 	{
 		//__dlog("%-32s %d", __func__, m_pooltype);
 		return m_pooltype;
 	}
-	bool	IsPossible()
+	bool			IsPossible()
 	{
 		if (false == m_bInitialize)	return false;
 		if (false == m_bSupportDIRQL &&

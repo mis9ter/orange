@@ -205,6 +205,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="CQueue.h" />
     <ClInclude Include="CRegistryTable.h" />
     <ClInclude Include="CThreadPool.h" />
+    <ClInclude Include="File.h" />
     <ClInclude Include="FilterContext.h" />
     <ClInclude Include="md5.h" />
     <ClInclude Include="resource.h" />
@@ -212,7 +213,14 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Config.cpp" />
+    <ClCompile Include="File.Cleanup.cpp" />
+    <ClCompile Include="File.Context.cpp" />
     <ClCompile Include="File.cpp" />
+    <ClCompile Include="File.Create.cpp" />
+    <ClCompile Include="File.Message.cpp" />
+    <ClCompile Include="File.Read.cpp" />
+    <ClCompile Include="File.StreamHandle.cpp" />
+    <ClCompile Include="File.Write.cpp" />
     <ClCompile Include="Filter.cpp" />
     <ClCompile Include="FilterContext.cpp" />
     <ClCompile Include="Instance.cpp" />
