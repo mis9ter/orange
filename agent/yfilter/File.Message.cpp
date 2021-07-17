@@ -6,13 +6,13 @@
 #endif
 
 void					CreateFileMessage(
-	PFILE_ENTRY			p,
-	PY_FILE_MESSAGE		*pOut
+	PY_STREAMHANDLE_CONTEXT	p,
+	PY_FILE_MESSAGE			*pOut
 )
 {
 	WORD	wDataSize	= sizeof(Y_FILE_DATA);
 	WORD	wStringSize	= sizeof(Y_FILE_STRING);
-	wStringSize		+=	GetStringDataSize(&p->FilePath);
+	wStringSize		+=	GetStringDataSize(&p->pFileNameInfo->Name);
 
 	PY_FILE_MESSAGE		pMsg	= NULL;
 	HANDLE				PPID	= GetParentProcessId(p->PID);
@@ -29,8 +29,8 @@ void					CreateFileMessage(
 		RtlZeroMemory(pMsg, wDataSize+wStringSize);
 
 		pMsg->mode		= YFilter::Message::Mode::Event;
-		pMsg->category	= YFilter::Message::Category::Registry;
-		//pMsg->subType	= FileTable()->Class2SubType(p->nClass);
+		pMsg->category	= YFilter::Message::Category::File;
+		pMsg->subType	= YFilter::Message::SubType::FileClose;
 		pMsg->wDataSize	= wDataSize;
 		pMsg->wStringSize	= wStringSize;
 		pMsg->wRevision	= 1;
@@ -46,13 +46,16 @@ void					CreateFileMessage(
 		pMsg->FUID		= p->FUID;
 		pMsg->FPUID		= p->FPUID;
 		pMsg->nCount	= p->nCount;
-		pMsg->nSize		= p->nSize;
+		pMsg->nBytes	= p->nBytes;
+		pMsg->read		= p->read;
+		pMsg->write		= p->write;
+
 		WORD		dwStringOffset	= (WORD)(sizeof(Y_REGISTRY_MESSAGE));
 
 		pMsg->Path.wOffset	= dwStringOffset;
-		pMsg->Path.wSize	= GetStringDataSize(&p->FilePath);
+		pMsg->Path.wSize	= GetStringDataSize(&p->pFileNameInfo->Name);
 		pMsg->Path.pBuf		= (WCHAR *)((char *)pMsg + dwStringOffset);
-		RtlStringCbCopyUnicodeString(pMsg->Path.pBuf, pMsg->Path.wSize, &p->FilePath);
+		RtlStringCbCopyUnicodeString(pMsg->Path.pBuf, pMsg->Path.wSize, &p->pFileNameInfo->Name);
 		if( pOut ) {
 			*pOut	= pMsg;
 		}

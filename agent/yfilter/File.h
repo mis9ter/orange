@@ -14,10 +14,16 @@ PY_FILE_CONTEXT			CreateFileContext();
 void					ReleaseFileContext(PY_FILE_CONTEXT p);
 PY_STREAMHANDLE_CONTEXT	CreateStreamHandle();
 void					DeleteStreamHandleCallback(PY_STREAMHANDLE_CONTEXT p);
+
+EXTERN_C_START
+
 void					CreateFileMessage(
-	PFILE_ENTRY			p,
-	PY_FILE_MESSAGE		*pOut
+	PY_STREAMHANDLE_CONTEXT	p,
+	PY_FILE_MESSAGE			*pOut
 );
+
+EXTERN_C_END
+
 class CFile
 {
 public:

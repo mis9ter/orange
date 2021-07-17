@@ -60,7 +60,14 @@ FLT_POSTOP_CALLBACK_STATUS	PostCleanupSafe (
 		//	[TODO]	delete stream handle
 		if( NT_SUCCESS(FltDeleteStreamHandleContext(FltObjects->Instance, Data->Iopb->TargetFileObject, 
 			(PFLT_CONTEXT *)&pContext)) ) {
-			//__log("%-32s %wZ", __func__, &pContext->pFileNameInfo->Name);
+			if( KernelMode == pContext->RequestorMode ) {
+				__log("%-32s %06d %10s C:%d D:%d %wZ", 
+					__func__, pContext->PID, 
+					(KernelMode == pContext->RequestorMode)? "Kernel":"User",
+					pContext->bCreate, pContext->bIsDirectory, 
+					&pContext->pFileNameInfo->Name);
+			}
+			//if( KernelMode == Data->RequestorMode)
 		}
 		else {
 			//__log("%-32s FltDeleteStreamHandleContext() failed.", __func__);
@@ -96,6 +103,20 @@ FLT_POSTOP_CALLBACK_STATUS	PostCleanupSafe (
 				}	
 				if( pContext->bCreate ) {
 					__log("%-32s %wZ", __func__, &pContext->pFileNameInfo->Name);
+				}
+				if( Config()->client.event.nConnected ) {
+					PY_FILE_MESSAGE	pMsg	= NULL;
+					CreateFileMessage(pContext, &pMsg);
+					if( pMsg ) {
+						if( MessageThreadPool()->Push(__func__, pMsg->mode, pMsg->category, 
+							pMsg, pMsg->wDataSize+pMsg->wStringSize, false) ) {
+							MessageThreadPool()->Alert(pMsg->category);
+							pMsg	= NULL;
+						}
+						else {
+							CMemory::Free(pMsg);
+						}
+					}	
 				}
 			}
 			else {

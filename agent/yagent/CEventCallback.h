@@ -79,6 +79,7 @@ interface   IEventCallback
 #include "CThreadCallback.h"
 #include "CBootCallback.h"
 #include "CRegisryCallback.h"
+#include "CFileCallback.h"
 
 #define		EVENT_DB_NAME	L"event.db"
 
@@ -127,6 +128,7 @@ class CEventCallback
 	public	CModuleCallback,
 	public	CBootCallback,
 	public	CRegistryCallback,
+	public	CFileCallback,
 	virtual	public	CStringTable
 {
 
@@ -394,6 +396,7 @@ public:
 		std::atomic<DWORD>		dwThread;
 		std::atomic<DWORD>		dwModule;
 		std::atomic<DWORD>		dwRegistry;
+		std::atomic<DWORD>		dwFile;
 
 	} m_counter;
 
@@ -571,6 +574,11 @@ protected:
 			case YFilter::Message::Category::Thread:
 				pClass->m_counter.dwThread++;
 				bRet	= CThreadCallback::Proc2(pMessage, dynamic_cast<CThreadCallback *>(pClass));
+				break;
+
+			case YFilter::Message::Category::File:
+				pClass->m_counter.dwFile++;
+				bRet	= CFileCallback::Proc2(pMessage, dynamic_cast<CFileCallback *>(pClass));
 				break;
 
 			default:

@@ -23,6 +23,12 @@
     <Filter Include="Source Files\File">
       <UniqueIdentifier>{c8cdfd21-f953-4631-87cb-e34d68fa803a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Process">
+      <UniqueIdentifier>{b4c38b0e-4dc3-4768-a4f4-2d896e440c3e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Registry">
+      <UniqueIdentifier>{21e36a3a-11a8-4aed-a689-078636a98d0b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.h">
@@ -99,12 +105,6 @@
     <ClCompile Include="port.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Process.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Registry.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Util.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -158,6 +158,12 @@
     </ClCompile>
     <ClCompile Include="File.Message.cpp">
       <Filter>Source Files\File</Filter>
+    </ClCompile>
+    <ClCompile Include="Process.cpp">
+      <Filter>Source Files\Process</Filter>
+    </ClCompile>
+    <ClCompile Include="Registry.cpp">
+      <Filter>Source Files\Registry</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

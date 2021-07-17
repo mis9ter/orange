@@ -129,6 +129,7 @@ namespace YFilter
 			FileRead,
 			FileWrite,
 			FileDelete,
+			FileClose,
 		};
 	};
 	namespace Object
@@ -293,6 +294,15 @@ typedef struct Y_STRING
 
 typedef UINT64	STRUID;
 typedef STRUID	*PSTRUID;
+typedef struct Y_OPERATION {
+	volatile	LONG	nCount;
+	volatile	LONG64	nBytes;
+	volatile	LONG64	nStartOffset;
+	volatile	LONG64	nLastOffset;
+	volatile	LONG64	nSize;
+	LARGE_INTEGER		firstTime;
+	LARGE_INTEGER		lastTime;
+} Y_OPERATION;
 
 inline void			SetStringOffset(PVOID p, PY_STRING str) {
 	str->pBuf			= (PWSTR)((char *)p + str->wOffset);
@@ -366,8 +376,13 @@ typedef struct Y_FILE_DATA
 	YFilter::Message::SubType	subType;
 	UID							FPUID;
 	UID							FUID;
-	ULONG64						nSize;
+	BOOLEAN						bIsDirectory;
+	bool						bCreate;
+	LONG64						nBytes;
 	ULONG						nCount;
+	LARGE_INTEGER				createTime;
+	Y_OPERATION					read;
+	Y_OPERATION					write;
 } Y_FILE_DATA, *PY_FILE_DATA;
 
 typedef struct Y_FILE_STRING

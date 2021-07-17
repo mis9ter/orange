@@ -129,6 +129,7 @@ public:
 			}
 			if( bDelete ) {
 				p->nCount++;
+				/*
 				PY_FILE_MESSAGE		pMsg	= NULL;
 				CreateFileMessage(pEntry, &pMsg);
 				if( pMsg ) {
@@ -143,6 +144,7 @@ public:
 						CMemory::Free(pMsg);
 					}
 				}
+				*/
 			}
 			*pDelete	= bDelete;
 		});

@@ -135,6 +135,9 @@
     <ClInclude Include="CStringTable.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CFileCallback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">

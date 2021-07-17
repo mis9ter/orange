@@ -6,15 +6,6 @@ typedef struct Y_INSTANCE_CONTEXT
 											//	파일시스템 타입. NTFS, FAT, CDFS 등
 } Y_INSTANCE_CONTEXT, *PY_INSTANCE_CONTEXT;
 
-typedef struct Y_OPERATION {
-	volatile	LONG	nCount;
-	volatile	LONG64	nBytes;
-	volatile	LONG64	nStartOffset;
-	volatile	LONG64	nLastOffset;
-	volatile	LONG64	nSize;
-	LARGE_INTEGER		firstTime;
-	LARGE_INTEGER		lastTime;
-} Y_OPERATION;
 typedef struct Y_STREAMHANDLE_CONTEXT
 {
 	UID				FPUID;
@@ -26,12 +17,12 @@ typedef struct Y_STREAMHANDLE_CONTEXT
 	ACCESS_MASK		accessMask;
 	ULONG			disposition;
 	ULONG			createOption;
-
+	KPROCESSOR_MODE	RequestorMode;
 	PFLT_FILE_NAME_INFORMATION	pFileNameInfo;
 	BOOLEAN			bIsDirectory;
 	bool			bCreate;
 	LONG64			nBytes;
-
+	ULONG			nCount;
 	LARGE_INTEGER	createTime;
 	Y_OPERATION		read;
 	Y_OPERATION		write;

@@ -3,21 +3,21 @@
 	{
 		"post" : 
 		[
-			"sc.exe start orange.driver"
+			"sc.exe start orange"
 		],
 		"pre" : 
 		[
-			"sc.exe stop orange.driver"
+			"sc.exe stop orange"
 		]
 	},
 	"file" : 
 	[
 		{
 			"apath" : "@orange.exe",
-			"hash" : 17568984212607141573,
+			"hash" : 1515139951958805108,
 			"name" : "orange.exe",
 			"path" : "orange.exe",
-			"size" : 733184,
+			"size" : 739328,
 			"time" : 
 			{
 				"creation" : 
@@ -27,28 +27,28 @@
 				},
 				"lastwrite" : 
 				{
-					"high" : 30894873,
-					"low" : 110926592
+					"high" : 30898926,
+					"low" : -1926491392
 				}
 			}
 		},
 		{
 			"apath" : "@orange.sys",
-			"hash" : 1212078303302702688,
+			"hash" : 15961960741463355759,
 			"name" : "orange.sys",
 			"path" : "orange.sys",
-			"size" : 111312,
+			"size" : 112384,
 			"time" : 
 			{
 				"creation" : 
 				{
-					"high" : 30893260,
-					"low" : 1355519126
+					"high" : 30898909,
+					"low" : 180760948
 				},
 				"lastwrite" : 
 				{
-					"high" : 30898666,
-					"low" : 841102166
+					"high" : 30898921,
+					"low" : 123391239
 				}
 			}
 		},

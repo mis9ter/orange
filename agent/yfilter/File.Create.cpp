@@ -120,6 +120,7 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 		pStreamHandle->PID				= arg.PID;
 		pStreamHandle->PUID				= arg.PUID;
 		pStreamHandle->TID				= arg.TID;
+		pStreamHandle->RequestorMode	= Data->RequestorMode;
 		pStreamHandle->pFileNameInfo	= pFileNameInfo;
 		FltReferenceFileNameInformation(pStreamHandle->pFileNameInfo);
 		FltIsDirectory(Data->Iopb->TargetFileObject, FltObjects->Instance, &pStreamHandle->bIsDirectory);
@@ -136,6 +137,7 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 			__log("%-32s create", __func__);
 			__log("  %wZ", &pStreamHandle->pFileNameInfo->Name);
 			__log("  PID:%d", pStreamHandle->PID);
+			__log("  %s", Data->RequestorMode==KernelMode? "KernelMode":"UserMode");
 		}
 		//p->pFileNameInfo	= pFileNameInfo;
 			//pFileNameInfo		= NULL;

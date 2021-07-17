@@ -543,7 +543,6 @@ bool	StartRegistryFilter(IN PDRIVER_OBJECT pDriverObject)
 	}
 	return bRet;
 }
-
 bool	StopRegistryFilter()
 {
 	__log("%s", __FUNCTION__);

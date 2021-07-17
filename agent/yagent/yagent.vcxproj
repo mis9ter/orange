@@ -220,6 +220,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName)$(TargetExt).pdb"</Command>
     <ClInclude Include="CBootCallback.h" />
     <ClInclude Include="CDialog.h" />
     <ClInclude Include="CEventCallback.h" />
+    <ClInclude Include="CFileCallback.h" />
     <ClInclude Include="CModuleCallback.h" />
     <ClInclude Include="CNtDll.h" />
     <ClInclude Include="CPreProcess.h" />
