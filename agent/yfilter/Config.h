@@ -160,7 +160,7 @@ typedef HMODULE (*FN_LoadLibraryW)
 typedef struct FLT_CLIENT_PORT
 {
 	KSPIN_LOCK						lock;
-	HANDLE							hProcess;
+	HANDLE							PID;
 	PFLT_PORT						pPort;
 	wchar_t							szName[32];
 	ULONG							nConnected;

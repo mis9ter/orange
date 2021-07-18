@@ -80,6 +80,11 @@ FLT_POSTOP_CALLBACK_STATUS	PostCreateSafe(
 	__try {
 		if (!NT_SUCCESS( Data->IoStatus.Status ) || (STATUS_REPARSE == Data->IoStatus.Status)) 
 			__leave;
+
+		if( arg.PID == Config()->client.event.PID	||
+			arg.PID == (HANDLE)3664	)	
+			__leave;
+
 		status = FltGetFileNameInformation(
 					Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_ALWAYS_ALLOW_CACHE_LOOKUP,
 					&pFileNameInfo);

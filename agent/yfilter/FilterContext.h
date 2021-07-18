@@ -21,8 +21,8 @@ typedef struct Y_STREAMHANDLE_CONTEXT
 	PFLT_FILE_NAME_INFORMATION	pFileNameInfo;
 	BOOLEAN			bIsDirectory;
 	bool			bCreate;
-	LONG64			nBytes;
-	ULONG			nCount;
+	volatile LONG64	nBytes;
+	volatile LONG	nCount;
 	LARGE_INTEGER	createTime;
 	Y_OPERATION		read;
 	Y_OPERATION		write;

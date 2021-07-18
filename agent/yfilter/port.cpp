@@ -26,8 +26,8 @@ NTSTATUS	CommandConnected(
 			FltCloseClientPort(Config()->pFilter, &Config()->client.command.pPort);
 		}
 		FLT_ASSERT(Config()->client.command.pPort == NULL);
-		Config()->client.command.pPort = ClientPort;
-		Config()->client.command.hProcess = PsGetCurrentProcessId();
+		Config()->client.command.pPort	= ClientPort;
+		Config()->client.command.PID	= PsGetCurrentProcessId();
 		RtlStringCbCopyW(Config()->client.command.szName, sizeof(Config()->client.command.szName), 
 			DRIVER_COMMAND_PORT);
 #ifndef _WIN64
@@ -204,8 +204,8 @@ NTSTATUS	EventConnected(
 			FltCloseClientPort(Config()->pFilter, &Config()->client.event.pPort);
 		}
 		FLT_ASSERT(Config()->client.event.pPort == NULL);
-		Config()->client.event.pPort = ClientPort;
-		Config()->client.event.hProcess = PsGetCurrentProcessId();
+		Config()->client.event.pPort	= ClientPort;
+		Config()->client.event.PID		= PsGetCurrentProcessId();
 		Config()->client.event.nConnected++;
 		RtlStringCbCopyW(Config()->client.event.szName, sizeof(Config()->client.event.szName),
 			DRIVER_EVENT_PORT);
@@ -233,7 +233,7 @@ VOID	EventDisconnected(_In_opt_ PVOID ConnectionCookie)
 		CAutoReleaseSpinLock(__FUNCTION__, &Config()->client.event.lock, true);
 		FltCloseClientPort(Config()->pFilter, &Config()->client.event.pPort);
 		Config()->client.event.pPort	= NULL;
-		Config()->client.event.hProcess	= NULL;
+		Config()->client.event.PID		= NULL;
 		Config()->client.event.nConnected--;
 	}
 	__log("%-32s %d", __func__, Config()->client.event.nConnected);

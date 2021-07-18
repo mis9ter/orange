@@ -301,7 +301,7 @@ public:
 				url	= __utf16(Profile()["url"].asCString());
 			
 			if( url.empty() )
-				url	= L"http://download.orangeworks.org";
+				url	= L"http://download.orangeworks.org/build/x64";
 
 			if( DownloadProfile((url + L"/" UPDATE_DIST_NAME).c_str(), UPDATE_DIST_NAME) ) {
 

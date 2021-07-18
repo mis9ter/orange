@@ -42,6 +42,7 @@ FLT_POSTOP_CALLBACK_STATUS	PostWriteSafe(
 			InterlockedIncrement(&p->write.nCount);
 			InterlockedAdd64(&p->write.nBytes, Data->Iopb->Parameters.Write.Length);
 			InterlockedAdd64(&p->nBytes, Data->Iopb->Parameters.Write.Length);
+			InterlockedIncrement(&p->nCount);
 
 			if( p->bCreate ) {
 				//__log("%-32s %d", __func__, Data->Iopb->Parameters.Write.Length);

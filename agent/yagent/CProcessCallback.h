@@ -249,12 +249,14 @@ public:
 		m_lock.Lock(NULL, [&](PVOID pContext) {
 			try {
 				auto	t	= m_table.find(PUID);
-				if( m_table.end() == t ) {
-					m_log.Log("%-32s PUID:%p is not found.", __func__, PUID);
-					return;
+				if( m_table.end() != t ) {
+					bRet	= true;
+					if( pCallback ) {
+						pCallback(pContext, t->second.get());
+					}
 				}
-				if( pCallback ) {
-					pCallback(pContext, t->second.get());
+				else {
+					m_log.Log("%-32s PUID:%p is not found.", __func__, PUID);
 				}
 			}
 			catch( std::exception & e) {

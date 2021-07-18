@@ -47,10 +47,10 @@ void					CreateFileMessage(
 		pMsg->FPUID		= p->FPUID;
 		pMsg->nCount	= p->nCount;
 		pMsg->nBytes	= p->nBytes;
-		pMsg->read		= p->read;
-		pMsg->write		= p->write;
+		RtlCopyMemory(&pMsg->read, &p->read, sizeof(pMsg->read));
+		RtlCopyMemory(&pMsg->write, &p->write, sizeof(pMsg->write));
 
-		WORD		dwStringOffset	= (WORD)(sizeof(Y_REGISTRY_MESSAGE));
+		WORD		dwStringOffset	= (WORD)(sizeof(Y_FILE_MESSAGE));
 
 		pMsg->Path.wOffset	= dwStringOffset;
 		pMsg->Path.wSize	= GetStringDataSize(&p->pFileNameInfo->Name);

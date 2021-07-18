@@ -58,6 +58,7 @@ FLT_POSTOP_CALLBACK_STATUS	PostReadSafe(
 		InterlockedIncrement(&pStreamHandleContext->read.nCount);
 		InterlockedAdd64(&pStreamHandleContext->read.nBytes, nBytes);
 		InterlockedAdd64(&pStreamHandleContext->nBytes, nBytes);
+		InterlockedIncrement(&pStreamHandleContext->nCount);
 		KeQuerySystemTime(&pStreamHandleContext->read.lastTime);	
 
 		//	STATUS_FLT_DISALLOW_FAST_IO

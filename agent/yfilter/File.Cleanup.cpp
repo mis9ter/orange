@@ -104,7 +104,8 @@ FLT_POSTOP_CALLBACK_STATUS	PostCleanupSafe (
 				if( pContext->bCreate ) {
 					__log("%-32s %wZ", __func__, &pContext->pFileNameInfo->Name);
 				}
-				if( Config()->client.event.nConnected ) {
+				if( Config()->client.event.nConnected	&&
+					pContext->nBytes ) {
 					PY_FILE_MESSAGE	pMsg	= NULL;
 					CreateFileMessage(pContext, &pMsg);
 					if( pMsg ) {

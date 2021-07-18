@@ -76,18 +76,32 @@ protected:
 		PVOID				pContext
 	) 
 	{
-		PY_THREAD_MESSAGE	p		= (PY_THREAD_MESSAGE)pMessage;
-		CFileCallback		*pClass = (CFileCallback *)pContext;
+		PY_FILE_MESSAGE	p		= (PY_FILE_MESSAGE)pMessage;
+		CFileCallback	*pClass = (CFileCallback *)pContext;
+		SetStringOffset(p, &p->Path);
 
-		std::wstring		str;
-
-		if( YFilter::Message::SubType::FileClose == p->subType ) {
-
-		}
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
-
-
-
+			WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
+			if( false == CAppPath::GetFilePath(p->Path.pBuf, szPath, sizeof(szPath)) )
+				StringCbCopy(szPath, sizeof(szPath), p->Path.pBuf);
+			PCWSTR	pName	= wcsrchr(szPath, L'\\');
+			std::wstring	proc;
+			if( pClass->GetProcess(p->PUID, pClass, [&](PVOID pContext, CProcess *p) {
+				pClass->GetString(p->ProcPathUID, proc);
+			})) {
+				pName	= _tcsrchr(proc.c_str(), L'\\');
+				if( p->bCreate ) {
+					pClass->m_log.Log("%-32ws %ws", pName, szPath);
+					if( p->read.nCount )
+						pClass->m_log.Log("  read :%d %d", p->read.nCount, (int)p->read.nBytes);
+					if( p->write.nCount )
+						pClass->m_log.Log("  write:%d %d", p->write.nCount, (int)p->write.nBytes);
+				}
+			} 
+			else {
+				pClass->m_log.Log("%p %d NOT FOUND", p->PUID, p->PID);
+			
+			}
 		});
 		return true;
 	}

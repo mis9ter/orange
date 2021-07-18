@@ -141,7 +141,7 @@ public:
 				str	= s.value;
 			}
 			else {
-				str	= L"can not select from db";
+				str	= std::to_wstring(SUID);
 			}				
 		}	
 		else	str	= t->second->value.c_str();
