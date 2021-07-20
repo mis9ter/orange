@@ -152,6 +152,7 @@ public:
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CThreadCallback*>(this)));
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CBootCallback*>(this)));	
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CRegistryCallback*>(this)));	
+		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CFileCallback*>(this)));	
 		/*
 		AddCallback(
 			YFilter::Message::Mode::Event, 
@@ -201,6 +202,10 @@ public:
 	bool			GetProcess(PROCUID PUID, PWSTR pValue, IN DWORD dwSize) {
 		return CProcessCallback::GetProcess(PUID, pValue, dwSize);
 	}
+	STRUID			GetStrUID(IN StringType type, IN PCWSTR pStr) {
+		return CStringTable::GetStrUID(type, pStr);	
+	}
+
 	static	void	SystemCallback(
 		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
 	) {
@@ -213,6 +218,7 @@ public:
 		CEventCallback	*pClass	= (CEventCallback *)pContext;
 		pClass->Log("%s %4d %4d", __FUNCTION__, wType, wEvent);
 	}
+
 	bool			CreateCallback()
 	{	
 		Log(__FUNCTION__);

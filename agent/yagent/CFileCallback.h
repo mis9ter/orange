@@ -14,6 +14,7 @@ public:
 	{
 		ZeroMemory(&m_stmt, sizeof(m_stmt));
 		m_name = EVENT_CALLBACK_NAME;
+		m_log.Log(NULL);
 	}
 	~CFileCallback()
 	{
@@ -27,6 +28,7 @@ public:
 						PVOID	pContext, std::function<void (PVOID, CProcess *, CModule *, PVOID)> pCallback)	= NULL;
 	virtual		bool		GetProcess(PROCUID PUID, 
 		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback)	= NULL;
+	virtual		STRUID	GetStrUID(IN StringType type, IN PCWSTR pStr)	= NULL;
 
 	PCSTR				Name() {
 		return m_name.c_str();
@@ -34,28 +36,28 @@ public:
 protected:
 	void		Create()
 	{
-		const char* pInsert = "insert into thread"	\
+		const char* pInsert = "insert into file"	\
 			"("\
-			"ProcGuid,ProcUID,PID,PPID,CPID,TID"\
-			",CTID,StartAddress,RProcGuid,CreateTime,ExitTime"\
-			",FilePath,FileName,FileExt,KernelTime,UserTime"\
+			"FPUID,FUID,PUID,PathUID,Count,CreateCount,DeleteCount"\
+			",Directory,ReadCount,ReadSize,WriteCount,WriteSize"\
 			") values("\
-			"?,?,?,?,?,?"\
-			",?,?,?,?,?"\
+			"?,?,?,?,1,?,?"\
 			",?,?,?,?,?"\
 			")";
-		const char* pIsExisting = "select count(ProcGuid) from thread where ProcGuid=? and ProcUID=? and TID=?";
-		const char* pUpdate = "update thread "	\
-			"set ExitTime=?,KernelTime=?,UserTime=?,CreateCount=CreateCount+1 "\
-			"where ProcGuid=? and ProcUID=? and TID=?";
+		const char* pIsExisting = "select count(FPUID) from file where FPUID=?";
+		const char* pUpdate = "update file "	\
+			"set Count=Count+1,CreateCount=CreateCount+?, DeleteCount=DeleteCount+?,ReadCount=ReadCount+?,ReadSize=ReadSize+?, "\
+			"WriteCount=WriteCount+?,WriteSize=WriteSize+?,"	\
+			"LastTime=CURRENT_TIMESTAMP	"	\
+			"where FPUID=?";
 		if (Db()->IsOpened()) {
 
 			if (NULL == (m_stmt.pInsert = Db()->Stmt(pInsert)))
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 			if (NULL == (m_stmt.pUpdate = Db()->Stmt(pUpdate)))
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 			if (NULL == (m_stmt.pIsExisting = Db()->Stmt(pIsExisting)))
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 		}
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
@@ -90,8 +92,9 @@ protected:
 				pClass->GetString(p->ProcPathUID, proc);
 			})) {
 				pName	= _tcsrchr(proc.c_str(), L'\\');
-				if( p->bCreate ) {
-					pClass->m_log.Log("%-32ws %ws", pName, szPath);
+				if( p->bCreate ) 
+				{
+					pClass->m_log.Log("%-32ws %d %ws", pName, p->bCreate, szPath);
 					if( p->read.nCount )
 						pClass->m_log.Log("  read :%d %d", p->read.nCount, (int)p->read.nBytes);
 					if( p->write.nCount )
@@ -99,9 +102,13 @@ protected:
 				}
 			} 
 			else {
-				pClass->m_log.Log("%p %d NOT FOUND", p->PUID, p->PID);
-			
+				pClass->m_log.Log("%p %d NOT FOUND", p->PUID, p->PID);			
 			}
+
+			if( pClass->IsExisting(p) )
+				pClass->Update(p);
+			else
+				pClass->Insert(szPath, p);
 		});
 		return true;
 	}
@@ -115,117 +122,88 @@ private:
 		sqlite3_stmt* pIsExisting;
 	}	m_stmt;
 	bool	IsExisting(
-		PCWSTR			pProcGuid,
-		PYFILTER_DATA	pData
+		PY_FILE_MESSAGE	p
 	) {
 		int			nCount = 0;
 		sqlite3_stmt* pStmt = m_stmt.pIsExisting;
 		if (pStmt) {
 			int		nIndex = 0;
-			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->PUID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->TID);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->FPUID);
 			if (SQLITE_ROW == sqlite3_step(pStmt)) {
 				nCount = sqlite3_column_int(pStmt, 0);
+			}
+			else {
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		}
 		return nCount ? true : false;
 	}
 	bool	Insert(
-		PCWSTR				pProcGuid,
-		PCWSTR				pProcPath,
-		PCWSTR				pFilePath,
-		PYFILTER_DATA		pData
+		PCWSTR			pFilePath,
+		PY_FILE_MESSAGE	p
 	) {
-		if (NULL == pProcPath)			return false;
-
 		bool			bRet = false;
 		sqlite3_stmt* pStmt = m_stmt.pInsert;
+
+		const char* pInsert = "insert into file"	\
+			"("\
+			"FPUID,FUID,PUID,PathUID,Create"\
+			",Directory,ReadCount,ReadSize,WriteCount,WriteSize"\
+			") values("\
+			"?,?,?,?,?"\
+			",?,?,?,?,?"\
+			")";
 		if (pStmt) {
 			int		nIndex = 0;
-			PCWSTR	pProcName	= pProcPath? wcsrchr(pProcPath, L'\\')	: NULL;
-			PCWSTR	pFileName	= pFilePath? wcsrchr(pFilePath, L'\\')	: NULL;
-			PCWSTR	pFileExt	= pFileName? wcsrchr(pFileName, L'.')	: NULL;
-			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->PUID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->PID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->PPID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->CPID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->TID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->CTID);
-			sqlite3_bind_int64(pStmt,	++nIndex, pData->pStartAddress);
-			sqlite3_bind_null(pStmt,	++nIndex);
-			
-			char	szTime[50] = "";
-			if (pData->times.CreateTime.QuadPart) {
-				sqlite3_bind_text(pStmt, ++nIndex,
-					CTime::LaregInteger2LocalTimeString(&pData->times.CreateTime, szTime, sizeof(szTime)),
-					-1, SQLITE_TRANSIENT);
-			}
-			else {
-				Log("---- CreateTime is null");
-				sqlite3_bind_null(pStmt, ++nIndex);
-			}
-			if (pData->times.ExitTime.QuadPart) {
-				sqlite3_bind_text(pStmt, ++nIndex,
-					CTime::LaregInteger2LocalTimeString(&pData->times.ExitTime, szTime, sizeof(szTime)),
-					-1, SQLITE_TRANSIENT);
-			}
-			else {
-				sqlite3_bind_null(pStmt, ++nIndex);
-			}
-			if( pFilePath )
-				sqlite3_bind_text16(pStmt, ++nIndex, pFilePath, -1, SQLITE_STATIC);
-			else 
-				sqlite3_bind_null(pStmt,	++nIndex);		//	FilePath
-			if( pFileName )
-				sqlite3_bind_text16(pStmt, ++nIndex, pFileName + 1, -1, SQLITE_STATIC);
-			else
-				sqlite3_bind_null(pStmt, ++nIndex);		//	FileName
-			if( pFileExt )
-				sqlite3_bind_text16(pStmt, ++nIndex, pFileExt + 1, -1, SQLITE_STATIC); 
-			else 
-				sqlite3_bind_null(pStmt,	++nIndex);		//	FileExt
+			UID		PathUID	= GetStrUID(StringFilePath, pFilePath);
 
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->times.KernelTime.QuadPart);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->times.UserTime.QuadPart);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->FPUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->FUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->PUID);
+			sqlite3_bind_int64(pStmt, ++nIndex, PathUID);
+			sqlite3_bind_int(pStmt, ++nIndex, p->bCreate);
+			sqlite3_bind_int(pStmt, ++nIndex, 0);
+			sqlite3_bind_int(pStmt, ++nIndex, p->bIsDirectory);
+			sqlite3_bind_int(pStmt, ++nIndex, p->read.nCount);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->read.nBytes);
+			sqlite3_bind_int(pStmt, ++nIndex, p->write.nCount);
+			sqlite3_bind_int64(pStmt, ++nIndex, p->write.nBytes);
+			
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
+		}
+		else {
+			m_log.Log("%-32s %s", __func__, "pStmt is null");
 		}
 		return bRet;
 	}
 	bool	Update(
-		PCWSTR				pProcGuid,
-		PYFILTER_DATA		pData
+		PY_FILE_MESSAGE	p
 	) {
-		const char* pUpdate = "update thread "	\
-			"set ExitTime=?,KernelTime=?,UserTime=? "\
-			"where ProcGuid=? and TID=?";
+		const char* pUpdate = "update file "	\
+			"set Create=Create+?, Delete=Delete+?,ReadCount=ReadCount+?,ReadSize=ReadSize+?, "\
+			"WriteCount=WriteCount+?,WriteSize=WriteSize+?,"	\
+			"LastTime=CURRENT_TIMESTAMP	"	\
+			"where FPUID=?";
 
 		bool			bRet = false;
 		sqlite3_stmt* pStmt = m_stmt.pUpdate;
 		if (pStmt) {
 			int		nIndex = 0;
-			char	szTime[50] = "";
-			if (pData->times.ExitTime.QuadPart) {
-				sqlite3_bind_text(pStmt, ++nIndex,
-					CTime::LaregInteger2LocalTimeString(&pData->times.ExitTime, szTime, sizeof(szTime)),
-					-1, SQLITE_STATIC);
-			}
-			else
-				sqlite3_bind_null(pStmt, ++nIndex);
-			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.KernelTime.QuadPart);
-			sqlite3_bind_int64(pStmt,	++nIndex, pData->times.UserTime.QuadPart);
-			sqlite3_bind_text16(pStmt,	++nIndex, pProcGuid, -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt, ++nIndex, pData->PUID);
-			sqlite3_bind_int(pStmt,		++nIndex, pData->TID);
+			sqlite3_bind_int(pStmt,		++nIndex, p->bCreate);
+			sqlite3_bind_int(pStmt,		++nIndex, 0);
+			sqlite3_bind_int(pStmt,		++nIndex, p->read.nCount);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->read.nBytes);
+			sqlite3_bind_int(pStmt,		++nIndex, p->write.nCount);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->write.nBytes);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->FPUID);
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
-				Log("%s", sqlite3_errmsg(Db()->Handle()));
+				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			}
 			sqlite3_reset(pStmt);
 		}

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "mongoose.h"
 #include "json/json.h"
 #include "yagent.define.h"
@@ -95,7 +96,8 @@ public:
 	Json::Value &		Profile() {
 		return m_doc;
 	}
-	XXH64_hash_t		FileHash(PCWSTR pPath) {
+	
+	static	XXH64_hash_t		FileHash(PCWSTR pPath) {
 		XXH64_hash_t	v	= 0;
 		XXH64_state_t*	p	= XXH64_createState();
 		if (p) {
@@ -214,7 +216,7 @@ public:
 				}
 				else {
 					XXH64_hash_t	hash	= FileHash(path.c_str());
-					printf("  %p -> %p\n", hash, t["hash"].asLargestUInt());
+					printf("  %p -> %p\n", (PVOID)hash, (PVOID)t["hash"].asLargestUInt());
 					if( hash != t["hash"].asLargestUInt() ) {
 						update	= true;
 					}
@@ -272,7 +274,7 @@ public:
 
 							}
 						}
-						printf("%ws -> %ws [%d]", fileurl.c_str(), path.c_str(), bDownload);
+						printf("%ws -> %ws [%d]\n", fileurl.c_str(), path.c_str(), bDownload);
 						nUpdateRequired++;
 					}
 					else {
@@ -345,7 +347,7 @@ public:
 
 		}
 		catch( std::exception & e) {
-		
+			printf("%-32s %s\n", __func__, e.what());
 		}
 		return nCount;
 	}

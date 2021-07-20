@@ -361,12 +361,14 @@ typedef int socklen_t;
 // https://lgtm.com/rules/2154840805/ -gmtime, localtime, ctime and asctime
 static __inline struct tm *gmtime_r(time_t *t, struct tm *tm) {
   (void) tm;
-  return gmtime(t);
+  gmtime_s(tm, t);
+  return tm;
 }
 
 static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
   (void) tm;
-  return localtime(t);
+  localtime_s(tm, t);
+  return tm;
 }
 
 #endif

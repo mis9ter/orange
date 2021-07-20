@@ -1,5 +1,6 @@
 #pragma once
 #pragma comment(lib, "Rpcrt4.lib")
+#include "CUpdate.h"
 
 #define	GUID_STRLEN	37
 #define USE_PROCESS_LOG		1
@@ -18,7 +19,8 @@ public:
 		DevicePathUID(0),
 		CommandUID(0)
 	{
-		CopyMemory(dynamic_cast<PY_PROCESS_DATA>(this), _p, sizeof(Y_PROCESS_DATA));
+		if( _p )	CopyMemory(dynamic_cast<PY_PROCESS_DATA>(this), _p, sizeof(Y_PROCESS_DATA));
+		else		ZeroMemory(dynamic_cast<PY_PROCESS_DATA>(this), sizeof(Y_PROCESS_DATA));
 		ZeroMemory(&registry, sizeof(registry));
 	}
 	STRUID			ProcPathUID;
@@ -28,6 +30,7 @@ public:
 	DWORD64			dwLastTick;
 	bool			bUpdate;
 	REG_COUNT		registry;
+	UID				nFileHash;
 	ModuleMap		module;
 };
 
@@ -70,13 +73,13 @@ public:
 			"PUID,BootUID,PID,CPID,SID,"	\
 			"PPUID,PPID,DevicePath,ProcPath,ProcName,"	\
 			"IsSystem,CmdLine,UserId,CreateTime,ExitTime,"\
-			"KernelTime,UserTime"\
+			"KernelTime,UserTime,FileHash"\
 			") "\
 			"values("\
 			"?,?,?,?,?"\
 			",?,?,?,?,?"\
 			",?,?,?,?,?"\
-			",?,?)";
+			",?,?,?)";
 		const char	*pUpdate		= "update process "	\
 			"set CreateTime=?, ExitTime=?, KernelTime=?, UserTime=? "\
 			"where PUID=?";
@@ -256,7 +259,20 @@ public:
 					}
 				}
 				else {
-					m_log.Log("%-32s PUID:%p is not found.", __func__, PUID);
+					m_log.Log("%-32s PUID:%p is not found in MEMORY.", __func__, PUID);
+					WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
+					if( GetProcess(PUID, szPath, sizeof(szPath))) {
+						m_log.Log("%-32s PUID:%p is found in DB.", __func__, PUID);
+						CProcess	c(NULL);
+						c.ProcPathUID	= GetStringCRC64(szPath);
+						bRet	= true;
+						if( pCallback ) {
+							pCallback(pContext, t->second.get());
+						}
+					}
+					else {
+						m_log.Log("%-32s PUID:%p is not found.", __func__, PUID);
+					}
 				}
 			}
 			catch( std::exception & e) {
@@ -339,21 +355,22 @@ protected:
 		pClass->m_log.Log("  Command  :%d %d", p->Command.wOffset, p->Command.wSize);
 		*/
 
+		WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
+		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szPath, sizeof(szPath)) )
+			StringCbCopy(szPath, sizeof(szPath), p->DevicePath.pBuf);
+		PCWSTR	pName		= wcsrchr(szPath, L'\\');
+		UID		nFileHash	= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : CDist::FileHash(szPath);
+
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			try {
 				auto	t	= pClass->m_table.find(p->PUID);
 				if( pClass->m_table.end() == t ) {
 					ProcessPtr	ptr	= std::make_shared<CProcess>(dynamic_cast<PY_PROCESS_DATA>(p));
-
-					WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
-					if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szPath, sizeof(szPath)) )
-						StringCbCopy(szPath, sizeof(szPath), p->DevicePath.pBuf);
-					PCWSTR	pName	= wcsrchr(szPath, L'\\');
-
 					ptr->ProcPathUID	= pClass->GetStrUID(StringProcPath, szPath);
 					ptr->ProcNameUID	= pClass->GetStrUID(StringProcName, pName? pName + 1 : szPath);
 					ptr->CommandUID		= pClass->GetStrUID(StringCommand, p->Command.pBuf);
 					ptr->DevicePathUID	= pClass->GetStrUID(StringProcDevicePath, p->DevicePath.pBuf);
+					ptr->nFileHash		= nFileHash;
 					pClass->m_table[ptr->PUID]	= ptr;
 				}
 				else {
@@ -362,6 +379,7 @@ protected:
 					t->second->registry	= p->registry;
 				}
 				pClass->m_log.Log("[%d] C:%05d P:%05d %ws", p->subType, pClass->m_table.size(), p->PID, p->DevicePath.pBuf);
+				pClass->m_log.Log("  hash:%p", (PVOID)nFileHash);
 				t	= pClass->m_table.find(p->PUID);
 				if( pClass->m_table.end() == t ) {
 					pClass->m_log.Log("%-32s internal error", "CProcessCallback::Proc2");				
@@ -598,6 +616,7 @@ private:
 				sqlite3_bind_null(pStmt, ++nIndex);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->times.KernelTime.QuadPart);
 			sqlite3_bind_int64(pStmt,	++nIndex, p->times.UserTime.QuadPart);
+			sqlite3_bind_int64(pStmt,	++nIndex, p->nFileHash);
 
 			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
 			else {
