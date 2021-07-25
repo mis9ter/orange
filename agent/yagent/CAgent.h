@@ -366,6 +366,12 @@ public:
 	PCWSTR			AppPath() {
 		return m_config.path.szApp;
 	}
+	PCWSTR			DumpPath() {
+		return m_config.path.szDump;
+	}
+	PCWSTR			DataPath() {
+		return m_config.path.szData;
+	}
 	void			SetRunLoop(void* pCallbackPtr, PFUNC_AGENT_RUNLOOP pCallback)
 	{
 		m_config.pRunLoopFunc	= pCallback;
@@ -394,6 +400,7 @@ private:
 
 		struct {
 			WCHAR			szData[AGENT_PATH_SIZE];
+			WCHAR			szDump[AGENT_PATH_SIZE];
 			WCHAR			szApp[AGENT_PATH_SIZE];
 			WCHAR			szDriver[AGENT_PATH_SIZE];			
 		

@@ -59,7 +59,8 @@ typedef std::map<STRUID, StrPtr>					StrUIDMap;
 
 class CStringTable
 	:
-	public	CCRC64
+	public	CCRC64,
+	virtual	public CAppLog
 {
 public:
 	CStringTable() 

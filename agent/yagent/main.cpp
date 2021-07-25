@@ -22,6 +22,8 @@ void    RunInDialog(CAgent * pAgent);
 void    RunInConsole(CAgent * pAgent);
 void    RunInService(CAgent * pAgent);
 
+WCHAR   g_szDumpPath[AGENT_PATH_SIZE];
+
 #ifdef _CONSOLE
 int     main()
 #else 
@@ -31,6 +33,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmd
    CAgent       agent;
    char         szCmd[100]  = "";
 
+   StringCbCopy(g_szDumpPath, sizeof(g_szDumpPath), agent.DumpPath());
    ::SetUnhandledExceptionFilter(CException::GlobalFilter);
    RunInService(&agent);
    return 0;

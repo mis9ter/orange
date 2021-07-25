@@ -981,7 +981,7 @@ void	CService::ServiceMain(DWORD ac, PTSTR *av)
 		pService->ServiceFunction(SERVICE_FUNCTION_SHUTDOWN, 0);			
 		dwLine	= __LINE__;
 	}
-	__except( CException::Handler(__FUNCTION__, __LINE__, GetExceptionInformation()) )
+	__except( CException::Handler(GetExceptionInformation()) )
 	{
 		pService->Log("익셉션	@서비스 메인 함수 래퍼. 함수=%s, 라인=%d\n", __FUNCTION__, dwLine);
 	}

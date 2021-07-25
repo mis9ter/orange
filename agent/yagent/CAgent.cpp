@@ -42,8 +42,9 @@ CAgent::CAgent()
 
 
 	YAgent::GetDataFolder(AGENT_DATA_FOLDERNAME, m_config.path.szData, sizeof(m_config.path.szData));
-	YAgent::MakeDirectory(m_config.path.szData);
+	YAgent::GetDataFolder(AGENT_DATA_FOLDERNAME, m_config.path.szDump, sizeof(m_config.path.szDump));
 
+	YAgent::MakeDirectory(m_config.path.szData);
 	AddDbList(IDR_CONFIG_ODB, m_config.path.szData, L"config",		m_db);
 	AddDbList(IDR_EVENT_ODB, m_config.path.szData, L"event",		m_db);
 	AddDbList(IDR_SUMMARY_ODB, m_config.path.szData, L"summary",	m_db);
@@ -187,7 +188,6 @@ bool	CAgent::Start()
 		)
 		{
 			Log("%s start failure.", __FUNCTION__);
-			break;
 		}
 		if (CFilterCtrl::Connect())
 		{
@@ -196,7 +196,6 @@ bool	CAgent::Start()
 		else
 		{
 			Log("%s connect failure.", __FUNCTION__);
-			break;
 		}
 
 		CIPC::SetServiceCallback(IPCRecvCallback, this);

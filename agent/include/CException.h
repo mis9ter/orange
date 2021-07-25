@@ -16,6 +16,8 @@ typedef BOOL(WINAPI* PMiniDumpWriteDump)
 	PMINIDUMP_CALLBACK_INFORMATION CallbackParam
 );
 
+extern	WCHAR	g_szDumpPath[AGENT_PATH_SIZE];
+
 class CException
 {
 public:
@@ -27,8 +29,7 @@ public:
 	{
 
 	}
-
-	static	LPCWSTR		GetDumpPath(IN LPTSTR pPath, IN DWORD dwSize, IN LPCWSTR pExt)
+	static	LPCWSTR		GetDumpPath(IN LPTSTR pPath, IN DWORD dwSize, IN PCWSTR pBasePath, IN PCWSTR pExt)
 	{
 		TCHAR	szName[SBUFSIZE] = L"";
 
@@ -37,13 +38,11 @@ public:
 		TCHAR			szBasePath[1024];
 
 		::GetLocalTime(&st);
-		YAgent::GetModulePath(szBasePath, sizeof(szBasePath));
-		::StringCbCat(szBasePath, sizeof(szBasePath), DUMP_PATH);
+		::StringCbPrintf(szBasePath, sizeof(szBasePath), L"%s%s", pBasePath, DUMP_PATH);
 		if (!YAgent::IsDirectory(szBasePath))
 		{
 			YAgent::MakeDirectory(szBasePath);
 		}
-
 		//	2017/05/31	BEOM
 		//	DUMP파일을 기존에는 매번 다른 이름으로 만들고 있었다.
 		//	이 경우 다양한 덤프 파일을 확보할 수 있다는 장점이 있으나, 
@@ -83,46 +82,26 @@ public:
 			st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
 			dwCount++, ::GetCurrentThreadId(), pExt);
 #endif
-
-		YAgent::GetModulePath(pPath, dwSize);
-		::StringCbCat(pPath, dwSize, DUMP_PATH);
-		if (!YAgent::IsDirectory(pPath))
-		{
-			YAgent::MakeDirectory(pPath);
-		}
-		::StringCbCat(pPath, dwSize, szName);
+		StringCbCopy(pPath, dwSize, szDumpPath);
 		return pPath;
 	}
 
-	static	LONG WINAPI	Handler(LPCSTR pCause, DWORD dwLine, struct _EXCEPTION_POINTERS* p)
+	static	LONG WINAPI	Handler(struct _EXCEPTION_POINTERS* p)
 	{
 		TCHAR	szPath[MBUFSIZE] = _T("");
 
-		GetDumpPath(szPath, sizeof(szPath), (LPTSTR)DUMP_EXT);
+		GetDumpPath(szPath, sizeof(szPath), g_szDumpPath, (LPTSTR)DUMP_EXT);
 		//xcommon::_nlogA(_T("exception"), __line);
 		//xcommon::_nlogA(_T("exception"), "exception - %s", pCause);
-		Dump(pCause, dwLine, szPath, p);
+		Dump(szPath, p);
 
 		return EXCEPTION_EXECUTE_HANDLER;
 	}
 	static	LONG WINAPI GlobalFilter(struct _EXCEPTION_POINTERS* p)
 	{
-		return Handler(__FUNCTION__, __LINE__, p);
+		return Handler(p);
 	}
-	static	bool	Save(IN LPCSTR pCause, IN char* p, IN DWORD dwSize)
-	{
-		TCHAR	szPath[MBUFSIZE] = _T("");
-
-		if (p && dwSize)
-		{
-			GetDumpPath(szPath, sizeof(szPath), DUMP_EXT);
-		}
-		else
-		{
-		}
-		return true;
-	}
-	static	bool	Dump(IN LPCSTR pFile, IN DWORD dwLine, IN LPCTSTR lpPath, IN struct _EXCEPTION_POINTERS* p,
+	static	bool	Dump(LPCTSTR lpPath, IN struct _EXCEPTION_POINTERS* p,
 		bool bExitProcess = true, IN int nExitCode = 0)
 	{
 		bool		bRet = false;

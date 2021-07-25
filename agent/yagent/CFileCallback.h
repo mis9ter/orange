@@ -92,6 +92,7 @@ protected:
 				pClass->GetString(p->ProcPathUID, proc);
 			})) {
 				pName	= _tcsrchr(proc.c_str(), L'\\');
+				if( NULL == pName )	pName	= proc.c_str();
 				if( p->bCreate ) 
 				{
 					pClass->m_log.Log("%-32ws %d %ws", pName, p->bCreate, szPath);

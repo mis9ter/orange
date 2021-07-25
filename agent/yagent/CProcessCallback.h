@@ -359,8 +359,15 @@ protected:
 		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szPath, sizeof(szPath)) )
 			StringCbCopy(szPath, sizeof(szPath), p->DevicePath.pBuf);
 		PCWSTR	pName		= wcsrchr(szPath, L'\\');
+
+		SetLastError(0);
 		UID		nFileHash	= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : CDist::FileHash(szPath);
 
+		if( 0 == nFileHash ) {
+			CErrorMessage	err(GetLastError());
+			pClass->m_log.Log("%-32s NO_HASH:%ws", __func__, szPath);
+			pClass->m_log.Log("  %d %s", (DWORD)err, (PCSTR)err);
+		}
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			try {
 				auto	t	= pClass->m_table.find(p->PUID);

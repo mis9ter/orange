@@ -18,11 +18,16 @@
 #pragma comment(lib, "Wininet.lib")
 
 #define UPDATE_DIST_NAME	L".update"
-
+#define DIST_LOGNAME		L"update.log"
 class CDist
+	:
+	virtual	public	CAppLog
 {
 public:
-	CDist() {
+	CDist() 
+		:
+		CAppLog(DIST_LOGNAME)
+	{
 
 
 	}
