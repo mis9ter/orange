@@ -267,7 +267,7 @@ public:
 						c.ProcPathUID	= GetStringCRC64(szPath);
 						bRet	= true;
 						if( pCallback ) {
-							pCallback(pContext, t->second.get());
+							pCallback(pContext, &c);
 						}
 					}
 					else {
@@ -362,12 +362,7 @@ protected:
 
 		SetLastError(0);
 		UID		nFileHash	= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : CDist::FileHash(szPath);
-
-		if( 0 == nFileHash ) {
-			CErrorMessage	err(GetLastError());
-			pClass->m_log.Log("%-32s NO_HASH:%ws", __func__, szPath);
-			pClass->m_log.Log("  %d %s", (DWORD)err, (PCSTR)err);
-		}
+		CErrorMessage	hasherr(GetLastError());
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			try {
 				auto	t	= pClass->m_table.find(p->PUID);
@@ -384,9 +379,16 @@ protected:
 					t->second->times	= p->times;
 					t->second->subType	= p->subType;
 					t->second->registry	= p->registry;
+					nFileHash			= t->second->nFileHash;
 				}
 				pClass->m_log.Log("[%d] C:%05d P:%05d %ws", p->subType, pClass->m_table.size(), p->PID, p->DevicePath.pBuf);
-				pClass->m_log.Log("  hash:%p", (PVOID)nFileHash);
+				if( YFilter::Message::SubType::ProcessStop != p->subType ) {
+					pClass->m_log.Log("  hash:%p", (PVOID)nFileHash);
+					if( 0 == nFileHash ) {
+						pClass->m_log.Log("  %-32s NOHASH:%ws", __func__, szPath);
+						pClass->m_log.Log("  %d %s", (DWORD)hasherr, (PCSTR)hasherr);
+					}
+				}
 				t	= pClass->m_table.find(p->PUID);
 				if( pClass->m_table.end() == t ) {
 					pClass->m_log.Log("%-32s internal error", "CProcessCallback::Proc2");				
