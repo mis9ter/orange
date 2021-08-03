@@ -1,0 +1,18 @@
+{
+	"boot":{
+		"insert": {
+			"sql":"			
+				insert into [boot]
+				(
+					[BootUID],[BootId],[UpTime]
+				) 
+				values(?,?,?)
+			",			
+			"bind":[
+				{"type":"int64", "size":null },
+				{"type":"int", "size":null},
+				{"type":"timestamp", "size",null}
+			]
+		}	
+	}
+}
