@@ -11,7 +11,6 @@
 #define DB_SUMMARY_NAME		L"summary"
 #define DB_CONFIG_NAME		L"config"
 
-
 #include "yagent.h"
 #include "yagent.common.h"
 #include "CPathConvertor.h"
@@ -25,6 +24,7 @@
 #include "CService.h"
 #include "CEventCallback.h"
 #include "CProtect.h"
+#include "CStmt.h"
 
 typedef std::function<void(HANDLE hShutdown, void * pCallbackPtr)>	PFUNC_AGENT_RUNLOOP;
 
@@ -324,6 +324,7 @@ class CAgent
 	public	CIPC,
 	public	CIPCCommand,
 	public	CIPCCommandCallback,
+	public	CStmt,
 	public	CProtect
 {
 public:
@@ -345,7 +346,11 @@ public:
 	}
 	CDB* Db(PCWSTR pName) {
 		auto t	= m_db.find(pName);
-		if( m_db.end() == t )	return NULL;
+		if( m_db.end() == t )	{
+		
+			Log("%-32s %ws is not found.", __func__, pName);
+			return NULL;
+		}
 		return &t->second->cdb;
 	}
 	INotifyCenter *	NotifyCenter() {

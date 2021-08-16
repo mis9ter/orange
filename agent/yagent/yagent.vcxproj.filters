@@ -138,6 +138,12 @@
     <ClInclude Include="CFileCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CTimelineCallback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CStmt.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">
@@ -208,6 +214,9 @@
     </None>
     <None Include="db\config.odb" />
     <None Include="db\summary.odb" />
+    <None Include="db\stmt.json">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="opensource.txt">

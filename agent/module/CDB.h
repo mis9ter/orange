@@ -15,70 +15,6 @@
 #endif
 int		sqlite3_open_db(const char* zName, sqlite3** pDb);
 
-typedef std::function<void (std::string & name, std::string & query, sqlite3_stmt * p)>	PStmtCallback;
-typedef struct STMT {
-	std::string		name;
-	std::string		query;
-	sqlite3_stmt	*pStmt;
-	PStmtCallback	pCallback;
-
-	STMT(IN PCSTR pName, IN PCSTR pQuery, sqlite3_stmt *p) 
-		:
-		name(pName),
-		query(pQuery),
-		pStmt(p),
-		pCallback(nullptr)
-	{
-		
-	}
-	~STMT() {
-		if( pCallback )
-			pCallback(name, query, pStmt);
-	}
-} STMT;
-
-typedef std::shared_ptr<STMT>			STMTPtr;
-typedef std::map<std::string, STMTPtr>	STMTMap;
-
-class CStmtTable
-{
-public:
-	CStmtTable() {
-	
-	}
-	~CStmtTable() {
-		Reset();
-	}
-	CStmtTable *	StmtTable() {
-		return this;
-	}
-	STMTPtr		Get(IN PCSTR pName) {
-		auto	t	= m_table.find(pName);
-		if( m_table.end() == t )	return nullptr;
-		return t->second;	
-	}
-	bool		Add(IN PCSTR pName, IN PCSTR pQuery, sqlite3_stmt *p, PStmtCallback pCallback) {
-		try
-		{
-			STMTPtr		ptr	= std::shared_ptr<STMT>(new STMT(pName, pQuery, p));
-			ptr->pCallback	= pCallback;
-			m_table[ptr->name]	= ptr;
-		}
-		catch(std::exception & e) {
-			UNREFERENCED_PARAMETER(e);
-			//e.what();
-			return false;
-		}
-		return true;
-	}
-	void		Reset()
-	{
-		m_table.clear();
-	}
-private:
-	STMTMap		m_table;
-};
-
 class CDB;
 class CPatchDB
 	:
@@ -120,7 +56,6 @@ private:
 };
 class CDB
 	:
-	public	CStmtTable,
 	public	CPatchDB
 {
 public:
@@ -138,18 +73,6 @@ public:
 	~CDB() {
 		if( IsOpened() )
 			Close(__FUNCTION__);
-	}
-	sqlite3_stmt *	GetStmt(IN PCSTR pName)
-	{
-		auto	t	= CStmtTable::Get(pName);
-		if( nullptr == t )	return NULL;
-		return t->pStmt;
-	}
-	bool	AddStmt(IN PCSTR pName, IN PCSTR pQuery)
-	{
-		sqlite3_stmt	*pStmt	= Stmt(pQuery);
-		if( NULL == pStmt )	return false;
-		return CStmtTable::Add(pName, pQuery, pStmt, FreeStmtCallback);
 	}
 	bool	Initialize(PCWSTR pFilePath, PCSTR pCause)
 	{
@@ -327,24 +250,6 @@ public:
 	}
 	static	void FreeStmtCallback(std::string & name, std::string & query, sqlite3_stmt * p) {
 		Free(p);
-	}
-	bool		CreateStmtTable(IN PCSTR pName, IN PCSTR pQuery) {
-		sqlite3_stmt	*pStmt	= Stmt(pQuery);
-		if( pStmt ) {
-			if( CStmtTable::Add(pName, pQuery, pStmt, FreeStmtCallback)) {
-			
-			}	
-			else {
-				std::string		name	= pName;
-				std::string		query	= pQuery;
-				FreeStmtCallback(name, query, pStmt);
-			}
-		}
-		else {
-			m_log.Log("%s %s\n%s", __FUNCTION__, pQuery, sqlite3_errmsg(Handle()));
-			return false;
-		}
-		return true;
 	}
 private:
 	sqlite3			*m_pDb;

@@ -119,6 +119,9 @@ bool	CAgent::Initialize()
 	}
 	while( false );
 
+	CMemoryPtr	stmt	= GetResourceData(NULL, IDR_STMT_JSON);
+	CStmt::Create(stmt->Data(), stmt->Size());
+
 	if( false == CEventCallback::CreateCallback() ) {
 		Log("%s CEventCallback::Initialize() failed.", __func__);
 		return false;
@@ -131,6 +134,7 @@ void	CAgent::Destroy()
 		CEventCallback::DestroyCallback();
 		m_config.bInitialize = false;
 	}
+	CStmt::Destroy();
 	for( auto t : m_db ) {
 		if ( t.second->cdb.IsOpened() ) {
 			t.second->cdb.Close(__func__);
@@ -141,7 +145,6 @@ void	CAgent::Destroy()
 		}
 	}
 }
-
 bool	CAgent::Start()
 {
 	Log(__FUNCTION__);

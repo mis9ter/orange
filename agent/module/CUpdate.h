@@ -215,23 +215,28 @@ public:
 
 				update	= false;
 
-				printf("-- %ws\n", __utf16(t["path"].asCString()));
-				if( YAgent::GetFileSize(path.c_str(), NULL) != t["size"].asInt() ) {
+				ULONG	nThisFileSize	= YAgent::GetFileSize(path.c_str(), NULL);
+				ULONG	nNextFileSize	= t["size"].asInt();
+				printf("[%ws]\n", __utf16(t["path"].asCString()));
+				if( nThisFileSize != nNextFileSize ) {
+					printf("  size: %d -> %d\n", nThisFileSize, nNextFileSize);
 					update	= true;
 				}
 				else {
-					XXH64_hash_t	hash	= FileHash(path.c_str());
-					printf("  %p -> %p\n", (PVOID)hash, (PVOID)t["hash"].asLargestUInt());
+					XXH64_hash_t	hash	= FileHash(path.c_str());					
 					if( hash != t["hash"].asLargestUInt() ) {
+						printf("  hash: %p -> %p\n", (PVOID)hash, (PVOID)t["hash"].asLargestUInt());
 						update	= true;
 					}
+					else {
+						printf("  hash: %p\n", (PVOID)t["hash"].asLargestUInt());
+					}
 				}
-				printf("\n");
 				if( update.asBool() ) {
 					WCHAR	szAPath[AGENT_PATH_SIZE]	= L"";
 					GetTempFileName(szTempPath, __utf16(t["name"].asCString()), GetTickCount(), szAPath);
 
-					printf("%ws\n", szAPath);
+					printf("  downloading: %ws\n", szAPath);
 					std::wstring	apath	= szAPath;
 
 					if( bUpdate ) {
@@ -244,7 +249,7 @@ public:
 							}
 							else {
 								CErrorMessage	err(GetLastError());
-								printf("%-32s(1) %d %s\n", __func__, (DWORD)err, (PCSTR)err);
+								printf("  %-32s(1) %d %s\n", __func__, (DWORD)err, (PCSTR)err);
 							}
 						}
 						FILETIME	creation, lastwrite;
@@ -257,7 +262,7 @@ public:
 						bool	bDownload	= YAgent::RequestFile(fileurl.c_str(), path.c_str(), NULL, this,
 									[&](PVOID pContext, PCWSTR pPath, HANDLE hFile, DWORD dwTotalBytes, DWORD dwCurrentBytes)->bool {
 										if( dwTotalBytes == dwCurrentBytes ) {
-											printf("%-32s %d / %d\n", __func__, dwCurrentBytes, dwTotalBytes);
+											printf("  downloaded: %d bytes\n", dwCurrentBytes);
 											SetFileTime(hFile, &creation, NULL, &lastwrite);										
 										}
 										return true;
@@ -279,16 +284,17 @@ public:
 
 							}
 						}
-						printf("%ws -> %ws [%d]\n", fileurl.c_str(), path.c_str(), bDownload);
+						printf("  %ws -> %ws [%d]\n", fileurl.c_str(), path.c_str(), bDownload);
 						nUpdateRequired++;
 					}
 					else {
 						nUpdateRequired++;
 						printf("  update required.\n");
 					}
+					printf("\n");
 				}	
 				else {
-					printf("not update\n");
+					printf("  no update\n");
 				}
 			}
 			catch( std::exception & e) {

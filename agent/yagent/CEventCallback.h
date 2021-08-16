@@ -117,7 +117,6 @@ typedef struct EventCallbackItem {
 typedef std::shared_ptr<EventCallbackItem>		EventCallbackItemPtr;
 typedef std::map<DWORD, EventCallbackItemPtr>	EventCallbackTable;
 typedef std::map<DWORD, UUID>					ProcMap;
-
 typedef std::map<std::string, IEventCallback*>	EventCallbackMap;
 
 class CEventCallback
@@ -224,8 +223,7 @@ public:
 		Log(__FUNCTION__);
 
 		CDB		*pDB	= Db(DB_EVENT_NAME);
-		if( NULL == pDB ) {
-		
+		if( NULL == pDB ) {		
 			return false;
 		}
 		m_pDB	= pDB;

@@ -226,9 +226,11 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).$(Platform).pdb"</Command>
     <ClInclude Include="CPreProcess.h" />
     <ClInclude Include="CProcessCallback.h" />
     <ClInclude Include="CRegisryCallback.h" />
+    <ClInclude Include="CStmt.h" />
     <ClInclude Include="CStringTable.h" />
     <ClInclude Include="CThread.h" />
     <ClInclude Include="CThreadCallback.h" />
+    <ClInclude Include="CTimelineCallback.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MD5\Global.h" />
     <ClInclude Include="MD5\MD5.h" />
@@ -267,6 +269,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).$(Platform).pdb"</Command>
     <None Include="db\config.odb" />
     <None Include="db\event.odb" />
     <None Include="db\rcdata1.bin" />
+    <None Include="db\stmt.json" />
     <None Include="db\summary.odb" />
   </ItemGroup>
   <ItemGroup>

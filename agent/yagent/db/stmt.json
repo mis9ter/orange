@@ -1,18 +1,20 @@
 {
-	"boot":{
-		"insert": {
-			"sql":"			
-				insert into [boot]
-				(
-					[BootUID],[BootId],[UpTime]
-				) 
-				values(?,?,?)
-			",			
-			"bind":[
-				{"type":"int64", "size":null },
-				{"type":"int", "size":null},
-				{"type":"timestamp", "size",null}
-			]
-		}	
+	"boot": {
+		"@db": "event",
+		"insert": "insert into [boot] ([BootUID],[BootId],[UpTime]) values(?,?,?)",
+		"isExisting": "select count(BootId) from boot where BootUID=?",
+		"update": "update boot set LastTime=CURRENT_TIMESTAMP where BootUID=?",
+		"update2": "update boot set DownTime=CURRENT_TIMESTAMP where BootUID=?",
+		"update3": "update boot set DownTime=LastTime where DownTime is null",
+		"select": "select BootId,UpTime,LastTime,DownTime from boot where BootUID=?"
+	},
+	"file": {
+		"insert": "insert into file(FPUID,FUID,PUID,PathUID,Count,CreateCount,DeleteCount,Directory,ReadCount,ReadSize,WriteCount,WriteSize) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+		"isExisting": "select count(FPUID) from file where FPUID=?",
+		"update": "update file set Count=Count+1,CreateCount=CreateCount+?, DeleteCount=DeleteCount+?,ReadCount=ReadCount+?,ReadSize=ReadSize+?,WriteCount=WriteCount+?,WriteSize=WriteSize+?,LastTime=CURRENT_TIMESTAMP where FPUID=?"
+	},
+	"process": {
+		"@db": "event",
+		"list": "select ProcName,ProcPath,count(*) cnt,sum(KernelTime+UserTime) time, sum(KernelTime) ktime, sum(UserTime) utime from process where BootUID=? group by ProcPath order by time desc"
 	}
 }

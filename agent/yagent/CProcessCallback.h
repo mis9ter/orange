@@ -94,7 +94,7 @@ public:
 
 		if (Db()->IsOpened()) {
 	
-			Db()->AddStmt("process.list", pProcessList);
+			//Db()->AddStmt("process.list", pProcessList);
 			if( NULL == (m_stmt.pIsExisting	= Db()->Stmt(pIsExisting)) )
 				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
 			if( NULL == (m_stmt.pInsert	= Db()->Stmt(pInsert)) )
@@ -132,7 +132,7 @@ public:
 		DWORD			dwCount	= 0;
 		sqlite3_stmt	*pStmt	= m_stmt.pProcessList;
 
-		pStmt	= Db()->GetStmt("process.list");
+		//pStmt	= Db()->GetStmt("process.list");
 		Log("%-32s BootUID=%p", __FUNCTION__, GetBootUID());
 		if (pStmt) {
 			int			nIndex = 0;
