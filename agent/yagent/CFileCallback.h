@@ -29,6 +29,7 @@ public:
 	virtual		bool		GetProcess(PROCUID PUID, 
 		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback)	= NULL;
 	virtual		STRUID	GetStrUID(IN StringType type, IN PCWSTR pStr)	= NULL;
+	virtual		unsigned int	Query(const Json::Value & input, Json::Value & output)	= NULL;
 
 	PCSTR				Name() {
 		return m_name.c_str();
@@ -125,8 +126,40 @@ private:
 	bool	IsExisting(
 		PY_FILE_MESSAGE	p
 	) {
-		int			nCount = 0;
-		sqlite3_stmt* pStmt = m_stmt.pIsExisting;
+		int			nCount	= 0;
+		bool		bRet	= false;
+		Json::Value	req;
+		Json::Value	bind;
+		Json::Value	res;
+
+		req["name"]	= "file.isExisting";
+		bind["type"]	= "int64";
+		bind["value"]	= p->FPUID;
+
+		req["bind"].append(bind);
+
+		nCount	= Query(req, res);
+		res["count"]	= nCount;
+		JsonUtil::Json2String(res, [&](std::string & str) {
+
+			m_log.Log(str.c_str());
+		});
+
+		if( nCount ) {
+			try {
+				nCount	= res["row"][0][0].asInt();
+			}
+			catch( std::exception & e) {
+				m_log.Log("%-32s %s", __func__, e.what());
+			}
+		}
+		return nCount ? true : false;
+	}
+	bool	IsExisting_OLD(
+		PY_FILE_MESSAGE	p
+	) {
+		int			nCount	= 0;
+		sqlite3_stmt* pStmt = NULL;
 		if (pStmt) {
 			int		nIndex = 0;
 			sqlite3_bind_int64(pStmt, ++nIndex, p->FPUID);

@@ -1,18 +1,28 @@
 #pragma once
 
 typedef std::function<void (std::string & name, std::string & query, sqlite3_stmt * p)>	PStmtCallback;
-typedef struct STMT {
+
+typedef struct _STMT {
+	_STMT() 
+		:
+		pDB(NULL), pStmt(NULL)	
+	{	
+	}
 	std::string		name;
 	std::string		query;
+	CDB				*pDB;
 	sqlite3_stmt	*pStmt;
+} _STMT, *_PSTMT;
 
-	STMT(IN PCSTR pName, IN PCSTR pQuery, sqlite3_stmt *p) 
-		:
-		name(pName),
-		query(pQuery),
-		pStmt(p)
+typedef struct STMT 
+	:	public	_STMT
+{
+	STMT(IN _PSTMT p) 
 	{
-
+		name	= p->name;
+		query	= p->query;
+		pDB		= p->pDB;
+		pStmt	= p->pStmt;
 	}
 	~STMT() {
 		if( pStmt ) {
@@ -35,11 +45,168 @@ public:
 	
 	{
 		m_log.Log(NULL);
+		m_log.Log("%s %s", __DATE__, __TIME__);
 	}
 	~CStmt() {
 	
 	}
-	STMTPtr			Pop(PCSTR pName) {
+	/*
+		input:
+		(1) query stmt name
+		(2) 인자 JSON
+
+		{
+			"name":"xxxx",
+			"bind": [
+				{"type":"int","value":"value"},
+				{"type":"int64","value":value},
+				{"type":"text","value":"value"}
+			]
+		}
+
+		output:
+		(1) 결과 JSON
+		{
+			"name":"xxxx",
+			"column":[
+
+
+			],
+			"row":[
+
+
+			],
+			"error":{
+				"code":xxx,
+				"msg":""
+			},
+			"exception":""
+		}
+
+	*/
+	void			SetError(Json::Value doc, int nCode, PCSTR pFmt, ...) {
+		doc["error"]["code"]	= nCode;
+
+		if (NULL == pFmt)	return;
+
+		va_list		argptr;
+		char		szBuf[4096] = "";
+		va_start(argptr, pFmt);
+		int		nLength = lstrlenA(szBuf);
+		::StringCbVPrintfA(szBuf + nLength, sizeof(szBuf) - nLength, pFmt, argptr);
+		va_end(argptr);
+		doc["error"]["message"]	= szBuf;
+	} 
+	unsigned int	Query(const Json::Value & req, Json::Value & res) {	
+		UINT	nCount	= 0;	
+		try {
+			if( false == req.isMember("name") ) {
+				SetError(res, -1, "[name] is not found.");
+				return 0;
+			}
+			if( req.isMember("bind") && !req["bind"].isArray() ) {
+				SetError(res, -1, "[bind] is not array.");
+				return 0;
+			}
+			const	Json::Value		&name	= req["name"];
+			const	Json::Value		&bind	= req["bind"];
+
+			STMTPtr	ptr	= Get(name.asCString());
+			if( nullptr == ptr ) {
+				SetError(res, -1, "[%s] is not found.", name.asCString());
+				return 0;
+			}	
+
+			res["sql"]	= ptr->query;
+
+			int		nIndex	= 0;
+			for( auto & t : bind ) {
+				if( t.isObject() ) {				
+					try {
+						const	Json::Value	&type	= t["type"];
+						const	Json::Value	&value	= t["value"];					
+						if( !type.asString().compare("int") ) {							
+							sqlite3_bind_int(ptr->pStmt, ++nIndex, value.asInt());
+						}
+						else if( !type.asString().compare("int64") ) {
+							sqlite3_bind_int64(ptr->pStmt, ++nIndex, value.asUInt64());
+						}
+						else if( !type.asString().compare("text")) {
+							sqlite3_bind_text(ptr->pStmt, ++nIndex, value.asCString(), -1, SQLITE_TRANSIENT);
+						}
+					}
+					catch( std::exception & e ) {
+						m_log.Log("%-32s exception(bind):%s", __func__, e.what());
+					}
+				}		
+			}
+			int			nStatus;
+			int			nColumnCount	= sqlite3_column_count(ptr->pStmt);
+			const char	*pColumnName	= NULL;
+			const char	*pColumnType	= NULL;
+			Json::Value	column;
+
+			res["columnCount"]	= nColumnCount;
+			for( auto i = 0 ; i < nColumnCount ; i++ ) {
+				pColumnName		= sqlite3_column_name(ptr->pStmt, i);			
+				column["name"]	= pColumnName? pColumnName : Json::Value::null;
+				pColumnType		= sqlite3_column_decltype(ptr->pStmt, i);
+				column["type"]	= pColumnType? pColumnType : Json::Value::null;
+
+				res["column"].append(column);
+			}
+			while( true ) {
+				nStatus	= sqlite3_step(ptr->pStmt);
+				Json::Value		row;
+				if( SQLITE_ROW == nStatus ) {
+					nIndex	= 0;
+					for( auto & t : bind ) {
+						if( t.isObject() ) {				
+							try {
+								const	Json::Value	&type		= t["type"];
+								const	Json::Value	&value		= t["value"];
+
+								const	unsigned char	*pValue		= NULL;
+								const	int				nValue		= 0;
+								const	int64_t			nValue64	= 0;
+
+								if( !type.asString().compare("int") ) {
+									row[nIndex]	= sqlite3_column_int(ptr->pStmt, nIndex);
+								}
+								else if( !type.asString().compare("int64") ) {
+									row[nIndex]	= sqlite3_column_int64(ptr->pStmt, nIndex);
+								}
+								else {
+									pValue	= sqlite3_column_text(ptr->pStmt, nIndex);
+									row[nIndex]	= pValue? pValue : Json::Value::null;
+								}
+								nIndex++;
+								res["row"].append(row);
+							}
+							catch( std::exception & e ) {
+								m_log.Log("%-32s exception(row):%s", __func__, e.what());
+							}
+						}		
+					}
+					nCount++;
+				}
+				else if( SQLITE_DONE == nStatus ) {
+					break;
+
+				}
+				else 
+					break;
+			}
+			res["lastQueryStatus"]	= nStatus;
+			res["rowCount"]	= nCount;
+		}
+		catch( std::exception & e ) {
+			res["exception"]	= e.what();		
+		}	
+		res["bind"]	= req["bind"];
+		return nCount;
+	}
+	STMTPtr			Get(PCSTR pName) {
 		STMTPtr		ptr	= nullptr;
 		
 		auto	t	= m_table.find(pName);
@@ -48,7 +215,7 @@ public:
 		}
 		return ptr;
 	}
-	void			Push(STMTPtr ptr) {
+	void			Reset(STMTPtr ptr) {
 		sqlite3_reset(ptr->pStmt);
 	}
 	void			Create(PVOID pData, DWORD dwSize) {
@@ -60,15 +227,19 @@ public:
 		const std::unique_ptr<Json::CharReader>		reader(builder.newCharReader());
 		std::string		err;
 		Json::Value		doc;
-		std::string		strQueryName;
+		
+		_STMT			stmt;
+
 		if (reader->parse((const char *)pData, (const char *)pData + dwSize, &doc, &err)) {
 
 			for( auto & t : doc.getMemberNames() ) {
 				Json::Value	&bname	= doc[t];
-				CDB		*pDB		= NULL;
 				try {
+					if( false == bname.isMember("@db") ) {
+						m_log.Log("%-32s %s has no @db.", __func__, t.c_str());
+					}
 					Json::Value	&dbName	= bname["@db"];
-					pDB	= Db(__utf16(dbName.asCString()));
+					stmt.pDB	= Db(__utf16(dbName.asCString()));
 					//m_log.Log("%-32s %s %p", "@db", dbName.asCString(), pDB);
 					for( auto & tt : bname.getMemberNames() ) {
 						Json::Value	&sname		= bname[tt];
@@ -78,15 +249,16 @@ public:
 							
 								}
 								else {
-									strQueryName	= t + "." + tt;
+									stmt.name	= t + "." + tt;
+									stmt.query	= sname.asString();
 									if( pDB ) {
-										sqlite3_stmt	*pStmt	= pDB->Stmt(sname.asCString());
-										if( pStmt ) {
-											m_log.Log("%-32s: %s", strQueryName.c_str(), sname.asCString());		
-											Add(strQueryName.c_str(), sname.asCString(), pStmt);
+										stmt.pStmt	= pDB->Stmt(sname.asCString());
+										if( stmt.pStmt ) {
+											m_log.Log("%-32s: %s", stmt.name.c_str(), sname.asCString());		
+											Add(&stmt);
 										}
 										else {
-											m_log.Log("%-32s: %s", strQueryName.c_str(), sqlite3_errmsg(pDB->Handle()));
+											m_log.Log("%-32s: %s", stmt.name.c_str(), sqlite3_errmsg(stmt.pDB->Handle()));
 										}
 									}
 									else {
@@ -95,15 +267,20 @@ public:
 								}
 							}
 							catch( std::exception & e ) {
-								m_log.Log("%-32s %s", __func__, e.what());		
+								m_log.Log("%-32s exception(1) %s", __func__, e.what());		
+								JsonUtil::Json2String(sname, [&](std::string & str) {
+									m_log.Log("%s", str.c_str());
+								});
 							}	
 
 						}
 					}
 				}
 				catch( std::exception & e) {
-					m_log.Log("%-32s %s", __func__, e.what());
-				
+					m_log.Log("%-32s exception(2) %s", __func__, e.what());
+					JsonUtil::Json2String(bname, [&](std::string & str) {
+						m_log.Log("%s: %s", t.c_str(), str.c_str());
+					});
 				}
 			}			
 		}
@@ -115,14 +292,14 @@ public:
 	void		Destroy() {
 		m_table.clear();
 	}
-	bool		Add(IN PCSTR pName, IN PCSTR pQuery, sqlite3_stmt *p) {
+	bool		Add(IN _STMT * p) {
 		try
 		{
-			auto	t		= m_table.find(pName);
+			auto	t		= m_table.find(p->name);
 			if( m_table.end() != t ) {
-				m_table.erase(pName);
+				m_table.erase(p->name);
 			}
-			STMTPtr		ptr	= std::shared_ptr<STMT>(new STMT(pName, pQuery, p));
+			STMTPtr		ptr	= std::shared_ptr<STMT>(new STMT(p));
 			m_table[ptr->name]	= ptr;
 		}
 		catch(std::exception & e) {

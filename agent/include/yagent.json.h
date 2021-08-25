@@ -5,7 +5,7 @@
 #include "xxhash.h"
 namespace JsonUtil {
 
-	inline	void	Json2String(IN Json::Value & doc, 
+	inline	void	Json2String(IN const Json::Value & doc, 
 		IN std::function<void (std::string &)> pCallback) {
 		std::string					str;
 		Json::StreamWriterBuilder	wbuilder;
@@ -28,7 +28,7 @@ namespace JsonUtil {
 		}
 		return bRet;
 	}
-	inline	DWORD	Json2File(IN Json::Value & doc, PCWSTR pFilePath) {
+	inline	DWORD	Json2File(IN const Json::Value & doc, PCWSTR pFilePath) {
 		DWORD	dwSize	= 0;
 		Json2String(doc, [&](std::string & str) {
 			dwSize	= (DWORD)str.length();

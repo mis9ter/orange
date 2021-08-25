@@ -387,6 +387,9 @@ public:
 		IN DWORD dwControl, IN DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext
 	);
 	static	bool	CALLBACK	ServiceFunction(DWORD dwFunction, DWORD dwControl, LPVOID lpContext);
+	unsigned int	Query(const Json::Value & input, Json::Value & output) {
+		return CStmt::Query(input, output);
+	}
 
 	void			LogDoc(PCSTR pTitle, const Json::Value & res) {
 		std::string					str;

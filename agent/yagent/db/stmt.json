@@ -9,6 +9,7 @@
 		"select": "select BootId,UpTime,LastTime,DownTime from boot where BootUID=?"
 	},
 	"file": {
+		"@db":  "event",
 		"insert": "insert into file(FPUID,FUID,PUID,PathUID,Count,CreateCount,DeleteCount,Directory,ReadCount,ReadSize,WriteCount,WriteSize) values(?,?,?,?,?,?,?,?,?,?,?,?)",
 		"isExisting": "select count(FPUID) from file where FPUID=?",
 		"update": "update file set Count=Count+1,CreateCount=CreateCount+?, DeleteCount=DeleteCount+?,ReadCount=ReadCount+?,ReadSize=ReadSize+?,WriteCount=WriteCount+?,WriteSize=WriteSize+?,LastTime=CURRENT_TIMESTAMP where FPUID=?"
