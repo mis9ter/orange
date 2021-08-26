@@ -84,9 +84,13 @@ public:
 		}
 
 	*/
-	void			SetError(Json::Value doc, int nCode, PCSTR pFmt, ...) {
-		doc["error"]["code"]	= nCode;
-
+	void			SetError(
+		Json::Value &doc, 
+		int			nCode, 
+		std::function<void (int nErrorCode, const char * pErrorMessage)>	pCallback,
+		PCSTR		pFmt, ...
+	) {
+		//if( doc )	doc["error"]["code"]	= nCode;
 		if (NULL == pFmt)	return;
 
 		va_list		argptr;
@@ -95,17 +99,26 @@ public:
 		int		nLength = lstrlenA(szBuf);
 		::StringCbVPrintfA(szBuf + nLength, sizeof(szBuf) - nLength, pFmt, argptr);
 		va_end(argptr);
-		doc["error"]["message"]	= szBuf;
+		//doc["error"]["message"]	= szBuf;
+		if( pCallback )	pCallback(nCode, szBuf);
 	} 
-	unsigned int	Query(const Json::Value & req, Json::Value & res) {	
+	unsigned int	Query(
+		const Json::Value & req, 
+		Json::Value & res,
+		std::function<void (int nErrorCode, const char * pErrorMessage)>	pErrorCallback = NULL
+	) {	
+		//	sqlite3 오류 코드 > 0 0인 경우 성공
+		//	sqlite3 이외의 오류인 경우는 음수를 사용할 것.
+		//	-1	exception
+		//	-2	not found
 		UINT	nCount	= 0;	
 		try {
 			if( false == req.isMember("name") ) {
-				SetError(res, -1, "[name] is not found.");
+				SetError(res, -2, pErrorCallback, "[name] is not found.");
 				return 0;
 			}
 			if( req.isMember("bind") && !req["bind"].isArray() ) {
-				SetError(res, -1, "[bind] is not array.");
+				SetError(res, -2, pErrorCallback, "[bind] is not array.");
 				return 0;
 			}
 			const	Json::Value		&name	= req["name"];
@@ -113,7 +126,7 @@ public:
 
 			STMTPtr	ptr	= Get(name.asCString());
 			if( nullptr == ptr ) {
-				SetError(res, -1, "[%s] is not found.", name.asCString());
+				SetError(res, -2, pErrorCallback, "[%s] is not found.", name.asCString());
 				return 0;
 			}	
 
@@ -136,7 +149,7 @@ public:
 						}
 					}
 					catch( std::exception & e ) {
-						m_log.Log("%-32s exception(bind):%s", __func__, e.what());
+						SetError(res, -1, pErrorCallback, "bind:%s", e.what());
 					}
 				}		
 			}
@@ -184,7 +197,7 @@ public:
 								res["row"].append(row);
 							}
 							catch( std::exception & e ) {
-								m_log.Log("%-32s exception(row):%s", __func__, e.what());
+								SetError(res, -1, pErrorCallback, "row:%s", e.what());
 							}
 						}		
 					}
@@ -201,7 +214,7 @@ public:
 			res["rowCount"]	= nCount;
 		}
 		catch( std::exception & e ) {
-			res["exception"]	= e.what();		
+			SetError(res, -1, pErrorCallback, "exception:%s", e.what());
 		}	
 		res["bind"]	= req["bind"];
 		return nCount;

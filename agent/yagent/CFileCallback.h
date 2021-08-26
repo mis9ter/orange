@@ -155,6 +155,41 @@ private:
 		}
 		return nCount ? true : false;
 	}
+	void	BindInt64(Json::Value & doc, int64_t nValue) {
+		doc["type"]		= "int64";
+		doc["value"]	= nValue;
+	}
+	void	BindInt(Json::Value & doc, int nValue) {
+		doc["type"]		= "int";
+		doc["value"]	= nValue;
+	}
+	bool	Insert(
+		PCWSTR			pFilePath,
+		PY_FILE_MESSAGE	p
+	) {
+		bool			bRet	= false;
+		int				nCount	= 0;
+		Json::Value		req, res;
+		Json::Value		&bind	= req["bind"];
+
+		req["name"]			= "file.insert";
+		BindInt64(	bind[0],	p->FPUID);
+		BindInt64(	bind[1],	p->FUID);
+		BindInt64(	bind[2],	p->PUID);
+		BindInt64(	bind[3],	GetStrUID(StringFilePath, pFilePath));
+		BindInt(	bind[4],	p->nCount);
+		BindInt(	bind[5],	p->bCreate);
+		BindInt(	bind[6],	0);					//	[TODO] delete count
+		BindInt(	bind[7],	p->bIsDirectory);
+		BindInt(	bind[8],	p->read.nCount);
+		BindInt64(	bind[9],	p->read.nSize);
+		BindInt(	bind[10],	p->write.nCount);
+		BindInt64(	bind[11],	p->write.nSize);
+
+		nCount	= Query(req, res);
+		res["count"]	= nCount;
+		return bRet;
+	}
 	bool	IsExisting_OLD(
 		PY_FILE_MESSAGE	p
 	) {
@@ -173,7 +208,7 @@ private:
 		}
 		return nCount ? true : false;
 	}
-	bool	Insert(
+	bool	Insert_OLD(
 		PCWSTR			pFilePath,
 		PY_FILE_MESSAGE	p
 	) {
