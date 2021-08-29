@@ -1,6 +1,7 @@
 #pragma once
 
 typedef std::function<void (std::string & name, std::string & query, sqlite3_stmt * p)>	PStmtCallback;
+typedef std::function<void (int nErrorCode, const char * pErrorMessage)>				PQueryCallback;
 
 typedef struct _STMT {
 	_STMT() 
@@ -49,6 +50,18 @@ public:
 	}
 	~CStmt() {
 	
+	}
+	static	void	BindUInt64(Json::Value & doc, uint64_t nValue) {
+		doc["type"]		= "uint64";
+		doc["value"]	= nValue;
+	}
+	static	void	BindInt64(Json::Value & doc, uint64_t nValue) {
+		doc["type"]		= "int64";
+		doc["value"]	= nValue;
+	}
+	static	void	BindInt(Json::Value & doc, int nValue) {
+		doc["type"]		= "int";
+		doc["value"]	= nValue;
 	}
 	/*
 		input:
@@ -101,11 +114,12 @@ public:
 		va_end(argptr);
 		//doc["error"]["message"]	= szBuf;
 		if( pCallback )	pCallback(nCode, szBuf);
+		m_log.Log("%-32s %s", __func__, szBuf);
 	} 
 	unsigned int	Query(
 		const Json::Value & req, 
 		Json::Value & res,
-		std::function<void (int nErrorCode, const char * pErrorMessage)>	pErrorCallback = NULL
+		PQueryCallback	pErrorCallback = NULL
 	) {	
 		//	sqlite3 오류 코드 > 0 0인 경우 성공
 		//	sqlite3 이외의 오류인 경우는 음수를 사용할 것.
@@ -135,21 +149,29 @@ public:
 			int		nIndex	= 0;
 			for( auto & t : bind ) {
 				if( t.isObject() ) {				
-					try {
-						const	Json::Value	&type	= t["type"];
-						const	Json::Value	&value	= t["value"];					
+					const		Json::Value	&type	= t["type"];
+					const		Json::Value	&value	= t["value"];		
+					uint64_t	nValue64;
+
+					try {									
 						if( !type.asString().compare("int") ) {							
 							sqlite3_bind_int(ptr->pStmt, ++nIndex, value.asInt());
 						}
 						else if( !type.asString().compare("int64") ) {
-							sqlite3_bind_int64(ptr->pStmt, ++nIndex, value.asUInt64());
+							sqlite3_bind_int64(ptr->pStmt, ++nIndex, nValue64 = value.asLargestInt());
+						}
+						else if( !type.asString().compare("uint64") ) {
+							sqlite3_bind_int64(ptr->pStmt, ++nIndex, nValue64 = value.asLargestUInt());
 						}
 						else if( !type.asString().compare("text")) {
 							sqlite3_bind_text(ptr->pStmt, ++nIndex, value.asCString(), -1, SQLITE_TRANSIENT);
 						}
 					}
 					catch( std::exception & e ) {
-						SetError(res, -1, pErrorCallback, "bind:%s", e.what());
+						SetError(res, -1, pErrorCallback, "bind[%s]:%s", type.asCString(), e.what());
+						JsonUtil::Json2String(t, [&](std::string &str) {
+							m_log.Log(str.c_str());
+						});
 					}
 				}		
 			}
@@ -189,6 +211,9 @@ public:
 								else if( !type.asString().compare("int64") ) {
 									row[nIndex]	= sqlite3_column_int64(ptr->pStmt, nIndex);
 								}
+								else if( !type.asString().compare("uint64") ) {
+									row[nIndex]	= (uint64_t)sqlite3_column_int64(ptr->pStmt, nIndex);
+								}
 								else {
 									pValue	= sqlite3_column_text(ptr->pStmt, nIndex);
 									row[nIndex]	= pValue? pValue : Json::Value::null;
@@ -204,6 +229,7 @@ public:
 					nCount++;
 				}
 				else if( SQLITE_DONE == nStatus ) {
+					nCount++;
 					break;
 
 				}
