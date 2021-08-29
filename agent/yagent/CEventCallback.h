@@ -5,6 +5,7 @@
 #include "CDB.h"
 #include "yagent.string.h"
 #include "CStringTable.h"
+#include "CStmt.h"
 
 #define IDLE_COMMIT		1
 #define IDLE_COUNT		1000
