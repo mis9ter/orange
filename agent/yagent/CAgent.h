@@ -24,7 +24,6 @@
 #include "CService.h"
 #include "CEventCallback.h"
 #include "CProtect.h"
-#include "CStmt.h"
 
 typedef std::function<void(HANDLE hShutdown, void * pCallbackPtr)>	PFUNC_AGENT_RUNLOOP;
 
@@ -388,9 +387,11 @@ public:
 	);
 	static	bool	CALLBACK	ServiceFunction(DWORD dwFunction, DWORD dwControl, LPVOID lpContext);
 	unsigned int	Query(
-		const Json::Value & input, 
-		Json::Value & output) {
-		return CStmt::Query(input, output);
+		const Json::Value	&req, 
+		Json::Value			&res,
+		PQueryCallback		pCallback
+		) {
+		return CStmt::Query(req, res, pCallback);
 	}
 
 	void			LogDoc(PCSTR pTitle, const Json::Value & res) {
