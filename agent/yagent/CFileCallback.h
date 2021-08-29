@@ -24,12 +24,13 @@ public:
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
 	virtual	bool		GetModule(PCWSTR pProcGuid, DWORD PID, ULONG_PTR pAddress,
 						PWSTR pValue, DWORD dwSize)	= NULL;
-	virtual		bool		FindModule(PROCUID PUID, PVOID pStartAddress,
+	virtual		bool	FindModule(PROCUID PUID, PVOID pStartAddress,
 						PVOID	pContext, std::function<void (PVOID, CProcess *, CModule *, PVOID)> pCallback)	= NULL;
 	virtual		bool		GetProcess(PROCUID PUID, 
 		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback)	= NULL;
 	virtual		STRUID	GetStrUID(IN StringType type, IN PCWSTR pStr)	= NULL;
-	virtual		unsigned int	Query(const Json::Value & input, Json::Value & output)	= NULL;
+	virtual		unsigned int		
+						Query(const Json::Value & input, Json::Value & output, PQueryCallback pCallback = NULL)	= NULL;
 
 	PCSTR				Name() {
 		return m_name.c_str();
@@ -127,24 +128,16 @@ private:
 		PY_FILE_MESSAGE	p
 	) {
 		int			nCount	= 0;
-		bool		bRet	= false;
 		Json::Value	req;
-		Json::Value	bind;
+		Json::Value	&bind	= req["bind"];
 		Json::Value	res;
 
 		req["name"]	= "file.isExisting";
-		bind["type"]	= "int64";
-		bind["value"]	= p->FPUID;
-
-		req["bind"].append(bind);
-
-		nCount	= Query(req, res);
-		res["count"]	= nCount;
-		JsonUtil::Json2String(res, [&](std::string & str) {
-
-			m_log.Log(str.c_str());
+		CStmt::BindUInt64(	bind[0],	p->FPUID);
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
-
+		res["count"]	= nCount;
 		if( nCount ) {
 			try {
 				nCount	= res["row"][0][0].asInt();
@@ -155,40 +148,54 @@ private:
 		}
 		return nCount ? true : false;
 	}
-	void	BindInt64(Json::Value & doc, int64_t nValue) {
-		doc["type"]		= "int64";
-		doc["value"]	= nValue;
-	}
-	void	BindInt(Json::Value & doc, int nValue) {
-		doc["type"]		= "int";
-		doc["value"]	= nValue;
-	}
 	bool	Insert(
 		PCWSTR			pFilePath,
 		PY_FILE_MESSAGE	p
 	) {
-		bool			bRet	= false;
 		int				nCount	= 0;
 		Json::Value		req, res;
 		Json::Value		&bind	= req["bind"];
 
 		req["name"]			= "file.insert";
-		BindInt64(	bind[0],	p->FPUID);
-		BindInt64(	bind[1],	p->FUID);
-		BindInt64(	bind[2],	p->PUID);
-		BindInt64(	bind[3],	GetStrUID(StringFilePath, pFilePath));
-		BindInt(	bind[4],	p->nCount);
-		BindInt(	bind[5],	p->bCreate);
-		BindInt(	bind[6],	0);					//	[TODO] delete count
-		BindInt(	bind[7],	p->bIsDirectory);
-		BindInt(	bind[8],	p->read.nCount);
-		BindInt64(	bind[9],	p->read.nSize);
-		BindInt(	bind[10],	p->write.nCount);
-		BindInt64(	bind[11],	p->write.nSize);
+		CStmt::BindUInt64(	bind[0],	p->FPUID);
+		CStmt::BindUInt64(	bind[1],	p->FUID);
+		CStmt::BindUInt64(	bind[2],	p->PUID);
+		CStmt::BindUInt64(	bind[3],	GetStrUID(StringFilePath, pFilePath));
+		CStmt::BindInt(	bind[4],	p->nCount);
+		CStmt::BindInt(	bind[5],	p->bCreate);
+		CStmt::BindInt(	bind[6],	0);					//	[TODO] delete count
+		CStmt::BindInt(	bind[7],	p->bIsDirectory);
+		CStmt::BindInt(	bind[8],	p->read.nCount);
+		CStmt::BindUInt64(	bind[9],	p->read.nSize);
+		CStmt::BindInt(	bind[10],	p->write.nCount);
+		CStmt::BindUInt64(	bind[11],	p->write.nSize);
 
-		nCount	= Query(req, res);
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+		});
 		res["count"]	= nCount;
-		return bRet;
+		return nCount? true : false;
+	}
+	bool	Update(
+		PY_FILE_MESSAGE	p
+	) {
+		int				nCount	= 0;
+		Json::Value		req, res;
+		Json::Value		&bind	= req["bind"];
+
+		req["name"]	= "file.update";
+		CStmt::BindInt(		bind[0],	p->bCreate);
+		CStmt::BindInt(		bind[1],	0);
+		CStmt::BindInt(		bind[2],	p->read.nCount);
+		CStmt::BindUInt64(	bind[3],	p->read.nBytes);
+		CStmt::BindInt(		bind[4],	p->write.nCount);
+		CStmt::BindUInt64(	bind[5],	p->write.nBytes);
+		CStmt::BindUInt64(	bind[6],	p->FPUID);
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+		});
+		res["count"]	= nCount;
+		return nCount? true : false;
 	}
 	bool	IsExisting_OLD(
 		PY_FILE_MESSAGE	p
@@ -250,7 +257,7 @@ private:
 		}
 		return bRet;
 	}
-	bool	Update(
+	bool	Update_OLD(
 		PY_FILE_MESSAGE	p
 	) {
 		const char* pUpdate = "update file "	\
