@@ -60,7 +60,8 @@ typedef std::map<STRUID, StrPtr>					StrUIDMap;
 class CStringTable
 	:
 	public	CCRC64,
-	virtual	public CAppLog
+	virtual	public	CAppLog,
+	virtual	public	CStmt
 {
 public:
 	CStringTable() 
@@ -74,37 +75,13 @@ public:
 	~CStringTable() {
 	
 	}
+	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	void			Create() {
-		PCSTR	pInsert		= "insert into string(SUID,Value,CNT,Type) values(?,?,?,?)";
-		PCSTR	pSelect1	= "select SUID,Value,CNT,CreateTime,LastTime from string where SUID=?";
-		PCSTR	pSelect2	= "select SUID,Value,CNT,CreateTime,LastTime from string where Value=?";
-		PCSTR	pUpdate		= "update string set CNT=CNT+1,LastTime=CURRENT_TIMESTAMP where SUID=?";
-		PCSTR	pIsExist	= "select count(SUID) from string where SUID=?";
-		if (Db()->IsOpened()) {
-			if( NULL == (m_stmt.pInsert	= Db()->Stmt(pInsert)) )
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
-			if (NULL == (m_stmt.pSelect1 = Db()->Stmt(pSelect1)))
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
-			if (NULL == (m_stmt.pSelect2 = Db()->Stmt(pSelect2)))
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
-			if (NULL == (m_stmt.pUpdate = Db()->Stmt(pUpdate)))
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
-			if (NULL == (m_stmt.pIsExist = Db()->Stmt(pIsExist)))
-				m_log.Log("%s", sqlite3_errmsg(Db()->Handle()));
-		}
-		else {
-			ZeroMemory(&m_stmt, sizeof(m_stmt));
-		}
 		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, 60, 
 							this, PeriodicCallback);
 	}	
 	void			Destroy() {
 		Flush(true);
-		if( m_stmt.pInsert )	Db()->Free(m_stmt.pInsert);
-		if( m_stmt.pSelect1)	Db()->Free(m_stmt.pSelect1);
-		if( m_stmt.pSelect2)	Db()->Free(m_stmt.pSelect2);
-		if( m_stmt.pUpdate)		Db()->Free(m_stmt.pUpdate);
-		if( m_stmt.pIsExist)	Db()->Free(m_stmt.pIsExist);
 	}
 	STRUID			GetStrUID(IN StringType type, IN PCWSTR pStr) {
 		STRUID	SUID	= 0;
@@ -186,7 +163,6 @@ public:
 			}
 			m_log.Log("%-32s T:%d UPSERT:%d D:%d", __func__, m_str.size(), dwUpsert, nDeleted);
 		});	
-		//Db()->Commit(__func__);
 	}
 	void			Lock(PVOID pContext, std::function<void (PVOID)> pCallback) {
 		m_lock.Lock(pContext, pCallback);
@@ -195,9 +171,6 @@ public:
 		if( NULL == pValue )	return 0;
 		return GetCrc64((PVOID)pValue, (DWORD)(wcslen(pValue) * sizeof(WCHAR)));	
 	}
-	virtual	CDB *	Db()	= NULL;
-	virtual	INotifyCenter *	NotifyCenter() = NULL;
-	virtual	CDB*	Db(PCWSTR pName) = NULL;
 private:
 	CAppLog		m_log;
 	CDB			*m_pDB;
@@ -222,46 +195,147 @@ private:
 		sqlite3_stmt	*pUpdate;
 		sqlite3_stmt	*pIsExist;
 	}	m_stmt;
-	bool			IsExist(IN STRUID SUID) {
-		int				nCount	= 0;
-		sqlite3_stmt	*pStmt	= m_stmt.pIsExist;
-		if (pStmt) {
-			int		nBind	= 0;
-			sqlite3_bind_int64(pStmt,	++nBind, SUID);
-			if (SQLITE_ROW == sqlite3_step(pStmt))	{
-				nCount		= sqlite3_column_int(pStmt, 0);
+	bool			IsExisting(IN STRUID SUID) {
+		int			nCount	= 0;
+		Json::Value	req;
+		Json::Value	&bind	= req["bind"];
+		Json::Value	res;
+
+		req["name"]	= "string.isExisting";
+		CStmt::BindUInt64(	bind[0],	SUID);
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+		});
+		res["count"]	= nCount;
+		if( nCount ) {
+			try {
+				nCount	= res["row"][0][0].asInt();
 			}
-			else {
-				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
+			catch( std::exception & e) {
+				m_log.Log("%-32s %s", __func__, e.what());
 			}
-			sqlite3_reset(pStmt);
-		} 
-		return nCount? true : false;
+		}
+		return nCount ? true : false;
 	}
 	bool			Update(IN PSTRING p) {
-		bool			bRet	= false;
-		sqlite3_stmt	*pStmt	= m_stmt.pUpdate;
-		if (pStmt) {
-			int		nBind	= 0;
-			sqlite3_bind_int64(pStmt,	++nBind,	p->SUID);
-			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
-			else {
-				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
+		int			nCount	= 0;
+		Json::Value	req;
+		Json::Value	&bind	= req["bind"];
+		Json::Value	res;
+
+		req["name"]	= "string.update";
+		CStmt::BindUInt64(	bind[0],	p->SUID);
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+		});
+		res["count"]	= nCount;
+		if( nCount ) {
+			try {
+				nCount	= res["row"][0][0].asInt();
 			}
-			sqlite3_reset(pStmt);
-		} 
-		return bRet;	
+			catch( std::exception & e) {
+				m_log.Log("%-32s %s", __func__, e.what());
+			}
+		}
+		return nCount ? true : false;	
 	}
 	bool			Upsert(IN PSTRING p) {
-		if( IsExist(p->SUID)) {
+		if( IsExisting(p->SUID)) {
 			return Update(p);
 		}	
 		return Insert(p);
 	}
 	bool			Select1(IN STRUID SUID, OUT PSTRING p) {
 
+		int			nCount	= 0;
+		Json::Value	req;
+		Json::Value	&bind	= req["bind"];
+		Json::Value	res;
+
+		req["name"]	= "string.select1";
+		CStmt::BindUInt64(	bind[0],	SUID);
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+			m_log.Log("---- req ----");
+			JsonUtil::Json2String(req, [&](std::string &str) {
+				m_log.Log(str.c_str());
+			});
+		});
+		res["count"]	= nCount;
+		if( nCount ) {
+			try {
+				JsonUtil::Json2String(res, [&](std::string &str) {
+					m_log.Log(str.c_str());
+				});
+			}
+			catch( std::exception & e) {
+				m_log.Log("%-32s %s", __func__, e.what());
+				m_log.Log("---- res ----");
+				JsonUtil::Json2String(res, [&](std::string &str) {
+					m_log.Log(str.c_str());
+				});
+			}
+		}
+		else {
+			m_log.Log("no count");
+		}
+		return nCount ? true : false;	
+	}
+	bool			Select2(IN PCWSTR pStr, OUT PSTRING p) {
+
+		int			nCount	= 0;
+		Json::Value	req;
+		Json::Value	&bind	= req["bind"];
+		Json::Value	res;
+
+		req["name"]	= "string.select2";
+		CStmt::BindString(	bind[0],	pStr);
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+		});
+		res["count"]	= nCount;
+		if( nCount ) {
+			try {
+				nCount	= res["row"][0][0].asInt();
+			}
+			catch( std::exception & e) {
+				m_log.Log("%-32s %s", __func__, e.what());
+			}
+		}
+		JsonUtil::Json2String(res, [&](std::string & str) {
+			m_log.Log(str.c_str());
+		});
+		return nCount ? true : false;	
+		/*
 		bool			bRet	= false;
-		sqlite3_stmt	*pStmt	= m_stmt.pSelect1;
+		sqlite3_stmt	*pStmt	= NULL;
+		if (pStmt) {
+			int		nBind	= 0;
+			sqlite3_bind_text16(pStmt,	++nBind, pStr, -1, SQLITE_STATIC);
+			if (SQLITE_ROW == sqlite3_step(pStmt))	{
+				int			nCol	= 0;
+				PCWSTR		pValue	= NULL;
+				uint64_t	nCount	= 0;
+
+				p->SUID		= sqlite3_column_int64(pStmt, nCol++);
+				pValue		= (PCWSTR)sqlite3_column_text16(pStmt, nCol++);
+				p->nCount	= (DWORD)sqlite3_column_int64(pStmt, nCol++);
+				p->value	= pValue;
+				bRet = true;
+			}
+			else {
+				m_log.Log("%-32s STR:%ws %s", __func__, pStr, sqlite3_errmsg(Db()->Handle()));
+			}
+			sqlite3_reset(pStmt);
+		} 
+		return bRet;
+		*/
+	}
+	/*
+	bool			Select1_OLD(IN STRUID SUID, OUT PSTRING p) {
+
+		bool			bRet	= false;
+		sqlite3_stmt	*pStmt	= NULL;
 		int				nRet	= 0;
 		if (pStmt) {
 			int		nBind	= 0;
@@ -284,10 +358,10 @@ private:
 		} 
 		return bRet;
 	}
-	bool			Select2(IN PCWSTR pStr, OUT PSTRING p) {
+	bool			Select2_OLD(IN PCWSTR pStr, OUT PSTRING p) {
 	
 		bool			bRet	= false;
-		sqlite3_stmt	*pStmt	= m_stmt.pSelect2;
+		sqlite3_stmt	*pStmt	= NULL;
 		if (pStmt) {
 			int		nBind	= 0;
 			sqlite3_bind_text16(pStmt,	++nBind, pStr, -1, SQLITE_STATIC);
@@ -309,26 +383,32 @@ private:
 		} 
 		return bRet;
 	}
+	*/
 	bool			Insert(IN PSTRING p) {
-		bool			bRet	= false;
-		sqlite3_stmt	*pStmt	= m_stmt.pInsert;
-		if (pStmt) {
-			int		nBind	= 0;
-			sqlite3_bind_int64(pStmt,	++nBind,	p->SUID);
-			sqlite3_bind_text16(pStmt,	++nBind,	p->value.c_str(), -1, SQLITE_STATIC);
-			sqlite3_bind_int64(pStmt,	++nBind,	p->nCount);
-			sqlite3_bind_int(pStmt,		++nBind,	p->type);
-			if (SQLITE_DONE == sqlite3_step(pStmt))	bRet = true;
-			else {
-				m_log.Log("%-32s %s", __func__, sqlite3_errmsg(Db()->Handle()));
+		int			nCount	= 0;
+		Json::Value	req;
+		Json::Value	&bind	= req["bind"];
+		Json::Value	res;
+
+		req["name"]	= "string.insert";
+		CStmt::BindUInt64(	bind[0],	p->SUID);
+		CStmt::BindString(	bind[1],	p->value.c_str());
+		CStmt::BindUInt64(	bind[2],	p->nCount);
+		CStmt::BindInt(		bind[3],	p->type);	
+		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+		});
+		res["count"]	= nCount;
+		if( nCount ) {
+			try {
+				nCount	= res["row"][0][0].asInt();
 			}
-			sqlite3_reset(pStmt);
-		} 
-		return bRet;
+			catch( std::exception & e) {
+				m_log.Log("%-32s %s", __func__, e.what());
+			}
+		}
+		return nCount ? true : false;	
 	}
-
-
-
 	static	void	PeriodicCallback(
 		WORD wType, WORD wEvent, PVOID pData, ULONG_PTR nDataSize, PVOID pContext
 	) {

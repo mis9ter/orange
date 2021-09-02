@@ -5,14 +5,19 @@ class CFileCallback
 	:
 	protected		IEventCallback,
 	public virtual	CAppLog,
-	virtual public	CStringTable
+	virtual public	CStringTable,
+	virtual	public	CStmt
 {
 public:
 	CFileCallback()
 		:
 		m_log(L"file.log")
 	{
+#if defined(USE_STMT) && 1 == USE_STMT
+
+#else
 		ZeroMemory(&m_stmt, sizeof(m_stmt));
+#endif
 		m_name = EVENT_CALLBACK_NAME;
 		m_log.Log(NULL);
 	}
@@ -29,15 +34,15 @@ public:
 	virtual		bool		GetProcess(PROCUID PUID, 
 		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback)	= NULL;
 	virtual		STRUID	GetStrUID(IN StringType type, IN PCWSTR pStr)	= NULL;
-	virtual		unsigned int		
-						Query(const Json::Value & input, Json::Value & output, PQueryCallback pCallback = NULL)	= NULL;
-
 	PCSTR				Name() {
 		return m_name.c_str();
 	}
 protected:
 	void		Create()
 	{
+#if defined(USE_STMT) && 1 == USE_STMT
+
+#else
 		const char* pInsert = "insert into file"	\
 			"("\
 			"FPUID,FUID,PUID,PathUID,Count,CreateCount,DeleteCount"\
@@ -64,15 +69,20 @@ protected:
 		else {
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
+#endif
 	}
 	void		Destroy()
 	{
+#if defined(USE_STMT) && 1 == USE_STMT
+
+#else
 		if (Db()->IsOpened()) {
 			if (m_stmt.pInsert)		Db()->Free(m_stmt.pInsert);
 			if (m_stmt.pUpdate)		Db()->Free(m_stmt.pUpdate);
 			if (m_stmt.pIsExisting)	Db()->Free(m_stmt.pIsExisting);
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
 		}
+#endif
 	}
 	static	bool			Proc2
 	(
@@ -119,11 +129,19 @@ private:
 	std::string		m_name;
 	CLock			m_lock;
 	CAppLog			m_log;
+
+#if defined(USE_STMT) && 1 == USE_STMT
+
+#else
 	struct {
 		sqlite3_stmt* pInsert;
 		sqlite3_stmt* pUpdate;
 		sqlite3_stmt* pIsExisting;
 	}	m_stmt;
+#endif
+
+#if defined(USE_STMT) && 1 == USE_STMT
+
 	bool	IsExisting(
 		PY_FILE_MESSAGE	p
 	) {
@@ -197,6 +215,7 @@ private:
 		res["count"]	= nCount;
 		return nCount? true : false;
 	}
+	#else
 	bool	IsExisting_OLD(
 		PY_FILE_MESSAGE	p
 	) {
@@ -285,4 +304,5 @@ private:
 		}
 		return bRet;
 	}
+	#endif
 };

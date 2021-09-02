@@ -4,8 +4,8 @@
 #include <atomic>
 #include "CDB.h"
 #include "yagent.string.h"
-#include "CStringTable.h"
 #include "CStmt.h"
+#include "CStringTable.h"
 
 #define IDLE_COMMIT		1
 #define IDLE_COUNT		1000
@@ -123,13 +123,14 @@ typedef std::map<std::string, IEventCallback*>	EventCallbackMap;
 class CEventCallback
 	:
 	virtual	public	CAppLog,
+	virtual	public	CStmt,
+	virtual	public	CStringTable,
 	public	CProcessCallback,
 	public	CThreadCallback,
 	public	CModuleCallback,
 	public	CBootCallback,
 	public	CRegistryCallback,
-	public	CFileCallback,
-	virtual	public	CStringTable
+	public	CFileCallback
 {
 
 public:
@@ -147,7 +148,7 @@ public:
 		m_counter.dwModule	= 0;
 		m_counter.dwThread	= 0;
 
-		RegisterEventCallback(dynamic_cast<IEventCallback *>(dynamic_cast<CProcessCallback*>(this)));
+		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CProcessCallback*>(this)));
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CModuleCallback*>(this)));
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CThreadCallback*>(this)));
 		RegisterEventCallback(dynamic_cast<IEventCallback*>(dynamic_cast<CBootCallback*>(this)));	
@@ -180,7 +181,7 @@ public:
 		return CBootCallback::GetBootUID();	
 	}
 	virtual	CDB*	Db(PCWSTR pName) = NULL;
-	bool		GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
+	bool			GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
 		return CModuleCallback::GetModules2(PID, pContext, pCallback);	
 	}
 
@@ -405,24 +406,24 @@ public:
 
 	} m_counter;
 
-	bool		AddModule(PROCUID PUID, PMODULE p)	{
+	bool			AddModule(PROCUID PUID, PMODULE p)	{
 		return CProcessCallback::AddModule(PUID, p);	
 	}
-	bool		FindModule(PROCUID PUID, PVOID pStartAddress,
+	bool			FindModule(PROCUID PUID, PVOID pStartAddress,
 		PVOID	pContext, std::function<void (PVOID, CProcess *, CModule *, PVOID)> pCallback) {
 		return CProcessCallback::FindModule(PUID, pStartAddress, pContext, pCallback);	
 		
 	}
-	bool		GetProcess(PROCUID PUID, 
+	bool			GetProcess(PROCUID PUID, 
 		PVOID	pContext, std::function<void (PVOID, CProcess *)> pCallback) {
 		return CProcessCallback::GetProcess(PUID, pContext, pCallback);	
 	}
 protected:
-	void	Wait(IN DWORD dwMilliSeconds)
+	void			Wait(IN DWORD dwMilliSeconds)
 	{
 		WaitForSingleObject(m_hWait, dwMilliSeconds);
 	}
-	bool	SendMessageToWebApp(Json::Value & req, Json::Value & res) 
+	bool			SendMessageToWebApp(Json::Value & req, Json::Value & res) 
 	{
 		CIPC	client;
 		HANDLE	hClient;
@@ -601,7 +602,7 @@ protected:
 		Sleep(1);
 		return bRet;
 	}
-	EventCallbackTable & CallbackTable() {
+	EventCallbackTable &	CallbackTable() {
 		return m_table;
 	}
 private:

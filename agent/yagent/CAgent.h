@@ -323,7 +323,6 @@ class CAgent
 	public	CIPC,
 	public	CIPCCommand,
 	public	CIPCCommandCallback,
-	public	CStmt,
 	public	CProtect
 {
 public:
@@ -386,14 +385,6 @@ public:
 		IN DWORD dwControl, IN DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext
 	);
 	static	bool	CALLBACK	ServiceFunction(DWORD dwFunction, DWORD dwControl, LPVOID lpContext);
-	unsigned int	Query(
-		const Json::Value	&req, 
-		Json::Value			&res,
-		PQueryCallback		pCallback
-		) {
-		return CStmt::Query(req, res, pCallback);
-	}
-
 	void			LogDoc(PCSTR pTitle, const Json::Value & res) {
 		std::string					str;
 		Json::StreamWriterBuilder	wbuilder;

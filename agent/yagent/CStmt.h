@@ -1,5 +1,7 @@
 #pragma once
 
+#define USE_STMT	1
+
 typedef std::function<void (std::string & name, std::string & query, sqlite3_stmt * p)>	PStmtCallback;
 typedef std::function<void (int nErrorCode, const char * pErrorMessage)>				PQueryCallback;
 
@@ -50,6 +52,10 @@ public:
 	}
 	~CStmt() {
 	
+	}
+	static	void	BindString(Json::Value & doc, PCWSTR pValue) {
+		doc["type"]		= "text";
+		doc["value"]	= __utf8(pValue);
 	}
 	static	void	BindUInt64(Json::Value & doc, uint64_t nValue) {
 		doc["type"]		= "uint64";
@@ -125,7 +131,8 @@ public:
 		//	sqlite3 이외의 오류인 경우는 음수를 사용할 것.
 		//	-1	exception
 		//	-2	not found
-		UINT	nCount	= 0;	
+		UINT		nCount	= 0;	
+		STMTPtr		ptr		= nullptr;
 		try {
 			if( false == req.isMember("name") ) {
 				SetError(res, -2, pErrorCallback, "[name] is not found.");
@@ -138,14 +145,13 @@ public:
 			const	Json::Value		&name	= req["name"];
 			const	Json::Value		&bind	= req["bind"];
 
-			STMTPtr	ptr	= Get(name.asCString());
+			ptr	= Get(name.asCString());
 			if( nullptr == ptr ) {
 				SetError(res, -2, pErrorCallback, "[%s] is not found.", name.asCString());
 				return 0;
 			}	
 
 			res["sql"]	= ptr->query;
-
 			int		nIndex	= 0;
 			for( auto & t : bind ) {
 				if( t.isObject() ) {				
@@ -175,7 +181,7 @@ public:
 					}
 				}		
 			}
-			int			nStatus;
+			int			nStatus			= 0;
 			int			nColumnCount	= sqlite3_column_count(ptr->pStmt);
 			const char	*pColumnName	= NULL;
 			const char	*pColumnType	= NULL;
@@ -187,51 +193,55 @@ public:
 				column["name"]	= pColumnName? pColumnName : Json::Value::null;
 				pColumnType		= sqlite3_column_decltype(ptr->pStmt, i);
 				column["type"]	= pColumnType? pColumnType : Json::Value::null;
-
 				res["column"].append(column);
 			}
+
+			[TODO]	row 부분이 제대로 처리되지 않음.
 			while( true ) {
 				nStatus	= sqlite3_step(ptr->pStmt);
 				Json::Value		row;
 				if( SQLITE_ROW == nStatus ) {
-					nIndex	= 0;
-					for( auto & t : bind ) {
-						if( t.isObject() ) {				
-							try {
+					row.clear();
+					for( unsigned i = 0 ; i < column.size() ; i++ ) {
+						try {
+							auto	&t	= res["column"][i];
+							if( t.isObject() ) {				
 								const	Json::Value	&type		= t["type"];
-								const	Json::Value	&value		= t["value"];
+								const	Json::Value	&name		= t["name"];
 
 								const	unsigned char	*pValue		= NULL;
 								const	int				nValue		= 0;
 								const	int64_t			nValue64	= 0;
-
-								if( !type.asString().compare("int") ) {
-									row[nIndex]	= sqlite3_column_int(ptr->pStmt, nIndex);
+								if( !type.asString().compare("INT") ) {
+									row[i]	= sqlite3_column_int(ptr->pStmt, nIndex);
 								}
-								else if( !type.asString().compare("int64") ) {
-									row[nIndex]	= sqlite3_column_int64(ptr->pStmt, nIndex);
+								else if( !type.asString().compare("INTEGER") ) {
+									row[i]	= (uint64_t)sqlite3_column_int64(ptr->pStmt, nIndex);
 								}
-								else if( !type.asString().compare("uint64") ) {
-									row[nIndex]	= (uint64_t)sqlite3_column_int64(ptr->pStmt, nIndex);
+								else if( !type.asString().compare("TIMESTAMP") ) {
+									row[i]	= (char *)sqlite3_column_text(ptr->pStmt, nIndex);
 								}
 								else {
 									pValue	= sqlite3_column_text(ptr->pStmt, nIndex);
-									row[nIndex]	= pValue? pValue : Json::Value::null;
-								}
-								nIndex++;
-								res["row"].append(row);
+									row[i]	= pValue? pValue : Json::Value::null;
+								}								
 							}
-							catch( std::exception & e ) {
-								SetError(res, -1, pErrorCallback, "row:%s", e.what());
+							else {
+								m_log.Log("t is not object.");
 							}
-						}		
+						}
+						catch( std::exception & e ) {
+							SetError(res, -1, pErrorCallback, "%s(%d):%s", __FILE__, __LINE__, e.what());
+						}
 					}
+					JsonUtil::Json2String(row, [&](std::string & str) {
+						m_log.Log(str.c_str());
+					});
+					res["row"].append(row);
 					nCount++;
 				}
 				else if( SQLITE_DONE == nStatus ) {
-					nCount++;
 					break;
-
 				}
 				else 
 					break;
@@ -240,8 +250,9 @@ public:
 			res["rowCount"]	= nCount;
 		}
 		catch( std::exception & e ) {
-			SetError(res, -1, pErrorCallback, "exception:%s", e.what());
+			SetError(res, -1, pErrorCallback, "%s(%d):%s", __FILE__, __LINE__, e.what());
 		}	
+		Reset(ptr);
 		res["bind"]	= req["bind"];
 		return nCount;
 	}
@@ -255,7 +266,7 @@ public:
 		return ptr;
 	}
 	void			Reset(STMTPtr ptr) {
-		sqlite3_reset(ptr->pStmt);
+		if( ptr )	sqlite3_reset(ptr->pStmt);
 	}
 	void			Create(PVOID pData, DWORD dwSize) {
 		CDB		*pDB	= Db(DB_EVENT_NAME);
