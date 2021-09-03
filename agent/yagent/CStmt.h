@@ -185,59 +185,66 @@ public:
 			int			nColumnCount	= sqlite3_column_count(ptr->pStmt);
 			const char	*pColumnName	= NULL;
 			const char	*pColumnType	= NULL;
-			Json::Value	column;
-
-			res["columnCount"]	= nColumnCount;
+			Json::Value	&column			= res["column"];
 			for( auto i = 0 ; i < nColumnCount ; i++ ) {
+				Json::Value		c;
 				pColumnName		= sqlite3_column_name(ptr->pStmt, i);			
-				column["name"]	= pColumnName? pColumnName : Json::Value::null;
+				c["name"]	= pColumnName? pColumnName : Json::Value::null;
 				pColumnType		= sqlite3_column_decltype(ptr->pStmt, i);
-				column["type"]	= pColumnType? pColumnType : Json::Value::null;
-				res["column"].append(column);
+				c["type"]	= pColumnType? pColumnType : Json::Value::null;
+				column.append(c);
 			}
 
-			[TODO]	row 부분이 제대로 처리되지 않음.
-			while( true ) {
+			Json::Value		&row	= res["row"];
+			int				nRow	= 0;
+			for( nRow = 0 ; nRow < 1000 ; nRow++ ) {
+				Json::Value		col;
 				nStatus	= sqlite3_step(ptr->pStmt);
-				Json::Value		row;
 				if( SQLITE_ROW == nStatus ) {
-					row.clear();
+					col.clear();
 					for( unsigned i = 0 ; i < column.size() ; i++ ) {
 						try {
-							auto	&t	= res["column"][i];
-							if( t.isObject() ) {				
-								const	Json::Value	&type		= t["type"];
-								const	Json::Value	&name		= t["name"];
+							auto	&t	= column[i];
+							const	Json::Value	&type		= t["type"];
+							const	Json::Value	&name		= t["name"];
 
-								const	unsigned char	*pValue		= NULL;
-								const	int				nValue		= 0;
-								const	int64_t			nValue64	= 0;
-								if( !type.asString().compare("INT") ) {
-									row[i]	= sqlite3_column_int(ptr->pStmt, nIndex);
-								}
-								else if( !type.asString().compare("INTEGER") ) {
-									row[i]	= (uint64_t)sqlite3_column_int64(ptr->pStmt, nIndex);
-								}
-								else if( !type.asString().compare("TIMESTAMP") ) {
-									row[i]	= (char *)sqlite3_column_text(ptr->pStmt, nIndex);
-								}
-								else {
-									pValue	= sqlite3_column_text(ptr->pStmt, nIndex);
-									row[i]	= pValue? pValue : Json::Value::null;
-								}								
+							const	unsigned char	*pValue		= NULL;
+							const	int				nValue		= 0;
+							const	int64_t			nValue64	= 0;
+
+							int						nType		= sqlite3_column_type(ptr->pStmt, i);
+							if( 0 == nRow ) {
+								//	column 정보를 넣을 때 한번에 하려 했으나 윗 부분에서 하면 모두 type == 5로 나온다.
+								//	실데이터가 필요해.
+								column[i]["@type"]	= nType;
 							}
-							else {
-								m_log.Log("t is not object.");
+							switch( nType ) {
+								case SQLITE_INTEGER:
+									col.append((uint64_t)sqlite3_column_int64(ptr->pStmt, i));
+									break;
+
+								case SQLITE_FLOAT:
+									col.append(sqlite3_column_double(ptr->pStmt, i));
+									break;
+
+								case SQLITE_TEXT:
+									col.append((char *)sqlite3_column_text(ptr->pStmt, i));
+									break;
+
+								case SQLITE_NULL:
+									col.append(Json::Value::null);
+									break;
+
+								case SQLITE_BLOB:
+									col.append("not supported value type");
+									break;
 							}
 						}
 						catch( std::exception & e ) {
 							SetError(res, -1, pErrorCallback, "%s(%d):%s", __FILE__, __LINE__, e.what());
 						}
 					}
-					JsonUtil::Json2String(row, [&](std::string & str) {
-						m_log.Log(str.c_str());
-					});
-					res["row"].append(row);
+					row.append(col);
 					nCount++;
 				}
 				else if( SQLITE_DONE == nStatus ) {
@@ -246,8 +253,7 @@ public:
 				else 
 					break;
 			}
-			res["lastQueryStatus"]	= nStatus;
-			res["rowCount"]	= nCount;
+			res["status"]	= nStatus;
 		}
 		catch( std::exception & e ) {
 			SetError(res, -1, pErrorCallback, "%s(%d):%s", __FILE__, __LINE__, e.what());

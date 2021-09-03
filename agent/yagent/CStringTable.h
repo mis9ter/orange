@@ -206,7 +206,6 @@ private:
 		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
-		res["count"]	= nCount;
 		if( nCount ) {
 			try {
 				nCount	= res["row"][0][0].asInt();
@@ -264,6 +263,7 @@ private:
 		res["count"]	= nCount;
 		if( nCount ) {
 			try {
+				m_log.Log("---- res ----");
 				JsonUtil::Json2String(res, [&](std::string &str) {
 					m_log.Log(str.c_str());
 				});
