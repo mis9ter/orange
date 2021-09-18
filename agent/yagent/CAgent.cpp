@@ -1,10 +1,11 @@
 ﻿#include "Framework.h"
 
 void	CAgent::AddDbList(int nResourceID, PCWSTR pRootPath, PCWSTR pName, DbMap & table) {
-	Log("%-32s begin", __func__);
+	Log("----------------------------------------------------------");
+	Log("%-32s %ws", "pName", pName);
+	Log("----------------------------------------------------------");
 	Log("%-32s %d", "nResourceID", nResourceID);
-	Log("%-32s %ws", "nRootPath", pRootPath);
-	Log("%-32s %ws", "nName", pName);
+	Log("%-32s %ws", "pRootPath", pRootPath);
 
 	try {
 		DbConfigPtr	ptr		=	std::shared_ptr<DB_CONFIG>(new DB_CONFIG);
@@ -22,7 +23,7 @@ void	CAgent::AddDbList(int nResourceID, PCWSTR pRootPath, PCWSTR pName, DbMap & 
 		UNREFERENCED_PARAMETER(e);	
 		Log("%-32s %s", __func__, e.what());
 	}
-	Log("%-32s end", __func__);
+	Log("----------------------------------------------------------");
 }
 CAgent::CAgent()
 	:
@@ -43,11 +44,11 @@ CAgent::CAgent()
 
 	YAgent::GetDataFolder(AGENT_DATA_FOLDERNAME, m_config.path.szData, sizeof(m_config.path.szData));
 	YAgent::GetDataFolder(AGENT_DATA_FOLDERNAME, m_config.path.szDump, sizeof(m_config.path.szDump));
-
 	YAgent::MakeDirectory(m_config.path.szData);
 	AddDbList(IDR_CONFIG_ODB, m_config.path.szData, L"config",		m_db);
 	AddDbList(IDR_EVENT_ODB, m_config.path.szData, L"event",		m_db);
 	AddDbList(IDR_SUMMARY_ODB, m_config.path.szData, L"summary",	m_db);
+	AddDbList(IDR_STRING_ODB, m_config.path.szData, L"string",		m_db);
 
 	m_config.hShutdown	= CreateEvent(NULL, TRUE, FALSE, NULL);
 	Log("%-32s end", __func__);
@@ -109,7 +110,7 @@ bool	CAgent::Initialize()
 			}
 			Patch(t.second->strODB.c_str(), t.second->strCDB.c_str(), NULL);			
 			if ( t.second->cdb.Open(t.second->strCDB.c_str(), __func__) ) {
-
+				Log("%-32s %ws %p", __func__, t.second->strCDB.c_str(), t.second->cdb.Handle());
 			}
 			else {
 				Log("%s can not open db %ws", __func__, t.second->strCDB.c_str());
@@ -135,8 +136,10 @@ void	CAgent::Destroy()
 		m_config.bInitialize = false;
 	}
 	CStmt::Destroy();
+	CStringTable::Destroy();
 	for( auto t : m_db ) {
 		if ( t.second->cdb.IsOpened() ) {
+			Log("%-32s %ws %p", __func__, t.second->strCDB.c_str(), t.second->cdb.Handle());
 			t.second->cdb.Close(__func__);
 		}
 		else {

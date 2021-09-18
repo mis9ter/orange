@@ -249,8 +249,8 @@ public:
 	void			DestroyCallback() {
 		Log("%s", __FUNCTION__);
 		for (auto t : m_events) {
-			Log("%s %s", __FUNCTION__, t.second->Name());
-			//t.second->Destroy();
+			//Log("%s %s", __FUNCTION__, t.second->Name());
+			t.second->Destroy();
 		}
 		CStringTable::Destroy();
 		CDB		*pDB	= Db(DB_EVENT_NAME);

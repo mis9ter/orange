@@ -94,10 +94,13 @@ public:
 		m_log.Log("%s %s @%s", __FUNCTION__, pFilePath, pCause);
 		__function_lock(m_lock.Get());
 		if (SQLITE_OK == sqlite3_open_db(__ansi(pFilePath), &m_pDb)) {
-
+			m_strPath	= pFilePath;
 			return true;
 		}
 		return false;
+	}
+	PCSTR	Path() {
+		return m_strPath.c_str();
 	}
 	bool	Execute(IN	std::function<void (int nAffected, PCSTR pQuery, PCSTR pError)> pCallback,
 		IN const char *pFmt, ...)
@@ -241,6 +244,7 @@ public:
 		if (m_pDb) {
 			sqlite3_close(m_pDb);
 			m_pDb	= NULL;
+			m_strPath.clear();
 			m_log.Log("%s @%s", __FUNCTION__, pCause);
 		}
 	}
@@ -252,6 +256,7 @@ public:
 		Free(p);
 	}
 private:
+	std::string		m_strPath;
 	sqlite3			*m_pDb;
 	CLock			m_lock;
 	CLock			m_lock2;

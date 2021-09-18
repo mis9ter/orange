@@ -19,11 +19,13 @@
 		"list": "select ProcName,ProcPath,count(*) cnt,sum(KernelTime+UserTime) time, sum(KernelTime) ktime, sum(UserTime) utime from process where BootUID=? group by ProcPath order by time desc"
 	},
 	"string": {
-		"@db": "summary",
+		"@db": "string",
 		"insert": "insert into string(SUID,Value,CNT,Type) values(?,?,?,?)",
 		"select1": "select SUID,Value,CNT,CreateTime,LastTime from string where SUID=?",
 		"select2": "select SUID,Value,CNT,CreateTime,LastTime from string where Value=?",
 		"update": "update string set CNT=CNT+1,LastTime=CURRENT_TIMESTAMP where SUID=?",
-		"isExisting": "select count(SUID) from string where SUID=?"
+		"isExisting": "select count(SUID) from string where SUID=?",
+		"begin": "begin",
+		"commit":  "commit"
 	}
 }

@@ -152,7 +152,7 @@ private:
 
 		req["name"]	= "file.isExisting";
 		CStmt::BindUInt64(	bind[0],	p->FPUID);
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
 		res["count"]	= nCount;
@@ -188,7 +188,7 @@ private:
 		CStmt::BindInt(	bind[10],	p->write.nCount);
 		CStmt::BindUInt64(	bind[11],	p->write.nSize);
 
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
 		res["count"]	= nCount;
@@ -209,7 +209,7 @@ private:
 		CStmt::BindInt(		bind[4],	p->write.nCount);
 		CStmt::BindUInt64(	bind[5],	p->write.nBytes);
 		CStmt::BindUInt64(	bind[6],	p->FPUID);
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
 		res["count"]	= nCount;

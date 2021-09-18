@@ -349,6 +349,7 @@ public:
 			Log("%-32s %ws is not found.", __func__, pName);
 			return NULL;
 		}
+		Log("%-32s %ws %p", __func__, pName, t->second->cdb.Handle());
 		return &t->second->cdb;
 	}
 	INotifyCenter *	NotifyCenter() {

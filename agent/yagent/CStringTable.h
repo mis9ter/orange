@@ -23,15 +23,17 @@ typedef struct _STRING {
 	{
 		if( pStr && *pStr )	value	= pStr;
 		SUID		= 0;
-		dwLastTick	= GetTickCount64();
+		nLastTick	= GetTickCount64();
 		nCount		= 1;
+		bSave		= false;
 	}
 	std::wstring		value;
 	STRUID				SUID;
-	DWORD64				dwLastTick;
+	volatile LONG64		nLastTick;
 	UINT64				nCreateTime;
 	StringType			type;
 	volatile	ULONG	nCount;
+	bool				bSave;
 } STRING, *PSTRING;
 
 struct c_str_icompare
@@ -70,14 +72,14 @@ public:
 		m_szNull(L""),
 		m_log(L"string.log")
 	{
-	
+		m_log.Log(NULL);
 	}
 	~CStringTable() {
-	
+		m_log.Log(__func__);
 	}
 	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	void			Create() {
-		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, 60, 
+		NotifyCenter()->RegisterNotifyCallback(__func__, NOTIFY_TYPE_AGENT, NOTIFY_EVENT_PERIODIC, 10, 
 							this, PeriodicCallback);
 	}	
 	void			Destroy() {
@@ -85,7 +87,7 @@ public:
 	}
 	STRUID			GetStrUID(IN StringType type, IN PCWSTR pStr) {
 		STRUID	SUID	= 0;
-		m_lock.Lock(NULL, [&](PVOID pContext) {
+		Lock(NULL, [&](PVOID pContext) {
 			auto	t	= m_str.find(pStr);
 			if( m_str.end() == t ) {
 				SUID	= GetStringCRC64(pStr);		
@@ -105,24 +107,43 @@ public:
 			else {
 				SUID	= t->second->SUID;
 				t->second->nCount++;
-				t->second->dwLastTick	= GetTickCount64();
+				t->second->nLastTick	= GetTickCount64();
 			}
 		});
 		return SUID;
 	}
 	PCWSTR			GetString(STRUID SUID, std::wstring & str) {
 		auto	t	= m_uid.find(SUID);
-		if( m_uid.end() == t ) {
-			//	메모리에 없는 경우 DB에서 읽습니다.
-			STRING	s(NULL);
-			if( Select1(SUID, &s) ) {			
-				str	= s.value;
+		DWORD64	dwTicks	= GetTickCount64();
+
+		Lock(NULL, [&](PVOID pContext) {
+			if( m_uid.end() == t ) {
+				//	메모리에 없는 경우 DB에서 읽습니다.
+				STRING	s(NULL);
+				if( Select1(SUID, &s) ) {			
+					str	= s.value;
+
+					StrPtr	ptr	= std::make_shared<STRING>(str.c_str());
+					ptr->SUID	= SUID;
+					ptr->type	= s.type;
+					ptr->nCount++;
+
+					std::pair<StrMap::iterator, bool>	ret	= m_str.insert(std::pair(ptr->value.c_str(), ptr));
+					if( ret.second ) {
+						m_uid.insert(std::pair(SUID, ptr));					
+					}
+					m_log.Log("%s %I64d %ws[%d]", "Select1", SUID, s.value.c_str(), s.value.length());
+				}
+				else {
+					str	= std::to_wstring(SUID);
+				}				
+			}	
+			else	{
+				str	= t->second->value.c_str();
+				t->second->nLastTick	= dwTicks;
+				//m_log.Log("%s %I64d %ws[%d]", "MEM", SUID, str.c_str(), str.length());
 			}
-			else {
-				str	= std::to_wstring(SUID);
-			}				
-		}	
-		else	str	= t->second->value.c_str();
+		});
 		return str.c_str();
 	}
 	void			Flush(bool bAll = false) {
@@ -133,6 +154,7 @@ public:
 		DWORD	dwUpsert	= 0;
 
 		//Db()->Begin(__func__);
+		Begin();
 		Lock(NULL, [&](PVOID pContext) {
 			for( auto t = m_str.begin()  ; t != m_str.end() ; ) {			
 				bDelete	= false;
@@ -142,17 +164,22 @@ public:
 					bDelete	= true;
 				}
 				else {
-					if( IsOld(t->second.get()) ) {
-						Upsert(t->second.get());
-						dwUpsert++;
-						bDelete	= true;
+					bool	bOld	= IsOld(t->second.get());
+					if( false == t->second->bSave || bOld ) {
+						if( Upsert(t->second.get()) ) {
+							dwUpsert++;
+							t->second->bSave = true;
+						}
+						bDelete	= bOld;
 					}
 				}
 				if( bDelete ) {
 					auto	d	= t++;
+					m_log.Log("%s %.2f %ws(%I64d)", "Flush", (GetTickCount64()-d->second->nLastTick)/1000.0, 
+						d->second->value.c_str(), d->second->SUID);
 					m_uid.erase(d->second->SUID);
 					m_str.erase(d);
-					nDeleted++;
+					nDeleted++;					
 				}
 				else 
 					t++;
@@ -163,6 +190,7 @@ public:
 			}
 			m_log.Log("%-32s T:%d UPSERT:%d D:%d", __func__, m_str.size(), dwUpsert, nDeleted);
 		});	
+		Commit();
 	}
 	void			Lock(PVOID pContext, std::function<void (PVOID)> pCallback) {
 		m_lock.Lock(pContext, pCallback);
@@ -182,7 +210,7 @@ private:
 
 	bool			IsOld(PSTRING p, DWORD64 dwTick = 0) {
 		if( 0 == dwTick )	dwTick = GetTickCount64();
-		if( (dwTick - p->dwLastTick) >= 30 * 1000 ) {
+		if( (dwTick - p->nLastTick) >= 60 * 1000 ) {
 			//m_log.Log("%04d %ws", p->nCount, p->value.c_str());
 			return true;
 		}
@@ -203,7 +231,7 @@ private:
 
 		req["name"]	= "string.isExisting";
 		CStmt::BindUInt64(	bind[0],	SUID);
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
 		if( nCount ) {
@@ -224,7 +252,7 @@ private:
 
 		req["name"]	= "string.update";
 		CStmt::BindUInt64(	bind[0],	p->SUID);
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
 		res["count"]	= nCount;
@@ -244,6 +272,40 @@ private:
 		}	
 		return Insert(p);
 	}
+	bool			Commit() {
+
+		int			nCount	= 0;
+		Json::Value	req;
+		Json::Value	&bind	= req["bind"];
+		Json::Value	res;
+
+		req["name"]	= "string.commit";
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+			m_log.Log("---- req ----");
+			JsonUtil::Json2String(req, [&](std::string &str) {
+				m_log.Log(str.c_str());
+			});
+		});
+		return true;
+	}
+	bool			Begin() {
+
+		int			nCount	= 0;
+		Json::Value	req;
+		Json::Value	&bind	= req["bind"];
+		Json::Value	res;
+
+		req["name"]	= "string.begin";
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
+			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
+			m_log.Log("---- req ----");
+			JsonUtil::Json2String(req, [&](std::string &str) {
+				m_log.Log(str.c_str());
+			});
+		});
+		return true;
+	}
 	bool			Select1(IN STRUID SUID, OUT PSTRING p) {
 
 		int			nCount	= 0;
@@ -253,7 +315,7 @@ private:
 
 		req["name"]	= "string.select1";
 		CStmt::BindUInt64(	bind[0],	SUID);
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 			m_log.Log("---- req ----");
 			JsonUtil::Json2String(req, [&](std::string &str) {
@@ -263,10 +325,14 @@ private:
 		res["count"]	= nCount;
 		if( nCount ) {
 			try {
-				m_log.Log("---- res ----");
-				JsonUtil::Json2String(res, [&](std::string &str) {
-					m_log.Log(str.c_str());
-				});
+				//m_log.Log("---- res ----");
+				//JsonUtil::Json2String(res, [&](std::string &str) {
+				//	m_log.Log(str.c_str());
+				//});
+				p->SUID		= SUID;
+				p->value	= __utf16(res["row"][0][1].asCString());
+				p->nCount	= res["row"][0][2].asUInt();
+				p->nLastTick= GetTickCount64();
 			}
 			catch( std::exception & e) {
 				m_log.Log("%-32s %s", __func__, e.what());
@@ -275,9 +341,6 @@ private:
 					m_log.Log(str.c_str());
 				});
 			}
-		}
-		else {
-			m_log.Log("no count");
 		}
 		return nCount ? true : false;	
 	}
@@ -290,7 +353,7 @@ private:
 
 		req["name"]	= "string.select2";
 		CStmt::BindString(	bind[0],	pStr);
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
 		res["count"]	= nCount;
@@ -395,7 +458,7 @@ private:
 		CStmt::BindString(	bind[1],	p->value.c_str());
 		CStmt::BindUInt64(	bind[2],	p->nCount);
 		CStmt::BindInt(		bind[3],	p->type);	
-		nCount	= Query(req, res, [&](int nErrorCode, const char * pErrorMessage) {
+		nCount	= Query(req, res, false, [&](int nErrorCode, const char * pErrorMessage) {
 			m_log.Log("[%d] %s", nErrorCode, pErrorMessage);
 		});
 		res["count"]	= nCount;

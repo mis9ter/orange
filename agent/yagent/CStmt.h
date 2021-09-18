@@ -123,9 +123,10 @@ public:
 		m_log.Log("%-32s %s", __func__, szBuf);
 	} 
 	unsigned int	Query(
-		const Json::Value & req, 
-		Json::Value & res,
-		PQueryCallback	pErrorCallback = NULL
+		const Json::Value	& req, 
+		Json::Value			& res,
+		bool				bDebugLog		= false,
+		PQueryCallback		pErrorCallback	= NULL
 	) {	
 		//	sqlite3 오류 코드 > 0 0인 경우 성공
 		//	sqlite3 이외의 오류인 경우는 음수를 사용할 것.
@@ -138,7 +139,7 @@ public:
 				SetError(res, -2, pErrorCallback, "[name] is not found.");
 				return 0;
 			}
-			if( req.isMember("bind") && !req["bind"].isArray() ) {
+			if( req.isMember("bind") && !req["bind"].empty() && !req["bind"].isArray() ) {
 				SetError(res, -2, pErrorCallback, "[bind] is not array.");
 				return 0;
 			}
@@ -150,6 +151,11 @@ public:
 				SetError(res, -2, pErrorCallback, "[%s] is not found.", name.asCString());
 				return 0;
 			}	
+			res["db"]["path"]	= ptr->pDB->Path();
+			res["db"]["stmt"]	= ptr->name;
+			res["db"]["handle"]	= (Json::Value::UInt64)ptr->pDB->Handle();
+			if( bDebugLog )
+				m_log.Log("%-32s %p", ptr->name.c_str(), ptr->pDB->Handle());
 
 			res["sql"]	= ptr->query;
 			int		nIndex	= 0;
@@ -275,8 +281,6 @@ public:
 		if( ptr )	sqlite3_reset(ptr->pStmt);
 	}
 	void			Create(PVOID pData, DWORD dwSize) {
-		CDB		*pDB	= Db(DB_EVENT_NAME);
-
 		//m_log.Log("%-32s\n%s", __func__, (char *)pData);
 
 		Json::CharReaderBuilder	builder;
@@ -296,7 +300,7 @@ public:
 					}
 					Json::Value	&dbName	= bname["@db"];
 					stmt.pDB	= Db(__utf16(dbName.asCString()));
-					//m_log.Log("%-32s %s %p", "@db", dbName.asCString(), pDB);
+					m_log.Log("%-32s %p", dbName.asCString(), stmt.pDB->Handle());
 					for( auto & tt : bname.getMemberNames() ) {
 						Json::Value	&sname		= bname[tt];
 						if( sname.isString() ) {						
@@ -307,8 +311,8 @@ public:
 								else {
 									stmt.name	= t + "." + tt;
 									stmt.query	= sname.asString();
-									if( pDB ) {
-										stmt.pStmt	= pDB->Stmt(sname.asCString());
+									if( stmt.pDB ) {
+										stmt.pStmt	= stmt.pDB->Stmt(sname.asCString());
 										if( stmt.pStmt ) {
 											m_log.Log("%-32s: %s", stmt.name.c_str(), sname.asCString());		
 											Add(&stmt);
