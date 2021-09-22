@@ -90,7 +90,9 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		RtlZeroMemory(pConfig, sizeof(CONFIG));
 		pConfig->version.dwOSVersionInfoSize	= sizeof(pConfig->version);
 		RtlGetVersion((RTL_OSVERSIONINFOW *)&pConfig->version);
-		pConfig->dwCPU	= KeQueryActiveProcessorCount(NULL);
+		pConfig->dwCPU			= KeQueryActiveProcessorCount(NULL);
+		pConfig->flag.nRun		= 0;
+		pConfig->flag.nProcess	= 0;
 
 		KeInitializeSpinLock(&pConfig->lock);
 		KeInitializeSpinLock(&pConfig->client.command.lock);

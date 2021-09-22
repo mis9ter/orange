@@ -156,14 +156,15 @@ Return Value:
 				//if( NT_SUCCESS(StartDriver()) )	
 				bRet	= true;
 				//ExInterlockedExchangeUlong(&Config()->nRun, 1, &Config()->lock);
-				_InterlockedExchange((LONG *)&Config()->nRun, 1);
+				_InterlockedExchange((LONG *)&Config()->flag.nRun, 1);
+				_InterlockedExchange((LONG *)&Config()->flag.nProcess, 1);
 				AddProcessToTable2(__func__, false, PsGetCurrentProcessId(), NULL, NULL, NULL, false, NULL, NULL);
 				break;
 			case Y_COMMAND_STOP:
 				__log("%s YFILTER_COMMAND_STOP", __FUNCTION__);
 				//if (NT_SUCCESS(StopDriver()))	
 				bRet = true;
-				_InterlockedExchange((LONG *)&Config()->nRun, 0);
+				_InterlockedExchange((LONG *)&Config()->flag.nRun, 0);
 				break;
 
 			case Y_COMMAND_GET_PROCESS_LIST:

@@ -13,6 +13,11 @@ FLT_PREOP_CALLBACK_STATUS	PreCreate(
 	// 필터링 중지거나 커널 쓰레드인 경우 체크하지 않음 
 	//	(추후 커널레벨에서의 방어가 필요한 경우 IoIsSystemThread 처리 부분 제거)
 
+	if( NULL == Config()	||
+		0 == Config()->flag.nRun	||
+		0 == Config()->flag.nFile )
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
 	if( CFile::IsNegligibleIO(Data->Thread)		||
 		KernelMode == Data->RequestorMode	||
 		FlagOn(Data->Iopb->OperationFlags, SL_OPEN_PAGING_FILE)

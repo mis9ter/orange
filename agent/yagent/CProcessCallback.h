@@ -2,6 +2,7 @@
 #pragma comment(lib, "Rpcrt4.lib")
 #include "CUpdate.h"
 
+#define DEBUG_PROCESS_LOG	0
 #define	GUID_STRLEN	37
 #define USE_PROCESS_LOG		1
 
@@ -332,7 +333,8 @@ protected:
 		SetStringOffset(p, &p->DevicePath);
 		SetStringOffset(p, &p->Command);
 
-		/*
+#if defined(DEBUG_PROCESS_LOG) && 1 == DEBUG_PROCESS_LOG
+
 		pClass->m_log.Log("  mode     :%d", p->mode);
 		pClass->m_log.Log("  category :%d", p->category);
 		pClass->m_log.Log("  wDataSize:%d", p->wDataSize);
@@ -344,8 +346,8 @@ protected:
 		pClass->m_log.Log("  TID      :%d", p->TID);
 		pClass->m_log.Log("  CTID     :%d", p->CTID);
 		pClass->m_log.Log("  CPID     :%d", p->CPID);
-		pClass->m_log.Log("  PPID     :%p", p->PPID);
-		pClass->m_log.Log("  RPID     :%p", p->PPID);
+		pClass->m_log.Log("  PPID     :%d", p->PPID);
+		pClass->m_log.Log("  RPID     :%d", p->PPID);
 
 		pClass->m_log.Log("  PUID     :%p", p->PUID);
 		pClass->m_log.Log("  PPUID    :%p", p->PPUID);
@@ -353,7 +355,8 @@ protected:
 
 		pClass->m_log.Log("  DevicePat:%d %d", p->DevicePath.wOffset, p->DevicePath.wSize);
 		pClass->m_log.Log("  Command  :%d %d", p->Command.wOffset, p->Command.wSize);
-		*/
+
+#endif
 
 		WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
 		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szPath, sizeof(szPath)) )
@@ -385,7 +388,7 @@ protected:
 				if( YFilter::Message::SubType::ProcessStop != p->subType ) {
 					pClass->m_log.Log("  hash:%p", (PVOID)nFileHash);
 					if( 0 == nFileHash ) {
-						pClass->m_log.Log("  %-32s NOHASH:%ws", __func__, szPath);
+						pClass->m_log.Log("  NOHASH:%ws", szPath);
 						pClass->m_log.Log("  %d %s", (DWORD)hasherr, (PCSTR)hasherr);
 					}
 				}

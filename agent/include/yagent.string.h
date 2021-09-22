@@ -337,17 +337,20 @@ class CErrorMessage {
 public:
 	CErrorMessage(IN DWORD dwError = 0) {
 		m_dwError	= dwError;
-		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, dwError, 0, m_szErrMsg, sizeof(m_szErrMsg), NULL);
+		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, dwError, 0, m_szErrMsg, sizeof(m_szErrMsg), NULL);
 	}
 	operator	DWORD() {
 		return m_dwError;
 	}
-	operator	PCSTR() {
+	operator	PCWSTR() {
 		return m_szErrMsg;
+	}
+	operator	PCSTR() {
+		return __ansi(m_szErrMsg);
 	}
 private:
 	DWORD	m_dwError;
-	CHAR	m_szErrMsg[1024];
+	WCHAR	m_szErrMsg[1024];
 };
 class CStringBuffer
 {

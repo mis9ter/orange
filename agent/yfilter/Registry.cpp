@@ -302,7 +302,7 @@ NTSTATUS	RegistryCallback
 
 	UNREFERENCED_PARAMETER(pCallbackContext);
 
-	if( 0 == Config()->nRun )	{
+	if( 0 == Config()->flag.nRun || 0 == Config()->flag.nRegistry )	{
 		//__log("%-32s %d", __func__, Config()->nRun);
 		return STATUS_SUCCESS;
 	}

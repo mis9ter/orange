@@ -22,6 +22,11 @@ void LoadImageNotifyRoutine(
 	UNREFERENCED_PARAMETER(ProcessId);
 	UNREFERENCED_PARAMETER(ImageInfo);
 
+	if( NULL == Config()	||
+		0 == Config()->flag.nRun	||
+		0 == Config()->flag.nModule )
+		return;
+
 	CWSTR		path(FullImageName);
 
 	if (NULL == FullImageName || ImageInfo->SystemModeImage) {

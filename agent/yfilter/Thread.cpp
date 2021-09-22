@@ -254,6 +254,8 @@ void CreateThreadNotifyRoutine(
 		__log("%s Config() is NULL.", __FUNCTION__);
 		return;
 	}
+	if( 0 == Config()->flag.nRun || 0 == Config()->flag.nThread )	return;
+
 	UNREFERENCED_PARAMETER(PPID);
 	UNREFERENCED_PARAMETER(CTID);
 	UNREFERENCED_PARAMETER(TID);

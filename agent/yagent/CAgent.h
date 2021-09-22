@@ -413,7 +413,7 @@ private:
 	CThread					m_main;
 
 	bool			Initialize();
-	void			Destroy();
+	void			Destroy(PCSTR pCause);
 	void			AddDbList(int nResourceID, PCWSTR pRootPath, PCWSTR pName, DbMap & table);
 
 	static	void	MainThread(void * ptr, HANDLE hShutdown);

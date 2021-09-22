@@ -153,6 +153,8 @@ public:
 
 		DWORD	dwUpsert	= 0;
 
+		return;
+
 		//Db()->Begin(__func__);
 		Begin();
 		Lock(NULL, [&](PVOID pContext) {

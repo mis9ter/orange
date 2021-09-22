@@ -281,6 +281,15 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 	if( KeGetCurrentIrql() > PASSIVE_LEVEL )
 		__function_log;
 
+	if( NULL == Config() || 0 == Config()->flag.nRun || 0 == Config()->flag.nProcess ) {
+		if( NULL == Config() )	{	__log("%-32s NULL == Config()", __func__);	}
+		else
+		{
+			__log("%-32s %d %d", __func__, Config()->flag.nRun, Config()->flag.nProcess);
+		}
+		return;
+	}
+
 	CFltObjectReference		filter(Config()->pFilter);
 	//FILTER_REPLY_DATA		reply;
 	//ULONG					nReplySize = 0;
@@ -381,6 +390,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				}
 				*/
 				
+				__log("%wZ", CreateInfo->ImageFileName);
 				AddProcessToTable2(__func__, true, PID, NULL, NULL, NULL, 
 					true, &CPID, 
 					[](PVOID pContext, HANDLE PID, PROCUID PUID, 

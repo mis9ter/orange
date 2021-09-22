@@ -558,7 +558,6 @@ protected:
 		static	std::atomic<DWORD64>	dwTicks	= 0;
 
 		//pClass->Log("%-32s %p", __func__, YAgent::GetBootUID());
-
 		dwCount++;
 		switch( pMessage->category )
 		{

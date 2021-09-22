@@ -124,19 +124,24 @@ bool	CAgent::Initialize()
 	CStmt::Create(stmt->Data(), stmt->Size());
 
 	if( false == CEventCallback::CreateCallback() ) {
-		Log("%s CEventCallback::Initialize() failed.", __func__);
+		Log("%-32s CEventCallback::Initialize() failed.", __func__);
 		return false;
 	}
 	return (m_config.bInitialize = true);
 }
-void	CAgent::Destroy()
+void	CAgent::Destroy(PCSTR pCause)
 {
+	Log("%-32s @%s", __func__, pCause);
 	if (m_config.bInitialize) {
+		Log("CEventCallback::DestroyCallback()");
 		CEventCallback::DestroyCallback();
 		m_config.bInitialize = false;
 	}
+
+	Log("CStmt::Destroy");
 	CStmt::Destroy();
-	CStringTable::Destroy();
+
+	Log("db close");
 	for( auto t : m_db ) {
 		if ( t.second->cdb.IsOpened() ) {
 			Log("%-32s %ws %p", __func__, t.second->strCDB.c_str(), t.second->cdb.Handle());
@@ -147,6 +152,7 @@ void	CAgent::Destroy()
 			break;
 		}
 	}
+	Log("done");
 }
 bool	CAgent::Start()
 {
@@ -221,6 +227,7 @@ bool	CAgent::Start()
 }
 void	CAgent::Shutdown(IN DWORD dwControl)
 {
+	Log("%-32s (1)", __func__);
 	switch( dwControl ) {
 	case SERVICE_CONTROL_PRESHUTDOWN:
 
@@ -233,7 +240,6 @@ void	CAgent::Shutdown(IN DWORD dwControl)
 			//	종료 과정에서 문제가 생겨 비정상 종료된 후 되살아나면 낭패.
 			//	어차피 종료가 돼야 하니까.
 			Service()->SetServiceRecoveryMode(true);
-
 			SetEvent(m_config.hShutdown);
 			CIPC::Shutdown();
 			if (CFilterCtrl::IsRunning())
@@ -241,7 +247,7 @@ void	CAgent::Shutdown(IN DWORD dwControl)
 				CFilterCtrl::Shutdown();
 			}
 			ResetEvent(m_config.hShutdown);
-			Destroy();
+			Destroy(__func__);
 		}
 	}
 }
