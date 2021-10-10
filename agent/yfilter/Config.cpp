@@ -170,6 +170,7 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		pConfig->pLoadLibraryW				= (FN_LoadLibraryW)GetProcAddress(L"LoadLibraryW");
 		pConfig->pZwQuerySystemInformation	= (FN_ZwQuerySystemInformation)GetProcAddress(L"ZwQuerySystemInformation");
 		
+		/*
 		__log("%s pZwQueryInformationProcess        %p", __FUNCTION__, pConfig->pZwQueryInformationProcess);
 		__log("%s pZwTerminateProcess               %p", __FUNCTION__, pConfig->pZwTerminateProcess);
 		__log("%s pObRegisterCallbacks              %p", __FUNCTION__, pConfig->pObRegisterCallbacks);
@@ -180,7 +181,7 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		__log("%s pZwQuerySystemInformation         %p", __FUNCTION__, pConfig->pZwQuerySystemInformation);
 		__log("%s pLoadLibraryA                     %p", __FUNCTION__, pConfig->pLoadLibraryA);
 		__log("%s pLoadLibraryW                     %p", __FUNCTION__, pConfig->pLoadLibraryW);
-
+		*/
 		if (pConfig->pZwQueryInformationProcess	&& pConfig->pZwTerminateProcess		&&
 			pConfig->pObRegisterCallbacks		&& pConfig->pObUnRegisterCallbacks	&& 
 			pConfig->pNtQueryInformationThread	)
