@@ -519,7 +519,7 @@ void CreateThreadNotifyRoutine(
 }
 bool		StartThreadFilter()
 {
-	__log("%s", __FUNCTION__);
+	__log("%-32s flag.nThread=%d", __FUNCTION__, Config()->flag.nThread);
 	NTSTATUS	status = STATUS_SUCCESS;
 	if (NULL == Config())	return false;
 
@@ -530,11 +530,10 @@ bool		StartThreadFilter()
 			status = PsSetCreateThreadNotifyRoutine(CreateThreadNotifyRoutine);
 			if (NT_SUCCESS(status)) {
 				Config()->bThreadNotifyCallback = true;
-				__log("%s succeeded.", __FUNCTION__);
 			}
 			else {
 				Config()->bThreadNotifyCallback	= false;
-				__log("%s PsSetCreateThreadNotifyRoutine() failed. status=%08x", __FUNCTION__, status);
+				__log("%-32s PsSetCreateThreadNotifyRoutine() failed. status=%08x", __FUNCTION__, status);
 				__leave;
 			}
 		}
