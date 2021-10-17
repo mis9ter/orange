@@ -174,7 +174,7 @@ Return Value:
 		}
 	}
 	if (OutputBuffer && OutputBufferSize) {
-		__log("%s OutputBuffer=%p, OutputBufferSize=%d", __FUNCTION__, OutputBuffer, OutputBufferSize);
+		//__log("%s OutputBuffer=%p, OutputBufferSize=%d", __FUNCTION__, OutputBuffer, OutputBufferSize);
 		((PY_REPLY)OutputBuffer)->bRet = bRet;
 		if (ReturnOutputBufferLength)
 			*ReturnOutputBufferLength = OutputBufferSize;

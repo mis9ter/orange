@@ -106,7 +106,7 @@ void LoadImageNotifyRoutine(
 }
 bool		StartModuleFilter()
 {
-	__log("%s", __FUNCTION__);
+	__log("%-32s flag.nModule=%d", __FUNCTION__, Config()->flag.nModule);
 	NTSTATUS	status = STATUS_SUCCESS;
 	if (NULL == Config())	return false;
 
@@ -116,11 +116,10 @@ bool		StartModuleFilter()
 			status	= PsSetLoadImageNotifyRoutine(LoadImageNotifyRoutine);
 			if (NT_SUCCESS(status)) {
 				Config()->bModuleNotifyCallback = true;
-				__log("%s succeeded.", __FUNCTION__);
 			}
 			else {
 				Config()->bModuleNotifyCallback = false;
-				__log("%s PsSetLoadImageNotifyRoutine() failed. status=%08x", __FUNCTION__, status);
+				__log("%-32s PsSetLoadImageNotifyRoutine() failed. status=%08x", __FUNCTION__, status);
 				__leave;
 			}
 			
