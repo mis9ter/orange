@@ -144,6 +144,9 @@
     <ClInclude Include="CStmt.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\module\cdb2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="yagent.rc">
@@ -194,12 +197,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\binary\driver\x64\rcdata1.bin">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="..\binary\driver\x64\rcdata2.bin">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="db\event.odb">
       <Filter>Resource Files</Filter>
     </None>
@@ -207,9 +204,6 @@
       <Filter>Resource Files</Filter>
     </None>
     <None Include="..\binary\driver\x64\pfilter.sys">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="db\rcdata1.bin">
       <Filter>Resource Files</Filter>
     </None>
     <None Include="db\config.odb" />

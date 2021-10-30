@@ -1,0 +1,28 @@
+{
+	"process": {
+		"res": "IDR_PROCESS_ODB",
+		"cdb": "process.cdb",
+		"odb": "process.odb",
+		"key": {
+			"PUID": {
+				"type": "INGEGER",
+				"option": "DEFAULT 0"
+			}
+		},
+		"index": {
+			"PID": {
+				"type": "INGEGER",
+				"option": "DEFAULT 0"
+			},
+			"ProcPath": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
+			}
+		},
+		"data": {
+			"Doc": {
+				"type": "TEXT"
+			}
+		}
+	}
+}

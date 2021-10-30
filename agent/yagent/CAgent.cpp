@@ -49,6 +49,7 @@ CAgent::CAgent()
 	AddDbList(IDR_EVENT_ODB, m_config.path.szData, L"event",		m_db);
 	AddDbList(IDR_SUMMARY_ODB, m_config.path.szData, L"summary",	m_db);
 	AddDbList(IDR_STRING_ODB, m_config.path.szData, L"string",		m_db);
+	AddDbList(IDR_PROCESS_ODB, m_config.path.szData, L"process", m_db);
 
 	m_config.hShutdown	= CreateEvent(NULL, TRUE, FALSE, NULL);
 	Log("%-32s end", __func__);

@@ -102,9 +102,73 @@ public:
 		return m_doc;
 	}
 	
+	static	XXH64_hash_t		FileFastHash(PCWSTR pPath) {
+#define	SAMPLE_THRESHOLD	(128 * 1024)
+#define	SAMPLE_SIZE			(16 * 1024)		
+		/*
+			초간단 파일해시 너무 믿진 마.
+			https://github.com/kalafut/py-imohash/blob/master/imohash/imohash.py
+			이걸 간단히 VC++로 포팅함.
+		*/
+		XXH64_hash_t	v = 0;
+		XXH64_state_t* p = XXH64_createState();
+		DWORD			dwSize[2]	= { 0, };
+		LARGE_INTEGER	lFileSize	= {0, };
+
+		if (p) {
+			HANDLE	hFile = INVALID_HANDLE_VALUE;
+			__try {
+				XXH64_reset(p, 0);
+				hFile = ::CreateFile(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL, NULL);
+				if (INVALID_HANDLE_VALUE == hFile)
+				{
+					//	해당 파일의 경로가 없는 경우 해시는 0인가요?
+					__leave;
+				}
+				DWORD	dwBytes = 0;
+				char	szBuf[SAMPLE_SIZE];
+				if (GetFileSizeEx(hFile, &lFileSize)) {
+					if (lFileSize.QuadPart < SAMPLE_THRESHOLD || SAMPLE_SIZE < 1) {
+						//	다 읽는다.
+						while (ReadFile(hFile, szBuf, sizeof(szBuf), &dwBytes, NULL) && dwBytes) {
+							XXH64_update(p, szBuf, dwBytes);
+						}
+					}
+					else {
+						if (ReadFile(hFile, szBuf, sizeof(szBuf), &dwBytes, NULL) && dwBytes) {
+							XXH64_update(p, szBuf, dwBytes);
+						}
+						LARGE_INTEGER	lFileSize2;
+						lFileSize2.QuadPart	= lFileSize.QuadPart/2;
+						if (SetFilePointerEx(hFile, lFileSize2, NULL, FILE_BEGIN)) {
+							if (ReadFile(hFile, szBuf, sizeof(szBuf), &dwBytes, NULL) && dwBytes) {
+								XXH64_update(p, szBuf, dwBytes);
+							}
+						}
+						if (SetFilePointer(hFile, -1 * SAMPLE_SIZE, NULL, FILE_END)) {
+							if (ReadFile(hFile, szBuf, sizeof(szBuf), &dwBytes, NULL) && dwBytes) {
+								XXH64_update(p, szBuf, dwBytes);
+							}
+						}
+					}					
+				}
+				XXH64_update(p, &lFileSize.QuadPart, sizeof(lFileSize.QuadPart));
+				v = XXH64_digest(p);
+			}
+			__finally {
+				if (INVALID_HANDLE_VALUE != hFile) {
+					CloseHandle(hFile);
+				}
+			}
+			XXH64_freeState(p);
+		}
+		return v;
+	}
 	static	XXH64_hash_t		FileHash(PCWSTR pPath) {
-		XXH64_hash_t	v	= 0;
-		XXH64_state_t*	p	= XXH64_createState();
+		XXH64_hash_t	v			= 0;
+		XXH64_state_t*	p			= XXH64_createState();
+		DWORD			dwSize[2]	= {0,};
 		if (p) {
 			HANDLE	hFile	= INVALID_HANDLE_VALUE;
 
@@ -114,13 +178,16 @@ public:
 					FILE_ATTRIBUTE_NORMAL, NULL);
 				if (INVALID_HANDLE_VALUE == hFile)
 				{
+					//	해당 파일의 경로가 없는 경우 해시는 0인가요?
 					__leave;
 				}
 				DWORD	dwBytes = 0;
-				char	szBuf[4096];
+				char	szBuf[1024 * 64];
 				while (ReadFile(hFile, szBuf, sizeof(szBuf), &dwBytes, NULL) && dwBytes ) {
 					XXH64_update(p, szBuf, dwBytes);
 				}
+				dwSize[0]	= GetFileSize(hFile, &dwSize[1]);
+				XXH64_update(p, dwSize, sizeof(dwSize));
 				v = XXH64_digest(p);
 			}
 			__finally {

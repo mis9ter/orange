@@ -4,7 +4,15 @@
 #include "json\json.h"
 #include "xxhash.h"
 namespace JsonUtil {
-
+	inline	bool	String2Json(const char *pData, DWORD dwSize, Json::Value & doc) {
+		Json::CharReaderBuilder	builder;
+		const std::unique_ptr<Json::CharReader>		reader(builder.newCharReader());
+		std::string		err;
+		if (reader->parse((const char*)pData, (const char*)pData + dwSize, &doc, &err)) {
+			return true;
+		}
+		return false;
+	}
 	inline	void	Json2String(IN const Json::Value & doc, 
 		IN std::function<void (std::string &)> pCallback) {
 		std::string					str;

@@ -15,7 +15,11 @@
 		"update": "update file set Count=Count+1,CreateCount=CreateCount+?, DeleteCount=DeleteCount+?,ReadCount=ReadCount+?,ReadSize=ReadSize+?,WriteCount=WriteCount+?,WriteSize=WriteSize+?,LastTime=CURRENT_TIMESTAMP where FPUID=?"
 	},
 	"process": {
-		"@db": "event",
+		"@db": "process",
+		"IsExisting": "select count(PUID) from process where PUID=?",
+		"Insert": "insert into process(PUID,BootUID,PID,CPID,SID,PPUID,PPID,DevicePath,ProcPath,ProcName,IsSystem,CmdLine,UserId,CreateTime,ExitTime,KernelTime,UserTime,FileHash) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		"Update": "update process set CreateTime=?, ExitTime=?, KernelTime=?, UserTime=? where PUID=?",
+		"Select": "select ProcPath,PID from process where PUID=?",
 		"list": "select ProcName,ProcPath,count(*) cnt,sum(KernelTime+UserTime) time, sum(KernelTime) ktime, sum(UserTime) utime from process where BootUID=? group by ProcPath order by time desc"
 	},
 	"string": {

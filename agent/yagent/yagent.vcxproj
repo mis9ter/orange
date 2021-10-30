@@ -213,6 +213,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).$(Platform).pdb"</Command>
     <ClInclude Include="..\include\yagent.json.h" />
     <ClInclude Include="..\include\yagent.string.h" />
     <ClInclude Include="..\module\CDB.h" />
+    <ClInclude Include="..\module\cdb2.h" />
     <ClInclude Include="..\module\CService.h" />
     <ClInclude Include="..\module\IObject.h" />
     <ClInclude Include="..\module\IService.h" />
@@ -264,11 +265,8 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).$(Platform).pdb"</Command>
   <ItemGroup>
     <None Include="..\binary\driver\x64\orange.sys" />
     <None Include="..\binary\driver\x64\pfilter.sys" />
-    <None Include="..\binary\driver\x64\rcdata1.bin" />
-    <None Include="..\binary\driver\x64\rcdata2.bin" />
     <None Include="db\config.odb" />
     <None Include="db\event.odb" />
-    <None Include="db\rcdata1.bin" />
     <None Include="db\stmt.json" />
     <None Include="db\summary.odb" />
   </ItemGroup>
