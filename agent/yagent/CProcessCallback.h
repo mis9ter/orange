@@ -364,7 +364,7 @@ protected:
 		PCWSTR	pName		= wcsrchr(szPath, L'\\');
 
 		SetLastError(0);
-		UID		nFileHash	= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : CDist::FileHash(szPath);
+		UID		nFileHash	= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : CDist::FileFastHash(szPath);
 		CErrorMessage	hasherr(GetLastError());
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			try {
