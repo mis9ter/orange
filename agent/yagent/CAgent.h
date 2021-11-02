@@ -12,7 +12,6 @@
 #define DB_CONFIG_NAME		L"config"
 
 #include "yagent.h"
-#include "yagent.common.h"
 #include "CPathConvertor.h"
 
 #include "CThread.h"
