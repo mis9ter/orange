@@ -2,7 +2,7 @@
 
 #include <process.h>
 #include <atomic>
-#include "CDB.h"
+#include "CDbClass.h"
 #include "yagent.string.h"
 #include "CStmt.h"
 #include "CStringTable.h"

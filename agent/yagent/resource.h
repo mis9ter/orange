@@ -22,8 +22,9 @@
 #define IDR_CONFIG_ODB                  140
 #define IDR_SUMMARY_ODB                 141
 #define IDR_STMT_JSON					142
-#define IDR_STRING_ODB                 143
+#define IDR_STRING_ODB					143
 #define IDR_PROCESS_ODB					144
+#define IDR_CDBCLASS_JSON				145
 #define IDC_SHUTDOWN                    1000
 #define IDC_BUTTON_INSTALL              1001
 #define IDC_BUTTON_UNINSTALL            1002

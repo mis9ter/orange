@@ -135,6 +135,10 @@ typedef UINT64	BootUID;
 namespace YAgent {
 	bool		DeleteDirectoryFiles(IN LPCTSTR lpPath);
 	bool		DeleteDirectory(IN LPCTSTR lpPath);
+	inline bool	DeleteFile(IN PCWSTR pFilePath) {
+		::SetFileAttributes(pFilePath, FILE_ATTRIBUTE_NORMAL);
+		return ::DeleteFile(pFilePath)? true : false;
+	}
 	bool		Command(IN LPCTSTR lpPath, IN LPCTSTR szArgument, 
 		IN LPCTSTR lpRunPath,
 		IN DWORD dwType =SW_SHOW , 

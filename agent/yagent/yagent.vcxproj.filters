@@ -144,7 +144,7 @@
     <ClInclude Include="CStmt.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\module\cdb2.h">
+    <ClInclude Include="..\module\CDbClass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -209,6 +209,9 @@
     <None Include="db\config.odb" />
     <None Include="db\summary.odb" />
     <None Include="db\stmt.json">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="db\CDbClass.json">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

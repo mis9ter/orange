@@ -322,6 +322,30 @@ protected:
 		m_log.Log(TEXTLINE);
 
 	}
+	void	ProcessMessage2Json(IN PY_PROCESS_MESSAGE p, OUT Json::Value& doc) {
+
+		try {
+			std::string		command	= __utf8(p->Command.pBuf);
+
+			doc["Category"]		= p->category;
+			doc["SubType"]		= p->subType;
+			doc["FPUID"]		= p->PPUID;
+			doc["ImageSize"]	= (int64_t)p->pImsageSize;
+			doc["SID"]			= (int)p->SID;
+			doc["DevicePath"]	= __utf8(p->DevicePath.pBuf);
+			doc["Command"]		= command;
+			doc["PID"]			= (int)p->PID;
+			doc["TID"]			= (int)p->TID;
+			doc["CTID"]			= (int)p->CTID;
+			doc["PPID"]			= (int)p->PPID;
+			doc["RPID"]			= (int)p->RPID;
+			doc["PUID"]			= (UID)p->PUID;
+			doc["PPUID"]		= (UID)p->PPUID;
+		}
+		catch (std::exception& e) {
+			doc["@exception"]	= e.what();
+		}
+	}
 	static	bool			Proc2
 	(
 		PY_HEADER			pMessage,
@@ -332,6 +356,9 @@ protected:
 		CProcessCallback	*pClass = (CProcessCallback *)pContext;
 		SetStringOffset(p, &p->DevicePath);
 		SetStringOffset(p, &p->Command);
+
+		Json::Value			doc;
+		pClass->ProcessMessage2Json(p, doc);
 
 #if defined(DEBUG_PROCESS_LOG) && 1 == DEBUG_PROCESS_LOG
 
@@ -357,14 +384,20 @@ protected:
 		pClass->m_log.Log("  Command  :%d %d", p->Command.wOffset, p->Command.wSize);
 
 #endif
-
 		WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
 		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szPath, sizeof(szPath)) )
 			StringCbCopy(szPath, sizeof(szPath), p->DevicePath.pBuf);
 		PCWSTR	pName		= wcsrchr(szPath, L'\\');
 
+		doc["ProcPath"]	= __utf8(szPath);
 		SetLastError(0);
+
+		//	프로세스 종료인 경우 파일 해시를 새로 뜨지 않고 이전에 구해놓은 것을 재사용한다.
 		UID		nFileHash	= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : CDist::FileFastHash(szPath);
+
+		doc["FileFastHash"]	= nFileHash;
+		doc["FileHash"]		= nFileHash;
+
 		CErrorMessage	hasherr(GetLastError());
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			try {
@@ -427,6 +460,12 @@ protected:
 				pClass->m_log.Log("Proc2", e.what());
 			}
 		});
+
+
+		JsonUtil::Json2String(doc, [&](std::string& str) {
+			pClass->m_log.Log("%s", str.c_str());
+		});
+
 		return true;
 	}
 	static	bool			Proc(

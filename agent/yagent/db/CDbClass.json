@@ -1,8 +1,7 @@
 {
 	"process": {
 		"res": "IDR_PROCESS_ODB",
-		"cdb": "process.cdb",
-		"odb": "process.odb",
+		"name": "process",
 		"key": {
 			"PUID": {
 				"type": "INGEGER",
