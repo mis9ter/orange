@@ -1,7 +1,6 @@
 {
 	"process": {
 		"res": "IDR_PROCESS_ODB",
-		"name": "process",
 		"key": {
 			"PUID": {
 				"type": "INGEGER",
@@ -10,8 +9,7 @@
 		},
 		"index": {
 			"PID": {
-				"type": "INGEGER",
-				"option": "DEFAULT 0"
+				"type": "INGEGER"
 			},
 			"ProcPath": {
 				"type": "NVARCHAR2",

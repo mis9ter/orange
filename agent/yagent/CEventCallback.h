@@ -125,6 +125,8 @@ class CEventCallback
 	virtual	public	CAppLog,
 	virtual	public	CStmt,
 	virtual	public	CStringTable,
+	virtual	public	CDbClassFactory,
+
 	public	CProcessCallback,
 	public	CThreadCallback,
 	public	CModuleCallback,
@@ -224,6 +226,17 @@ public:
 	{	
 		Log(__FUNCTION__);
 
+		CMemoryPtr	res = CFilePath::GetResourceData(NULL, IDR_CDBCLASS_JSON);
+		if (res) {
+			Json::Value	doc;
+
+			if( JsonUtil::String2Json((const char *)res->Data(), res->Size(), doc) ) 
+				CDbClassFactory::Initialize(doc);
+			else {
+				Log("%-32s IDR_CDBCLASS_JSON is not valid.", __func__);
+			}
+		}
+
 		CDB		*pDB	= Db(DB_EVENT_NAME);
 		if( NULL == pDB ) {		
 			return false;
@@ -253,6 +266,8 @@ public:
 			t.second->Destroy();
 		}
 		CStringTable::Destroy();
+		CDbClassFactory::Destroy();
+
 		CDB		*pDB	= Db(DB_EVENT_NAME);
 		if( NULL == pDB ) {
 			return;

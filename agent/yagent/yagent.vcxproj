@@ -200,6 +200,7 @@ cmd /c ..\AddSymbol.bat "$(OutDir)$(TargetName).$(Platform).pdb"</Command>
   <ItemGroup>
     <ClInclude Include="..\include\CAppLog.h" />
     <ClInclude Include="..\include\CException.h" />
+    <ClInclude Include="..\include\CFilePath.h" />
     <ClInclude Include="..\include\CIpc.h" />
     <ClInclude Include="..\include\CNotifyCenter.h" />
     <ClInclude Include="..\include\CPathConvertor.h" />
