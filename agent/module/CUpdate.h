@@ -36,20 +36,30 @@ public:
 
 	}
 
-	bool				Find(PCWSTR pRootPath, PCWSTR pPath, Json::Value & doc) {
+	bool				Find(PCWSTR pRootPath, PCWSTR pPath, PCWSTR pCopyPath, Json::Value & doc) {
 
 		WIN32_FIND_DATA		data;
 		WCHAR				szPath[AGENT_PATH_SIZE] = L"";
 		HANDLE				hFind;
+
+		WCHAR				szCopyPath[AGENT_PATH_SIZE]	= L"";
 
 		printf("%-32s %ws\n", __func__, pPath);
 		StringCbPrintf(szPath, sizeof(szPath), L"%s\\*.*", pPath);
 		hFind = FindFirstFile(szPath, &data);
 		if (INVALID_HANDLE_VALUE == hFind)	return false;
 		while (true) {
+			if( pCopyPath )
+				StringCbPrintf(szCopyPath, sizeof(szCopyPath), L"%s\\%s", pCopyPath, 
+					std::wstring(pPath + (std::wstring)L"\\" + data.cFileName).c_str() +
+					lstrlen(pRootPath) + 1);
+
 			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) {
-				if(L'.' != data.cFileName[0] )
-					Find(pRootPath, std::wstring(pPath + (std::wstring)L"\\" + data.cFileName).c_str(), doc);
+				if(L'.' != data.cFileName[0] ) {
+					YAgent::MakeDirectory(szCopyPath);
+					Find(pRootPath, std::wstring(pPath + (std::wstring)L"\\" + data.cFileName).c_str(), 
+						pCopyPath? szCopyPath : NULL, doc);
+				}
 			}
 			else if( _tcsicmp(data.cFileName, UPDATE_DIST_NAME) && data.nFileSizeLow ) {
 				Json::Value		file;
@@ -66,6 +76,18 @@ public:
 				file["time"]["lastwrite"]["low"] = (int)data.ftLastWriteTime.dwLowDateTime;
 				file["hash"] = FileHash(path.c_str());
 				doc.append(file);
+
+				if( pCopyPath ) {
+					if (CopyFile(path.c_str(), szCopyPath, FALSE)) {
+						printf("%-32s %ws => %ws\n", __func__, path.c_str(), szCopyPath);
+					}
+					else {
+						CErrorMessage	err(GetLastError());
+
+						printf("%-32s %ws => %ws failed.\n%ws\n", __func__, path.c_str(), szCopyPath,
+							(PCWSTR)err);
+					}
+				}
 			}
 			if (FALSE == FindNextFile(hFind, &data))	break;
 		}
@@ -88,11 +110,23 @@ public:
 
 		});
 
-		Json::Value& doc = m_doc["file"];
-		doc.clear();
-		int			nCount	= Find(szPath, szPath, doc);
+		Json::Value&	doc = m_doc["file"];
+		WCHAR			szCopyPath[AGENT_PATH_SIZE]	= L"";
 
-		JsonUtil::Json2File(m_doc, L".update");
+		if (m_doc.isMember("path") && m_doc["path"].isString() ) {
+			//	path가 존재하면 업데이트 대상 파일을 그곳으로 복사한다.
+			StringCbCopy(szCopyPath, sizeof(szCopyPath), __utf16(m_doc["path"].asCString()));
+		}
+		doc.clear();
+		int			nCount	= Find(szPath, szPath, szCopyPath[0]? szCopyPath : NULL, doc);
+
+		JsonUtil::Json2File(m_doc, UPDATE_DIST_NAME);
+		if (szCopyPath[0]) {
+			StringCbCat(szCopyPath, sizeof(szCopyPath), L"\\");
+			StringCbCat(szCopyPath, sizeof(szCopyPath), UPDATE_DIST_NAME);
+			CopyFile(UPDATE_DIST_NAME, szCopyPath, FALSE);
+
+		}
 		return nCount;
 	}
 	bool				LoadProfile(PCWSTR pPath) {
@@ -381,7 +415,7 @@ public:
 				url	= __utf16(Profile()["url"].asCString());
 			
 			if( url.empty() )
-				url	= L"http://download.orangeworks.org/build/x64";
+				url	= L"http://orangeworks.org/update";
 
 			if( DownloadProfile((url + L"/" UPDATE_DIST_NAME).c_str(), UPDATE_DIST_NAME) ) {
 
