@@ -415,7 +415,7 @@ public:
 				url	= __utf16(Profile()["url"].asCString());
 			
 			if( url.empty() )
-				url	= L"http://orangeworks.org/update";
+				url	= L"http://orangeworks.org/orange";
 
 			if( DownloadProfile((url + L"/" UPDATE_DIST_NAME).c_str(), UPDATE_DIST_NAME) ) {
 
