@@ -186,7 +186,12 @@ public:
 	bool			GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
 		return CModuleCallback::GetModules2(PID, pContext, pCallback);	
 	}
-
+	void			Upsert(Json::Value& doc, bool bUpdateData = false) {
+		JsonUtil::Json2String(doc, [&](std::string& str) {
+			m_log.Log("%s", str.c_str());
+		});
+		CDbClassFactory::Upsert(doc, bUpdateData);
+	}
 	CDB*			Db() {
 		return m_pDB;
 	}

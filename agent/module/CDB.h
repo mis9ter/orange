@@ -234,6 +234,9 @@ public:
 			sqlite3_finalize(pStmt);
 		}
 	}
+	static	void		Reset(IN sqlite3_stmt* pStmt) {
+		if( pStmt )	sqlite3_reset(pStmt);
+	}
 	bool		IsOpened() {
 		__function_lock(m_lock.Get());
 		return m_pDb? true : false;

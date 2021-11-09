@@ -201,6 +201,30 @@ public:
 		if( NULL == pValue )	return 0;
 		return GetCrc64((PVOID)pValue, (DWORD)(wcslen(pValue) * sizeof(WCHAR)));	
 	}
+	STRUID			GetStringCRC64(std::wstring & str) {
+		if (NULL == str.length() )	return 0;
+		return GetCrc64((PVOID)str.c_str(), (DWORD)(str.length() * sizeof(WCHAR)));
+	}
+	STRUID			GetStringCRC64(std::string& str) {
+		if (NULL == str.length())	return 0;
+		return GetCrc64((PVOID)str.c_str(), (DWORD)(str.length()));
+	}
+	STRUID16		GetStringCRC16(PCWSTR pValue) {
+		if (NULL == pValue)	return 0;
+		return GetCrc16((PVOID)pValue, (DWORD)(wcslen(pValue) * sizeof(WCHAR)));
+	}
+	STRUID16		GetStringCRC16(std::wstring & str) {
+		if (NULL == str.length() )	return 0;
+		return GetCrc16((PVOID)str.c_str(), (DWORD)(str.length() * sizeof(WCHAR)));
+	}
+	STRUID16		GetStringCRC16(std::string& str) {
+		if (NULL == str.length())	return 0;
+		return GetCrc16((PVOID)str.c_str(), (DWORD)(str.length()));
+	}
+	STRUID16		GetStringCRC16(PCSTR pValue) {
+		if (NULL == pValue)	return 0;
+		return GetCrc16((PVOID)pValue, (DWORD)(lstrlenA(pValue)));
+	}
 private:
 	CAppLog		m_log;
 	CDB			*m_pDB;

@@ -136,7 +136,11 @@ public:
 		return m_doc;
 	}
 	
-	static	XXH64_hash_t		FileFastHash(PCWSTR pPath) {
+	static	XXH64_hash_t		FileFastHash(
+		PCWSTR pPath, 
+		PLARGE_INTEGER pFileSize = NULL,
+		std::function<void (PCWSTR pFilePath, DWORD dwErrorCode)>	pCallback	= NULL
+	) {
 #define	SAMPLE_THRESHOLD	(128 * 1024)
 #define	SAMPLE_SIZE			(16 * 1024)		
 		/*
@@ -151,15 +155,29 @@ public:
 
 		if (p) {
 			HANDLE	hFile = INVALID_HANDLE_VALUE;
-			__try {
-				XXH64_reset(p, 0);
-				hFile = ::CreateFile(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-					FILE_ATTRIBUTE_NORMAL, NULL);
-				if (INVALID_HANDLE_VALUE == hFile)
-				{
-					//	해당 파일의 경로가 없는 경우 해시는 0인가요?
-					__leave;
+			XXH64_reset(p, 0);
+			hFile = ::CreateFile(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL|FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM, NULL);
+			if (INVALID_HANDLE_VALUE == hFile) {
+				//	해당 파일의 경로가 없는 경우 해시는 0인가요?
+				//	FastFileHash인 경우 어떻게든 파일을 구분하는 값을 구하기 위해 해시를 구한다. 
+				//	그러므로 파일을 open할 수 없다면 파일명으로라도 해시를 구한다. 
+
+				DWORD	dwErrorCode	= GetLastError();
+				if (ERROR_FILE_NOT_FOUND == dwErrorCode) {
+					//	파일이 존재하지 않음. 
+					//	System / MemCompression / Registry 같은 것들
+					XXH64_update(p, pPath, wcslen(pPath) * sizeof(WCHAR));
+					v	= XXH64_digest(p);
 				}
+				else {
+					if (pCallback) {
+						pCallback(pPath, GetLastError());
+					}
+				}
+			}
+			else
+			{
 				DWORD	dwBytes = 0;
 				char	szBuf[SAMPLE_SIZE];
 				if (GetFileSizeEx(hFile, &lFileSize)) {
@@ -189,11 +207,8 @@ public:
 				}
 				XXH64_update(p, &lFileSize.QuadPart, sizeof(lFileSize.QuadPart));
 				v = XXH64_digest(p);
-			}
-			__finally {
-				if (INVALID_HANDLE_VALUE != hFile) {
-					CloseHandle(hFile);
-				}
+				CloseHandle(hFile);
+				if (pFileSize)	*pFileSize = lFileSize;
 			}
 			XXH64_freeState(p);
 		}

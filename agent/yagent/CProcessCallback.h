@@ -327,6 +327,8 @@ protected:
 		try {
 			std::string		command	= __utf8(p->Command.pBuf);
 
+			doc["@name"]		= "process";
+			doc["@crc"]			= GetStringCRC16("process");
 			doc["Category"]		= p->category;
 			doc["SubType"]		= p->subType;
 			doc["FPUID"]		= p->PPUID;
@@ -346,6 +348,7 @@ protected:
 			doc["@exception"]	= e.what();
 		}
 	}
+	virtual	void			Upsert(Json::Value & doc, bool bUpdateData)	= NULL;
 	static	bool			Proc2
 	(
 		PY_HEADER			pMessage,
@@ -389,37 +392,73 @@ protected:
 			StringCbCopy(szPath, sizeof(szPath), p->DevicePath.pBuf);
 		PCWSTR	pName		= wcsrchr(szPath, L'\\');
 
-		doc["ProcPath"]	= __utf8(szPath);
+		doc["ProcPath"]			= __utf8(szPath);
+		doc["ProcPathUID16"]	= pClass->GetStringCRC16(szPath);
+
 		SetLastError(0);
 
-		//	프로세스 종료인 경우 파일 해시를 새로 뜨지 않고 이전에 구해놓은 것을 재사용한다.
-		UID		nFileHash	= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : CDist::FileFastHash(szPath);
+		UID		nFileHash	= 0;		
+		if (YFilter::Message::SubType::ProcessStop == p->subType) {
+			//	프로세스 종료인 경우 파일 해시를 새로 뜨지 않고 이전에 구해놓은 것을 재사용한다.
+		}
+
+		doc["Run"]				= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : 1;
+
+		//else	[TODO] 테스트를 위해 막아놓음.
+		{
+			nFileHash	= CDist::FileFastHash(szPath, NULL, 
+			[&](PCWSTR pFilePath, DWORD dwErrorCode) {
+				CErrorMessage	err(dwErrorCode);
+
+				pClass->m_log.Log("%ws %d %ws", pFilePath, (DWORD)err, (PCWSTR)err);
+				JsonUtil::Json2String(doc, [&](std::string& str) {
+					pClass->m_log.Log("%s", str.c_str());
+				});
+			
+			});
+		}
 
 		doc["FileFastHash"]	= nFileHash;
 		doc["FileHash"]		= nFileHash;
+
+		//	PUID2		ProcPath + Command + FastHash를 조합
+		//	동일 파일이 동일 명령으로 수행된 경우 같은 걸로 취급한다.
+		std::wstring	puid2 = szPath + (std::wstring)L":" + p->Command.pBuf + L":" + std::to_wstring(nFileHash);
+
+		doc["PUID2STR"]		= __utf8(puid2.c_str());
+		doc["PUID2"]		= pClass->GetStringCRC64(puid2);
 
 		CErrorMessage	hasherr(GetLastError());
 		pClass->m_lock.Lock(p, [&](PVOID pContext) {
 			try {
 				auto	t	= pClass->m_table.find(p->PUID);
+				ProcessPtr	ptr;
+
 				if( pClass->m_table.end() == t ) {
-					ProcessPtr	ptr	= std::make_shared<CProcess>(dynamic_cast<PY_PROCESS_DATA>(p));
+					ptr	= std::make_shared<CProcess>(dynamic_cast<PY_PROCESS_DATA>(p));
 					ptr->ProcPathUID	= pClass->GetStrUID(StringProcPath, szPath);
 					ptr->ProcNameUID	= pClass->GetStrUID(StringProcName, pName? pName + 1 : szPath);
 					ptr->CommandUID		= pClass->GetStrUID(StringCommand, p->Command.pBuf);
 					ptr->DevicePathUID	= pClass->GetStrUID(StringProcDevicePath, p->DevicePath.pBuf);
 					ptr->nFileHash		= nFileHash;
+
 					pClass->m_table[ptr->PUID]	= ptr;
 				}
 				else {
+					ptr	= t->second;
 					t->second->times	= p->times;
 					t->second->subType	= p->subType;
 					t->second->registry	= p->registry;
 					nFileHash			= t->second->nFileHash;
 				}
-				pClass->m_log.Log("[%d] C:%05d P:%05d %ws", p->subType, pClass->m_table.size(), p->PID, p->DevicePath.pBuf);
+
+				doc["ProcPathUID"] = ptr->ProcPathUID;
+				doc["ProcNameUID"] = ptr->ProcNameUID;
+				doc["CommandUID"] = ptr->CommandUID;
+
+				//pClass->m_log.Log("[%d] C:%05d P:%05d %ws", p->subType, pClass->m_table.size(), p->PID, p->DevicePath.pBuf);
 				if( YFilter::Message::SubType::ProcessStop != p->subType ) {
-					pClass->m_log.Log("  hash:%p", (PVOID)nFileHash);
+					//pClass->m_log.Log("  hash:%p", (PVOID)nFileHash);
 					if( 0 == nFileHash ) {
 						pClass->m_log.Log("  NOHASH:%ws", szPath);
 						pClass->m_log.Log("  %d %s", (DWORD)hasherr, (PCSTR)hasherr);
@@ -460,12 +499,7 @@ protected:
 				pClass->m_log.Log("Proc2", e.what());
 			}
 		});
-
-
-		JsonUtil::Json2String(doc, [&](std::string& str) {
-			pClass->m_log.Log("%s", str.c_str());
-		});
-
+		pClass->Upsert(doc, false);
 		return true;
 	}
 	static	bool			Proc(

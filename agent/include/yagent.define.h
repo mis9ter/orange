@@ -293,6 +293,8 @@ typedef struct Y_STRING
 } Y_STRING, *PY_STRING;
 
 typedef UINT64	STRUID;
+typedef UINT16	STRUID16;
+
 typedef STRUID	*PSTRUID;
 typedef struct Y_OPERATION {
 	volatile	LONG	nCount;

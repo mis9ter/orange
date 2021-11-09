@@ -2,24 +2,61 @@
 	"process": {
 		"res": "IDR_PROCESS_ODB",
 		"key": {
-			"PUID": {
-				"type": "INGEGER",
-				"option": "DEFAULT 0"
+			"PUID2": {
+				"type": "INTEGER",
+				"option": "DEFAULT 0",
+				"size": 64,
+				"signed": false
 			}
 		},
 		"index": {
+			"PUID": {
+				"type": "INTEGER",
+				"size": 64,
+				"signed": false
+			},
 			"PID": {
-				"type": "INGEGER"
+				"type": "INTEGER",
+				"size": 32,
+				"signed": false,
+				"default": 0
 			},
 			"ProcPath": {
 				"type": "NVARCHAR2",
 				"option": "COLLATE NOCASE"
+			},
+			"Command": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
+			},
+			"ProcPathUID": {
+				"type": "INTEGER",
+				"size": 64,
+				"signed": false
 			}
 		},
 		"data": {
 			"Doc": {
-				"type": "TEXT"
+				"type": "DATA"
+			},
+			"debug": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
 			}
+		},
+		"sum": {
+			"Run": {
+				"type": "INTEGER",
+				"size": 32,
+				"signed": false,
+				"default": "1"
+			}
+		},
+		"update": {
+
+		},
+		"count": {
+
 		}
 	}
 }
