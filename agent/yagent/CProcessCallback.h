@@ -390,8 +390,10 @@ protected:
 		WCHAR	szPath[AGENT_PATH_SIZE]	= L"";
 		if( false == CAppPath::GetFilePath(p->DevicePath.pBuf, szPath, sizeof(szPath)) )
 			StringCbCopy(szPath, sizeof(szPath), p->DevicePath.pBuf);
-		PCWSTR	pName		= wcsrchr(szPath, L'\\');
+		PCWSTR	pProcName		= wcsrchr(szPath, L'\\');
+		pProcName	= pProcName? pProcName + 1 : szPath;
 
+		doc["ProcName"]			= __utf8(pProcName);
 		doc["ProcPath"]			= __utf8(szPath);
 		doc["ProcPathUID16"]	= pClass->GetStringCRC16(szPath);
 
@@ -400,9 +402,26 @@ protected:
 		UID		nFileHash	= 0;		
 		if (YFilter::Message::SubType::ProcessStop == p->subType) {
 			//	프로세스 종료인 경우 파일 해시를 새로 뜨지 않고 이전에 구해놓은 것을 재사용한다.
+			doc["Run"]		= 0;
+			doc["Running"]	= -1;
+		}
+		else {
+			doc["Run"]		= 1;
+			doc["Running"]	= 1;
 		}
 
-		doc["Run"]				= (YFilter::Message::SubType::ProcessStop == p->subType)? 0 : 1;
+		if (YFilter::Message::SubType::ProcessStart2 == p->subType && p->PID > 4) {
+			HANDLE	hProcess	= YAgent::GetProcessHandle(p->PID);
+			if (hProcess) {				
+				CloseHandle(hProcess);
+			}
+			else {
+				//	아깐 존재했는지 몰라도 지금은 없단다. 
+				//doc["SubType"] = 0;
+				pClass->m_log.Log("[%d] NG C:%05d P:%05d %ws", p->subType, pClass->m_table.size(), p->PID, p->DevicePath.pBuf);
+				return false;
+			}
+		}
 
 		//else	[TODO] 테스트를 위해 막아놓음.
 		{
@@ -437,7 +456,7 @@ protected:
 				if( pClass->m_table.end() == t ) {
 					ptr	= std::make_shared<CProcess>(dynamic_cast<PY_PROCESS_DATA>(p));
 					ptr->ProcPathUID	= pClass->GetStrUID(StringProcPath, szPath);
-					ptr->ProcNameUID	= pClass->GetStrUID(StringProcName, pName? pName + 1 : szPath);
+					ptr->ProcNameUID	= pClass->GetStrUID(StringProcName, pProcName? pProcName + 1 : szPath);
 					ptr->CommandUID		= pClass->GetStrUID(StringCommand, p->Command.pBuf);
 					ptr->DevicePathUID	= pClass->GetStrUID(StringProcDevicePath, p->DevicePath.pBuf);
 					ptr->nFileHash		= nFileHash;

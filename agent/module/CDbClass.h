@@ -33,6 +33,8 @@
 
 
 */
+#include <list>
+
 #include "json/json.h"
 #include "CAppLog.h"
 #include "CDB.h"
@@ -49,6 +51,11 @@ typedef enum {
 	ColumnTypeTEXT,
 	ColumnTypeDATA,
 } CDbDataType;
+
+typedef enum {
+	StorageFile,
+	StorageMemory,
+} CDbStorageType;
 
 #define	CDB_COLUMN_ALL		0xffffffff
 #define	CDB_COLUMN_KEY		0x00000001
@@ -74,93 +81,119 @@ typedef std::map<std::string, ColumnPtr>	ColumnMap;
 
 class CDbClass
 	:
-	public	CDB
+	public	CDB,
+	virtual	public	CAppLog
 {
 public:
 	CDbClass
 	(
-		std::string		& name,
-		Json::Value		& doc,		//	DB 정의서
-		CAppLog			* pLog
+		PCWSTR			pLogName,		//	CDbClass별로 1개의 로그를 생성한다.
+		std::string		db,				//	db file 
+		std::string		table,			//	table name
+		Json::Value		&doc
 	) 
 		:
-		m_name(name),
-		m_pLog(pLog)
+		CAppLog(pLogName)
 	{
 		try {
+			Log(__func__);
 			ZeroMemory(&m_stmt, sizeof(m_stmt));
+			m_config.db		= db;
+			m_config.table	= table;
 
 			YAgent::GetDataFolder(m_path.root);
-			m_path.odb	= m_path.root + L"\\" + __utf16(m_name) + L".odb";
-			m_path.cdb	= m_path.root + L"\\" + __utf16(m_name) + L".cdb";
-			m_path.mdb	= m_path.root + L"\\" + __utf16(m_name) + L".mdb";
+			m_path.odb	= m_path.root + L"\\" + CDBTABLE_LOG_NAME + L"." + __utf16(m_config.db) + L".odb";
+			m_path.cdb	= m_path.root + L"\\" + CDBTABLE_LOG_NAME + L"." + __utf16(m_config.db) + L".cdb";
+			m_path.mdb	= m_path.root + L"\\" + CDBTABLE_LOG_NAME + L"." + __utf16(m_config.db) + L".mdb";
 
-			CreateDDL(name, doc, m_doc);
+			
+			m_config.storageType	= StorageFile;
+			if (doc.isMember("storage") && doc["storage"].isString() ) {
+				if (!doc["storage"].asString().compare("memory"))
+					m_config.storageType = StorageMemory;
+			}
+			if (doc.isMember("persistent") && doc["persitent"].isBool()) {
+				m_config.bPersistent	= doc["persistent"].asBool();
+			}
+			else {
+				m_config.bPersistent	= false;
+			}
 
+			CreateDDL(table, doc, m_config.doc);
+			Json::Value		&Path	= m_config.doc["path"];
 
+			Path["odb"]	= __utf8(m_path.odb);
+			Path["cdb"]	= __utf8(m_path.cdb);
+			Path["mdb"]	= __utf8(m_path.mdb);
 
-
+			if (doc.isMember("delete") && !doc["delete"].empty()) {
+				m_config.doc["delete"]	= doc["delete"];
+			}
 			if (PathFileExists(m_path.cdb.c_str())) {
 
 			}
 			else {
 
 			}
+
+			JsonUtil::Json2String(m_config.doc, [&](std::string& str) {
+				Log("%-32s %s", __func__, str.c_str());
+
+			});
 		}
 		catch( std::exception & e) {
-			pLog->Log("%-32s %s", __func__, e.what());
+			Log("%-32s %s", __func__, e.what());
 		}	
 	}
 	virtual	~CDbClass() {
 
 	}
-
 	Json::Value& GetJson(IN PCSTR pCause, IN Json::Value& doc, IN std::string name) {
 		try {
 			return doc[name];
 		}
 		catch (std::exception& e) {
-			m_pLog->Log("%-32s %s:%s", pCause, name.c_str(), e.what());
+			Log("%-32s %s:%s", pCause, name.c_str(), e.what());
 			throw e;
 		}
 	}
-	int			SetColumn(ColumnMap & m, std::string &ddl, 
-					int nCountOfColumn, Json::Value & doc,DWORD dwType, bool bTail = false) {
-		int				nCount	= 0;
+	int			SetColumn(ColumnMap& m, std::string& ddl,
+		int nCountOfColumn, Json::Value& doc, DWORD dwType, bool bTail = false) {
+		int				nCount = 0;
 		std::string		str, strall;
-	
+
 		for (auto& t : doc.getMemberNames()) {
 			try {
 				ColumnPtr	ptr = std::make_shared<CDbColumn>();
-				ptr->name	= t;
-				ptr->cType	= dwType;
+				ptr->name = t;
+				ptr->cType = dwType;
 				str.clear();
 
 				if (doc[t].isMember("type")) {
-					ptr->type	= doc[t]["type"].asString();
+					ptr->type = doc[t]["type"].asString();
 					if (!ptr->type.compare("INTEGER")) {
-						int		nSize = doc[t]["size"]? doc[t]["size"].asInt() : 32;
+						int		nSize = doc[t]["size"] ? doc[t]["size"].asInt() : 32;
 						bool	bSigned = doc[t].isMember("signed") ? doc[t]["signed"].asBool() : true;
 
 						if (64 == nSize) {
-							ptr->dType	= bSigned? ColumnTypeINT64 : ColumnTypeUINT64;
+							ptr->dType = bSigned ? ColumnTypeINT64 : ColumnTypeUINT64;
 						}
 						else
-							ptr->dType	= bSigned? ColumnTypeINT32 : ColumnTypeUINT32;
+							ptr->dType = bSigned ? ColumnTypeINT32 : ColumnTypeUINT32;
 					}
 					else if (!ptr->type.compare("NVARCHAR2")) {
-						ptr->dType	= ColumnTypeNVARCHAR2;
+						ptr->dType = ColumnTypeNVARCHAR2;
 					}
 					else if (!ptr->type.compare("DATA")) {
 						ptr->dType = ColumnTypeDATA;
 						//	정의문에는 DATA로 적혀있으나, sqlite에선 TEXT를 사용한다.
-						ptr->type	= "TEXT";
+						ptr->type = "TEXT";
 					}
 					else if (!ptr->type.compare("TEXT")) {
-						ptr->dType	= ColumnTypeTEXT;
+						ptr->dType = ColumnTypeTEXT;
 					}
 					else {
-						m_pLog->Log("%-32s %s %s", __func__, "unknown type", ptr->type.c_str());
+						Log("%-32s %s %s", __func__, "unknown type", ptr->type.c_str());
 					}
 					str += "  [" + t + "] " + ptr->type;
 					if (dwType & CDB_COLUMN_KEY)	str += " PRIMARY KEY ";
@@ -175,25 +208,25 @@ public:
 				}
 				m[ptr->name] = ptr;
 				nCount++;
-				if( strall.empty() )	strall	= str;
-				else					strall	+= (",\n" + str);
+				if (strall.empty())	strall = str;
+				else					strall += (",\n" + str);
 			}
 			catch (std::exception& e) {
-				m_pLog->Log("%-32s %s %s", __func__, t.c_str(), e.what());
+				Log("%-32s %s %s", __func__, t.c_str(), e.what());
 			}
 		}
-		if( strall.length() ) {
-			if( nCountOfColumn )	ddl	+= ",\n";
-			ddl	+= ("\n" + strall);
+		if (strall.length()) {
+			if (nCountOfColumn)	ddl += ",\n";
+			ddl += ("\n" + strall);
 		}
-		if( bTail )	ddl	+= "\n);\n";
+		if (bTail)	ddl += "\n);\n";
 		return nCount;
 	}
-	void		SetIndex(PCSTR pTable, ColumnMap &m,  std::string& ddl) {
+	void		SetIndex(PCSTR pTable, ColumnMap& m, std::string& ddl) {
 		std::string		str;
-		for (auto& t : m) {			
-			str += "CREATE INDEX IF NOT EXISTS [" + (std::string)pTable + ".idx." + t.second->name + "] ON [" + pTable + "]([" + 
-					t.second->name + "]";
+		for (auto& t : m) {
+			str += "CREATE INDEX IF NOT EXISTS [" + (std::string)pTable + ".idx." + t.second->name + "] ON [" + pTable + "]([" +
+				t.second->name + "]";
 			if (t.second->option.length())
 				str += " " + t.second->option;
 			str += ");\n";
@@ -237,7 +270,7 @@ public:
 			Json::Value	&index	= GetJson(__func__, req, "index");
 			Json::Value	&data	= GetJson(__func__, req, "data");
 			Json::Value	&count	= GetJson(__func__, req, "count");
-			Json::Value &sum = GetJson(__func__, req, "sum");
+			Json::Value &sum	= GetJson(__func__, req, "sum");
 			struct {
 				std::string		ddl;
 				std::string		select;
@@ -248,6 +281,7 @@ public:
 				std::string		_delete;
 				std::string		icolumn;
 				std::string		scolumn;
+				std::string		drop;
 			} query;
 
 			query.ddl	= "CREATE TABLE IF NOT EXISTS [" + table + "] (";
@@ -267,8 +301,8 @@ public:
 				if (nIndex)	query.where += " and ";
 				query.where += (p->name + "=?");
 			});
-			GetColumn(CDB_COLUMN_KEY|CDB_COLUMN_INDEX|CDB_COLUMN_DATA, [&](int nIndex, CDbColumn* p) {
-
+			GetColumn(CDB_COLUMN_KEY|CDB_COLUMN_INDEX|CDB_COLUMN_DATA|CDB_COLUMN_COUNT|CDB_COLUMN_SUM, 
+				[&](int nIndex, CDbColumn* p) {
 				if( nIndex )	query.icolumn	+= ",";
 				query.icolumn	+= p->name;
 			});	
@@ -278,6 +312,7 @@ public:
 				query.scolumn += p->name;
 			});
 
+			query.drop		= "DROP TABLE IF EXISTS [" + table + "]";
 			query.select	= "select " + query.scolumn + " from " + table + query.where;
 			query.count		= "select ";
 			GetColumn(CDB_COLUMN_KEY, [&](int nIndex, CDbColumn* p) {
@@ -285,7 +320,8 @@ public:
 			});
 			query.count	+= " from " + table + query.where;
 			query.insert	= "insert into " + table + "(" + query.icolumn + ") values(";
-			GetColumn(CDB_COLUMN_KEY|CDB_COLUMN_INDEX|CDB_COLUMN_DATA, [&](int nIndex, CDbColumn* p) {
+			GetColumn(CDB_COLUMN_KEY|CDB_COLUMN_INDEX|CDB_COLUMN_DATA|CDB_COLUMN_COUNT|CDB_COLUMN_SUM, 
+				[&](int nIndex, CDbColumn* p) {
 				if( nIndex )	query.insert	+= ",";
 				query.insert	+= "?";
 			});
@@ -310,36 +346,55 @@ public:
 			});
 			query.update	+= query.where;
 
-			res["query"]["s"] = query.select;
-			res["query"]["i"] = query.insert;
-			res["query"]["d"] = query._delete;
-			res["query"]["u"] = query.update;
-			res["query"]["c"] = query.count;
-
-			JsonUtil::Json2String(m_doc, [&](std::string& str) {
-				m_pLog->Log("%-32s %s", __func__, str.c_str());
-
-			});
+			res["query"]["s"]	= query.select;
+			res["query"]["i"]	= query.insert;
+			res["query"]["d"]	= query._delete;
+			res["query"]["u"]	= query.update;
+			res["query"]["c"]	= query.count;
+			res["drop"]			= query.drop;
 		}
 		catch (std::exception& e) {
-			m_pLog->Log("%-32s %s", __func__, e.what());
+			Log("%-32s %s", __func__, e.what());
 		}
-	}
-	void		CreateSTMT() {
-
 	}
 	bool		Initialize() {
 		bool	bRet	= false;
-		if( Open(L":memory:", __func__) ) {
 
-			m_pLog->Log("%-32s %s", __func__, "memory db created.");
+		std::wstring	path;
+
+		switch (m_config.storageType) {
+			case StorageMemory:
+				path	= L":memory:";
+				break;
+			default:
+				path	=m_path.cdb;
+				break;
+		}
+		if( Open(path.c_str(), __func__) ) {
+			if( StorageFile == m_config.storageType )
+				Log("%-32s %-20s %ws", __func__, "file db", path.c_str());
+			else
+				Log("%-32s %-20s", __func__, "memory db");
+
+			Execute(NULL, "PROGMA journal_mode=WAL");
+			Execute(NULL, "PRAGMA synchronous=NORMAL");
+			sqlite3_enable_shared_cache(1);
+			Execute(NULL, "PRAGMA cache_size=100000");
+
+			if (false == m_config.bPersistent) {
+				Execute([&](int nAffected, PCSTR pQuery, PCSTR pError) {
+					Log("%-32s %d", "affected", nAffected);
+					Log("%-32s %s", "query", pQuery);
+					if (pError)	Log("%-32s %s", "error", pError);
+				}, m_config.doc["drop"].asCString());
+			}
 			Execute([&](int nAffected, PCSTR pQuery, PCSTR pError) {
-				m_pLog->Log("%-32s %d", "affected", nAffected);
-				m_pLog->Log("%-32s %s", "query", pQuery);
-				if( pError )	m_pLog->Log("%-32s %s", "error", pError);
-			}, m_doc["ddl"].asCString());
+				Log("%-32s %d", "affected", nAffected);
+				Log("%-32s %s", "query", pQuery);
+				if( pError )	Log("%-32s %s", "error", pError);
+			}, m_config.doc["ddl"].asCString());
 
-			Json::Value	&query	= m_doc["query"];
+			Json::Value	&query	= m_config.doc["query"];
 			for (auto& t : query.getMemberNames() ) {
 				sqlite3_stmt	*p	= Stmt(query[t].asCString());
 				if (p) {
@@ -354,12 +409,12 @@ public:
 					else if (!t.compare("d"))
 						m_stmt.d = p;
 					else {
-						m_pLog->Log("%s %s\n%s", t.c_str(), query[t].asCString(), "unknown query");
+						Log("%s %s\n%s", t.c_str(), query[t].asCString(), "unknown query");
 						Free(p);
 					}
 				}
 				else {
-					m_pLog->Log("%s %s\n%s", t.c_str(), query[t].asCString(), sqlite3_errmsg(Handle()));
+					Log("%s %s\n%s", t.c_str(), query[t].asCString(), sqlite3_errmsg(Handle()));
 				}				
 			}
 		}
@@ -371,7 +426,10 @@ public:
 	}
 	void		Destroy() {
 		if( IsOpened() ) {
-			Backup(m_path.mdb.c_str());
+			if( StorageMemory == m_config.storageType ) {
+				Log("%-32s %-20s %ws", __func__, "backup", m_path.mdb.c_str());
+				Backup(m_path.mdb.c_str());
+			}
 			Close(__func__);
 
 			if( m_stmt.c )	Free(m_stmt.c);
@@ -380,11 +438,11 @@ public:
 			if (m_stmt.d)	Free(m_stmt.d);
 			if (m_stmt.u)	Free(m_stmt.u);
 
-			m_pLog->Log("%-32s %s", __func__, "db is closed.");
+			Log("%-32s %s", __func__, "db is closed.");
 		}
 	}
 	bool		Backup(IN PCWSTR pFilePath) {
-		m_pLog->Log("%-32s %ws", __func__, pFilePath);
+		Log("%-32s %ws", __func__, pFilePath);
 		bool	bRet	= false;
 		if (IsOpened() ) {
 
@@ -399,7 +457,7 @@ public:
 				{
 					while( SQLITE_OK == (nStatus = sqlite3_backup_step(pBackup, -1)) );
 					nStatus	= sqlite3_backup_finish(pBackup);
-					m_pLog->Log("%-32s %d", "sqlite3_backupo_finish", nStatus);
+					Log("%-32s %d", "sqlite3_backupo_finish", nStatus);
 
 					rc = sqlite3_errcode(Handle());
 					if (SQLITE_OK == rc)
@@ -408,26 +466,26 @@ public:
 					}
 					else
 					{
-						m_pLog->Log("%-32s %s", __func__, sqlite3_errmsg(dest.Handle()));
+						Log("%-32s %s", __func__, sqlite3_errmsg(dest.Handle()));
 					}
 				}
 				else
 				{
-					m_pLog->Log("%-32s sqlite3_backup_init() failed. path={}",
+					Log("%-32s sqlite3_backup_init() failed. path={}",
 						__func__, __ansi(pFilePath));
 				}
 				dest.Close(__func__);
 				if (false == bRet )
 				{
 					//	오류가 발생된 파일은 삭제해버린다.
-					m_pLog->Log("%-32s rc = %d", __func__, rc);
+					Log("%-32s rc = %d", __func__, rc);
 					//YAgent::DeleteFile(pFilePath);
 				}
 				dest.Close(__func__);
 			}
 		}
 		else {
-			m_pLog->Log("%-32s db is not opened.", __func__);
+			Log("%-32s db is not opened.", __func__);
 
 		}
 		return bRet;
@@ -438,16 +496,32 @@ public:
 		//JsonUtil::Json2String(doc, [&](std::string& str) {
 		//	m_pLog->Log("%-32s\n%s", __func__, str.c_str());
 		//});
-		try {
-			if (IsExisting(doc)) {
-				bRet	= Update(doc);
+
+		bool	bDelete	= false;
+		if (!m_config.doc["delete"].empty()) {
+			Json::Value		&Delete	= m_config.doc["delete"];
+			bDelete	= true;
+			for (auto& t : Delete.getMemberNames() ) {
+				if (Delete[t] != doc[t]) {
+					bDelete	= false;
+					break;
+				}
 			}
+		}
+		try {
+			if( bDelete )	Delete(doc);
 			else {
-				bRet	= Insert(doc);
+
+				if (IsExisting(doc)) {
+					bRet	= Update(doc);
+				}
+				else {
+					bRet	= Insert(doc);
+				}
 			}
 		}
 		catch (std::exception& e) {
-			m_pLog->Log("%-32s %s", __func__, e.what());
+			Log("%-32s %s", __func__, e.what());
 		}
 		return bRet;
 	}
@@ -469,7 +543,7 @@ public:
 					break;
 				default:
 					if (!doc.isMember(p->name)) {
-						m_pLog->Log("%-10s %-32s cType=%d, dType=%d, not found.", 
+						Log("%-10s %-32s cType=%d, dType=%d, not found.", 
 							pCause, p->name.c_str(), p->cType, p->dType);
 						sqlite3_bind_null(pStmt, nIndex);
 						return nIndex;
@@ -478,19 +552,19 @@ public:
 			}			
 			switch (p->dType) {
 				case ColumnTypeINT32:
-					if( bLog )	m_pLog->Log("%2d %-32s %d", nIndex, p->name.c_str(), doc[p->name].asInt());
+					if( bLog )	Log("%2d %-32s %d", nIndex, p->name.c_str(), doc[p->name].asInt());
 					sqlite3_bind_int(pStmt, nIndex, doc[p->name].asInt());
 					break;
 				case ColumnTypeUINT32:
-					if (bLog)	m_pLog->Log("%02d %-32s %d", nIndex, p->name.c_str(), doc[p->name].asUInt());
+					if (bLog)	Log("%02d %-32s %d", nIndex, p->name.c_str(), doc[p->name].asUInt());
 					sqlite3_bind_int(pStmt, nIndex, doc[p->name].asUInt());
 					break;
 				case ColumnTypeINT64:
-					if (bLog)	m_pLog->Log("%02d %-32s %I64d", nIndex, p->name.c_str(), doc[p->name].asInt64());
+					if (bLog)	Log("%02d %-32s %I64d", nIndex, p->name.c_str(), doc[p->name].asInt64());
 					sqlite3_bind_int64(pStmt, nIndex, doc[p->name].asInt64());
 					break;
 				case ColumnTypeUINT64:
-					if (bLog)	m_pLog->Log("%02d %-32s %I64u", nIndex, p->name.c_str(), doc[p->name].asUInt64());
+					if (bLog)	Log("%02d %-32s %I64u", nIndex, p->name.c_str(), doc[p->name].asUInt64());
 					//	JSON에는 UINT64가 있지만 
 					//	sqlite3엔 UINT64가 없기에 signed로 바꿔서 넣는다.
 					//	그러므로 sqlite3 -> json에 넣을 때도 형에 따라 바꿔서 넣어줘야 한다.
@@ -498,12 +572,12 @@ public:
 					break;
 				case ColumnTypeNVARCHAR2:
 				case ColumnTypeTEXT:
-					if (bLog)	m_pLog->Log("%02d %-32s %s", nIndex, p->name.c_str(), doc[p->name].asCString());
+					if (bLog)	Log("%02d %-32s %s", nIndex, p->name.c_str(), doc[p->name].asCString());
 					sqlite3_bind_text(pStmt, nIndex, doc[p->name].asCString(), -1, SQLITE_TRANSIENT);
 					break;
 
 				case ColumnTypeDATA:
-					if (bLog)	m_pLog->Log("%02d %-32s %s", nIndex, p->name.c_str(), "DATA");
+					if (bLog)	Log("%02d %-32s %s", nIndex, p->name.c_str(), "DATA");
 					JsonUtil::Json2String(doc, [&](std::string& str) {
 						sqlite3_bind_text(pStmt, nIndex, str.c_str(), -1, SQLITE_TRANSIENT);
 					});
@@ -511,7 +585,7 @@ public:
 			}
 		}
 		catch (std::exception& e) {
-			m_pLog->Log("%-10s %-32s %s", pCause, p->name.c_str(), e.what());
+			Log("%-10s %-32s %s", pCause, p->name.c_str(), e.what());
 		} 
 		return nIndex;
 	}
@@ -534,14 +608,14 @@ public:
 			sqlite3_reset(m_stmt.c);
 		}
 		else {
-			m_pLog->Log("%-32s %s", __func__, sqlite3_errmsg(Handle()));
+			Log("%-32s %s", __func__, sqlite3_errmsg(Handle()));
 		}
 		return nCount ? true : false;
 	}
 	bool		Insert(Json::Value& doc) {
 		bool	bRet	= false;
 		if (m_stmt.i) {
-			GetColumn(CDB_COLUMN_KEY|CDB_COLUMN_INDEX|CDB_COLUMN_DATA, 
+			GetColumn(CDB_COLUMN_KEY|CDB_COLUMN_INDEX|CDB_COLUMN_DATA|CDB_COLUMN_COUNT|CDB_COLUMN_SUM, 
 				[&](int nIndex, CDbColumn* p) {
 				BindColumn("Insert", p, nIndex + 1, m_stmt.i, doc);
 			});
@@ -551,13 +625,13 @@ public:
 			}
 			else {
 				JsonUtil::Json2String(doc, [&](std::string& str) {
-					m_pLog->Log("%-32s %s\n%s", __func__, sqlite3_errmsg(Handle()), str.c_str());
+					Log("%-32s %s\n%s", __func__, sqlite3_errmsg(Handle()), str.c_str());
 				});
 			}
 			Reset(m_stmt.i);
 		}
 		else {
-			m_pLog->Log("%-32s %s", __func__, "m_stmt.i is null.");
+			Log("%-32s %s", __func__, "m_stmt.i is null.");
 		}
 		return bRet;
 	}
@@ -568,38 +642,55 @@ public:
 		if (p) {			
 			GetColumn(CDB_COLUMN_INDEX,
 				[&](int nIndex, CDbColumn* p) {
-				BindColumn("Update", p, ++nStart, m_stmt.u, doc, true);
+				BindColumn("Update", p, ++nStart, m_stmt.u, doc, false);
 			});
 			GetColumn(CDB_COLUMN_COUNT,
 				[&](int nIndex, CDbColumn* p) {
-				BindColumn("Update", p, ++nStart, m_stmt.u, doc, true);
+				BindColumn("Update", p, ++nStart, m_stmt.u, doc, false);
 			});
 			GetColumn(CDB_COLUMN_SUM,
 				[&](int nIndex, CDbColumn* p) {
-				BindColumn("Update", p, ++nStart, m_stmt.u, doc, true);
+				BindColumn("Update", p, ++nStart, m_stmt.u, doc, false);
 			});
 			GetColumn(CDB_COLUMN_KEY,
 				[&](int nIndex, CDbColumn* p) {
-				BindColumn("Update", p, ++nStart, m_stmt.u, doc, true);
+				BindColumn("Update", p, ++nStart, m_stmt.u, doc, false);
 			});
 			if (SQLITE_DONE == sqlite3_step(p)) {
 				bRet	= true;
 
-				JsonUtil::Json2String(doc, [&](std::string& str) {
-					int	nChanged	= sqlite3_changes(Handle());
-					m_pLog->Log("%-32s changed:%d\n%s", "Update", nChanged, str.c_str());
-				});
+				//JsonUtil::Json2String(doc, [&](std::string& str) {
+				//	int	nChanged	= sqlite3_changes(Handle());
+				//	Log("%-32s changed:%d\n%s", "Update", nChanged, str.c_str());
+				//});
 			}
 			else {
-				m_pLog->Log("%-32s %s", __func__, sqlite3_errmsg(Handle()));
+				Log("%-32s %s", __func__, sqlite3_errmsg(Handle()));
 			}
 			Reset(p);
 		}
 		return bRet;
 	}
-	bool		Delete(Json::Value& req) {
+	bool		Delete(Json::Value& doc) {
 		bool	bRet	= false;
-
+		if (m_stmt.d) {
+			int	nStatus;
+			GetColumn(CDB_COLUMN_KEY, [&](int nIndex, CDbColumn* p) {
+				BindColumn("Delete", p, nIndex + 1, m_stmt.d, doc);
+			});
+			if (SQLITE_DONE == (nStatus = sqlite3_step(m_stmt.d))) {
+				
+				//Log("%-32s changed:%d", __func__, sqlite3_changes(Handle()));
+				bRet	= true;
+			}
+			else {
+				Log("%-32s nStatus=%d", __func__, nStatus);
+			}
+			sqlite3_reset(m_stmt.d);
+		}
+		else {
+			Log("%-32s %s", __func__, sqlite3_errmsg(Handle()));
+		}
 		return bRet;
 	}
 	int			Select(const Json::Value& req, Json::Value & res) {
@@ -608,15 +699,19 @@ public:
 		return nCount;
 	}
 private:	
-	std::string			m_name;
-	Json::Value			m_doc;
-	
+	struct {
+		std::string		db;
+		std::string		table;
+		Json::Value		doc;
+		CDbStorageType	storageType;
+		bool			bPersistent;
+	} m_config;
+
 	struct {
 		std::wstring	root;
 		std::wstring	odb;
 		std::wstring	cdb;
 		std::wstring	mdb;
-
 	} m_path;
 
 	struct {
@@ -634,15 +729,16 @@ private:
 		sqlite3_stmt	*d;
 		sqlite3_stmt	*u;
 	} m_stmt;
-	CAppLog				*m_pLog;
-
 };
 
 typedef std::shared_ptr<CDbClass>			DbClassPtr;
 typedef std::map<std::string, DbClassPtr>	DbClassMap;
+typedef std::list<DbClassPtr>				DbClassList;
+typedef std::map<std::string, DbClassList>	DbClassListMap;
 
 
 #define DBCLASS_PROCESS_CRC		41800
+
 
 
 class CDbClassFactory
@@ -659,61 +755,66 @@ public:
 	}
 	void	Initialize(IN Json::Value & doc) {
 		m_log.Log("%-32s", __FUNCTION__);
-
 		for (auto& t : doc.getMemberNames()) {
 
 			try {
-				Json::Value& table = doc[t];
+				Json::Value	&db		= doc[t];
+				Json::Value	&table	= db["name"];
 
 				m_log.Log("%-32s %s", __func__, t.c_str());
-				JsonUtil::Json2String(table, [&](std::string& str) {
-					m_log.Log("%-32s %s", __func__, str.c_str());
-				});
+				//JsonUtil::Json2String(table, [&](std::string& str) {
+				//	m_log.Log("%-32s %s", __func__, str.c_str());
+				//});
+				if( m_db.end() == m_db.find(t) ) {
+					WCHAR	szLogName[100]	= L"";
+					StringCbPrintf(szLogName, sizeof(szLogName), L"cdbclassfactory.%s.log", __utf16(t));
 
-				if( m_table.end() == m_table.find(t) ) {
-					DbClassPtr	ptr	= std::make_shared<CDbClass>(t, table, &m_log);
-					m_table[t]		= ptr;
+					DbClassPtr	ptr	= std::make_shared<CDbClass>(szLogName, t, table.asString(), db);
+					m_db[t]		= ptr;					
+					m_table[table.asString()].push_back(ptr);
 					ptr->Initialize();
 				}
 			}
 			catch (std::exception& e) {
-				m_log.Log("%-32s %s", __func__, e.what());
+				m_log.Log("%-32s %-20s %s", __func__, t.c_str(), e.what());
 			}
-			
-
 		}
 	}
 	void	Destroy() {
 		m_log.Log("%-32s", __FUNCTION__);
 
-		for (auto& t : m_table) {
+		for (auto& t : m_db) {
 			t.second->Destroy();
 		}
+		m_db.clear();
+		m_table.clear();
 	}
 	void	Upsert(IN Json::Value& doc, bool bUpdateData) {
 
+		bool	bDelete	= false;
 		try {
-			switch (doc["@crc"].asInt()) {
-				case 41800:	//	process
-					{
-						auto	t	= m_table.find("process");
-						if (m_table.end() == t) {
+			Json::Value	&name	= doc["@name"];
 
-						}
-						else {
-							t->second->Upsert(doc, bUpdateData);
-						}
-					}
-					break;
+			auto	t = m_table.find(name.asString());
+			if (m_table.end() == t) {
+				m_log.Log("%-32s name [%s] is not found.", __func__, name.asCString());
+			}
+			else {
+				for( auto &i : t->second ) {
+					i->Upsert(doc, bUpdateData);
+				}
 			}
 		}
 		catch (std::exception& e) {
-			m_log.Log("%-32s\n%s", __func__, e.what());
+			m_log.Log("%-32s @category %s", __func__, e.what());
 		}
-
 	}
-private:
-	CAppLog		m_log;
-	DbClassMap	m_table;
 
+	//------------------------------------------------------------------------------------------------
+	
+
+private:
+	CAppLog				m_log;
+	DbClassMap			m_db;
+	DbClassListMap		m_table;
 };

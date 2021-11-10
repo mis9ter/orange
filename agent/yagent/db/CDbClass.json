@@ -1,6 +1,9 @@
 {
-	"process": {
+	"aprocess": {
 		"res": "IDR_PROCESS_ODB",
+		"name": "process",
+		"storage": "file",
+		"persistent": false,
 		"key": {
 			"PUID2": {
 				"type": "INTEGER",
@@ -22,6 +25,10 @@
 				"default": 0
 			},
 			"ProcPath": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
+			},
+			"ProcName": {
 				"type": "NVARCHAR2",
 				"option": "COLLATE NOCASE"
 			},
@@ -49,7 +56,13 @@
 				"type": "INTEGER",
 				"size": 32,
 				"signed": false,
-				"default": "1"
+				"default": "0"
+			},
+			"Running": {
+				"type": "INTEGER",
+				"size": 32,
+				"signed": true,
+				"default": "0"
 			}
 		},
 		"update": {
@@ -57,6 +70,72 @@
 		},
 		"count": {
 
+		}
+	},
+	"cprocess": {
+		"res": "IDR_PROCESS_ODB",
+		"name": "process",
+		"storage": "file",
+		"persistent": false,
+		"key": {
+			"PUID": {
+				"type": "INTEGER",
+				"option": "DEFAULT 0",
+				"size": 64,
+				"signed": false
+			}
+		},
+		"index": {
+			"PID": {
+				"type": "INTEGER",
+				"size": 32,
+				"signed": false,
+				"default": 0
+			},
+			"ProcPath": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
+			},
+			"ProcName": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
+			},
+			"Command": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
+			}
+		},
+		"data": {
+			"Doc": {
+				"type": "DATA"
+			},
+			"debug": {
+				"type": "NVARCHAR2",
+				"option": "COLLATE NOCASE"
+			},
+			"SubType": {
+				"type": "INTEGER",
+				"size": 32,
+				"signed": true,
+				"default": 0
+			}
+		},
+		"sum": {
+			"Run": {
+				"type": "INTEGER",
+				"size": 32,
+				"signed": false,
+				"default": "0"
+			}
+		},
+		"update": {
+
+		},
+		"count": {
+
+		},
+		"delete": {
+			"SubType": 0
 		}
 	}
 }

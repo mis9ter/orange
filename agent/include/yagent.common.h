@@ -6,6 +6,8 @@
 #include <functional>
 #include <iostream>
 #include <fstream>
+#include <Shlwapi.h>
+#include <ShlObj.h>
 
 #include "CAppRegistry.h"
 #include "CTime.h"
@@ -162,7 +164,15 @@ namespace YAgent {
 	bool		SetFileContent(IN LPCTSTR lpPath, IN PVOID lpContent, IN DWORD dwSize);
 	PVOID		GetFileContent(IN LPCTSTR lpPath, OUT DWORD * pSize);
 	void		FreeFileContent(PVOID p);
-	PCWSTR		GetDataFolder(IN PCWSTR pName, OUT PWSTR pValue, IN DWORD dwSize);
+	inline	PCWSTR		GetDataFolder(IN PCWSTR pName, OUT PWSTR pValue, IN DWORD dwSize)
+	{
+		UNREFERENCED_PARAMETER(dwSize);
+		if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, pValue))) {
+			PathAppend(pValue, pName);
+			return pValue;
+		}
+		return NULL;
+	}
 	inline	PCWSTR		GetDataFolder(OUT PWSTR pValue, DWORD dwSize) {
 		return GetDataFolder(AGENT_DATA_FOLDERNAME, pValue, dwSize);
 	}

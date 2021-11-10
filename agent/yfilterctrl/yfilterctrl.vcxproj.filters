@@ -37,9 +37,6 @@
     <ClInclude Include="..\include\yagent.define.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\CAppLog.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\CAppRegistry.h">
       <Filter>Header Files</Filter>
     </ClInclude>

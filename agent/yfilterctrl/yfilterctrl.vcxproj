@@ -25,7 +25,6 @@
     <None Include="module.def" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\include\CAppLog.h" />
     <ClInclude Include="..\include\CAppRegistry.h" />
     <ClInclude Include="..\include\CDriverService.h" />
     <ClInclude Include="..\include\IFilterCtrl.h" />
