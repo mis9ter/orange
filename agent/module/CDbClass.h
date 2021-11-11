@@ -28,10 +28,6 @@
 	결과적으로 외부 님들은 sqlite에 대해선 모르게 된다. 
 
 	여러개의 db를 조인해야 하면 어떻게 하지???
-
-
-
-
 */
 #include <list>
 
@@ -39,8 +35,8 @@
 #include "CAppLog.h"
 #include "CDB.h"
 
-#define	CDBTABLE_LOG_NAME	L"cdbtable"
-
+#define	CDBTABLE_LOG_NAME			L"cdbtable"
+#define CDB_DEFAULT_TRANSACTION		300
 typedef enum {
 	ColumnTypeINTEGER,
 	ColumnTypeINT32,
@@ -93,7 +89,9 @@ public:
 		Json::Value		&doc
 	) 
 		:
-		CAppLog(pLogName)
+		CAppLog(pLogName),
+		m_dwOP(0),
+		m_bBegin(false)
 	{
 		try {
 			Log(__func__);
@@ -119,6 +117,12 @@ public:
 				m_config.bPersistent	= false;
 			}
 
+			m_config.dwTransaction	= (DWORD)JsonUtil::GetInt(doc, "transaction", 
+				CDB_DEFAULT_TRANSACTION, 1, 100000,
+				[&](const Json::Value& doc, PCSTR pName, PCSTR pErrMsg) {
+
+			});
+
 			CreateDDL(table, doc, m_config.doc);
 			Json::Value		&Path	= m_config.doc["path"];
 
@@ -135,7 +139,6 @@ public:
 			else {
 
 			}
-
 			JsonUtil::Json2String(m_config.doc, [&](std::string& str) {
 				Log("%-32s %s", __func__, str.c_str());
 
@@ -148,6 +151,7 @@ public:
 	virtual	~CDbClass() {
 
 	}
+
 	Json::Value& GetJson(IN PCSTR pCause, IN Json::Value& doc, IN std::string name) {
 		try {
 			return doc[name];
@@ -235,7 +239,6 @@ public:
 	}
 	void		GetColumn(DWORD dwFlags, std::function<void(int nIndex, CDbColumn *p)> pCallback) {
 		int		nIndex	= 0;
-
 		if( CDB_COLUMN_KEY & dwFlags ) {
 			for (auto& t : m_column.key) {
 				if( pCallback )	pCallback(nIndex++, t.second.get());
@@ -274,6 +277,7 @@ public:
 			struct {
 				std::string		ddl;
 				std::string		select;
+				std::string		selectall;
 				std::string		count;
 				std::string		where;
 				std::string		insert;
@@ -314,6 +318,7 @@ public:
 
 			query.drop		= "DROP TABLE IF EXISTS [" + table + "]";
 			query.select	= "select " + query.scolumn + " from " + table + query.where;
+			query.selectall	= "select " + query.scolumn + " from " + table;
 			query.count		= "select ";
 			GetColumn(CDB_COLUMN_KEY, [&](int nIndex, CDbColumn* p) {
 				query.count += ("count(" + p->name + ")");
@@ -352,6 +357,7 @@ public:
 			res["query"]["u"]	= query.update;
 			res["query"]["c"]	= query.count;
 			res["drop"]			= query.drop;
+			res["query"]["a"]	= query.selectall;
 		}
 		catch (std::exception& e) {
 			Log("%-32s %s", __func__, e.what());
@@ -376,14 +382,14 @@ public:
 			else
 				Log("%-32s %-20s", __func__, "memory db");
 
-			Execute(NULL, "PROGMA journal_mode=WAL");
-			Execute(NULL, "PRAGMA synchronous=NORMAL");
+			//Execute(NULL, "PROGMA journal_mode=WAL");
+			//Execute(NULL, "PRAGMA synchronous=NORMAL");
 			sqlite3_enable_shared_cache(1);
 			Execute(NULL, "PRAGMA cache_size=100000");
 
 			if (false == m_config.bPersistent) {
 				Execute([&](int nAffected, PCSTR pQuery, PCSTR pError) {
-					Log("%-32s %d", "affected", nAffected);
+					if( nAffected )	Log("%-32s %d", "affected", nAffected);
 					Log("%-32s %s", "query", pQuery);
 					if (pError)	Log("%-32s %s", "error", pError);
 				}, m_config.doc["drop"].asCString());
@@ -408,6 +414,8 @@ public:
 						m_stmt.u = p;
 					else if (!t.compare("d"))
 						m_stmt.d = p;
+					else if (!t.compare("a"))
+						m_stmt.a = p;
 					else {
 						Log("%s %s\n%s", t.c_str(), query[t].asCString(), "unknown query");
 						Free(p);
@@ -417,6 +425,7 @@ public:
 					Log("%s %s\n%s", t.c_str(), query[t].asCString(), sqlite3_errmsg(Handle()));
 				}				
 			}
+			BeginAndCommit(false);
 		}
 		else {
 
@@ -426,6 +435,7 @@ public:
 	}
 	void		Destroy() {
 		if( IsOpened() ) {
+			Commit(__func__);
 			if( StorageMemory == m_config.storageType ) {
 				Log("%-32s %-20s %ws", __func__, "backup", m_path.mdb.c_str());
 				Backup(m_path.mdb.c_str());
@@ -437,7 +447,7 @@ public:
 			if (m_stmt.i)	Free(m_stmt.i);
 			if (m_stmt.d)	Free(m_stmt.d);
 			if (m_stmt.u)	Free(m_stmt.u);
-
+			if( m_stmt.a)	Free(m_stmt.a);
 			Log("%-32s %s", __func__, "db is closed.");
 		}
 	}
@@ -509,7 +519,30 @@ public:
 			}
 		}
 		try {
-			if( bDelete )	Delete(doc);
+			if( bDelete )	{
+				Delete(doc);
+				/*
+				JsonUtil::Json2String(doc, [&](std::string& str) {
+					Log("\n%s", str.c_str());
+				});
+
+				Json::Value		req;
+				Select(req, [&](int nIndex, Json::Value& row) {
+					HANDLE	hProcess = YAgent::GetProcessHandle(row["PID"].asInt());
+
+					if (hProcess) {
+						Log("%04d %5d [O] %s", nIndex, row["PID"].asInt(), row["ProcPath"].asCString());
+						CloseHandle(hProcess);
+					}
+					else {
+						Log("%04d %5d [X] %s", nIndex, row["PID"].asInt(), row["ProcPath"].asCString());
+					}
+					//JsonUtil::Json2String(row, [&](std::string& str) {
+					//	Log("\n%s", str.c_str());
+					//});
+				});
+				*/
+			}
 			else {
 
 				if (IsExisting(doc)) {
@@ -523,10 +556,27 @@ public:
 		catch (std::exception& e) {
 			Log("%-32s %s", __func__, e.what());
 		}
+		BeginAndCommit(false);
 		return bRet;
 	}
+	void		BeginAndCommit(bool bForce) {
+		m_dwOP++;
+		if( m_bBegin ) {
+			if (bForce || 0 == m_dwOP % 300) {
+				m_bBegin	= false;
+				Log("COMMIT");
+				Commit(__func__);
+			}
+		}
+
+		if (false == m_bBegin) {
+			Begin(__func__);
+			m_bBegin	= true;
+			Log("BEGIN");
+		}
+	}
 	int			BindColumn(PCSTR pCause, CDbColumn *p, int nIndex, sqlite3_stmt * pStmt, 
-					Json::Value & doc, bool bLog = false) {
+					const Json::Value & doc, bool bLog = false) {
 		try {
 			switch (p->cType) {
 				case CDB_COLUMN_DATA:
@@ -546,6 +596,9 @@ public:
 						Log("%-10s %-32s cType=%d, dType=%d, not found.", 
 							pCause, p->name.c_str(), p->cType, p->dType);
 						sqlite3_bind_null(pStmt, nIndex);
+						JsonUtil::Json2String(doc, [&](std::string& str) {
+							Log("\n%s", str.c_str());
+						});
 						return nIndex;
 					}
 					break;
@@ -693,18 +746,118 @@ public:
 		}
 		return bRet;
 	}
-	int			Select(const Json::Value& req, Json::Value & res) {
-		int		nCount	= 0;
+	int			Select(const Json::Value& req, 
+				std::function<void(int nIndex, Json::Value & res)>	pCallback) {
+		int			nRowCount	= 0;
+		int			nKeyCount	= 0;
 
-		return nCount;
+		GetColumn(CDB_COLUMN_KEY, [&](int nIndex, CDbColumn* p) {
+			if (req.isMember(p->name)) {
+				//	주어진 요청문에 KEY 항목이 존재하면 개수를 세어본다.
+				nKeyCount++;
+			}
+		});
+
+		sqlite3_stmt* pStmt = nKeyCount? m_stmt.s : m_stmt.a;
+		if (pStmt) {
+			if( nKeyCount ) {
+				GetColumn(CDB_COLUMN_KEY,
+					[&](int nIndex, CDbColumn* p) {
+					BindColumn("Insert", p, nIndex + 1, pStmt, req);
+				});
+			}
+			int	nColumnCount	= sqlite3_column_count(pStmt);
+			Json::Value	column;
+			for (auto i = 0; i < nColumnCount; i++) {
+				Json::Value		c;
+				const char	*pColumnName	= sqlite3_column_name(pStmt, i);
+				const char	*pColumnType	= sqlite3_column_decltype(pStmt, i);
+
+				c["name"] = pColumnName ? pColumnName : Json::Value::null;
+				pColumnType = sqlite3_column_decltype(pStmt, i);
+				c["type"] = pColumnType ? pColumnType : Json::Value::null;
+				column.append(c);
+			}
+			int		nStatus;
+			for (int nRow = 0; nRow < 1000; nRow++) {
+				Json::Value		row;
+				nStatus = sqlite3_step(pStmt);
+				if (SQLITE_ROW == nStatus) {
+					row.clear();
+					for (unsigned i = 0; i < column.size(); i++) {
+						try {
+							auto& t = column[i];
+							const	Json::Value& type = t["type"];
+							const	Json::Value& name = t["name"];
+
+							const	unsigned char* pValue = NULL;
+							const	int				nValue = 0;
+							const	int64_t			nValue64 = 0;
+
+							int						nType = sqlite3_column_type(pStmt, i);
+							if (0 == nRow) {
+								//	column 정보를 넣을 때 한번에 하려 했으나 
+								//	윗 부분에서 하면 모두 type == 5로 나온다.
+								//	실데이터가 필요해.
+								column[i]["@type"] = nType;
+							}
+							switch (nType) {
+							case SQLITE_INTEGER:
+								row[name.asString()]	= (uint64_t)sqlite3_column_int64(pStmt, i);
+								break;
+
+							case SQLITE_FLOAT:
+								row[name.asString()]	= sqlite3_column_double(pStmt, i);
+								break;
+
+							case SQLITE_TEXT:
+								row[name.asString()]	= (char*)sqlite3_column_text(pStmt, i);
+								break;
+
+							case SQLITE_NULL:
+								row[name.asString()]	= Json::Value::null;
+								break;
+
+							case SQLITE_BLOB:
+								row[name.asString()]	= "not supported value type";
+								break;
+							}
+						}
+						catch (std::exception& e) {
+							Log("%-32s %s", __func__, e.what());
+						}
+					}
+					if (pCallback) {
+						pCallback(nRowCount, row);
+					}
+					nRowCount++;
+				}
+				else if (SQLITE_DONE == nStatus) {
+					break;
+				}
+				else
+					break;
+			}
+			//JsonUtil::Json2String(res, [&](std::string& str) {
+			//	Log("%-32s %s\n%s", __func__, sqlite3_errmsg(Handle()), str.c_str());
+			//});
+			Reset(m_stmt.s);
+		}
+		else {
+			Log("%-32s %s", __func__, "m_stmt.i is null.");
+		}
+		return nRowCount;
 	}
 private:	
+	std::atomic<DWORD>		m_dwOP;
+	std::atomic<bool>		m_bBegin;
 	struct {
-		std::string		db;
-		std::string		table;
-		Json::Value		doc;
-		CDbStorageType	storageType;
-		bool			bPersistent;
+		std::string			db;
+		std::string			table;
+		Json::Value			doc;
+		CDbStorageType		storageType;
+		bool				bPersistent;
+		DWORD				dwTransaction;
 	} m_config;
 
 	struct {
@@ -728,6 +881,7 @@ private:
 		sqlite3_stmt	*c;
 		sqlite3_stmt	*d;
 		sqlite3_stmt	*u;
+		sqlite3_stmt	*a;			//	select all
 	} m_stmt;
 };
 

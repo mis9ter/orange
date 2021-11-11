@@ -73,6 +73,8 @@ typedef struct _DB_CONFIG {
 typedef std::shared_ptr<DB_CONFIG>	DbConfigPtr;
 typedef std::map<std::wstring, DbConfigPtr>		DbMap;
 
+
+
 class CAgent
 	:
 	public	CFilterCtrl,

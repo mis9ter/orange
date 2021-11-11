@@ -169,7 +169,10 @@ namespace JsonUtil {
 		}
 		return dDefault;
 	}
-	inline	int64_t	GetInt(IN const Json::Value & doc, IN LPCSTR pName, IN int64_t nDefault = 0,
+	inline	int64_t	GetInt(IN const Json::Value & doc, IN LPCSTR pName, 
+		IN int64_t nDefault = 0,
+		IN int64_t nMinimum = 0,
+		IN int64_t nMaximum = 1000000,
 		IN std::function<void (const Json::Value &, PCSTR pName, PCSTR pErrMsg)> pExceptionCallback = NULL)
 	{
 		try
@@ -178,8 +181,12 @@ namespace JsonUtil {
 
 			if (doc.isMember(pName))
 			{
-				if (doc[pName].isInt64())
-					return doc[pName].asInt64();
+				if (doc[pName].isInt64()) {
+					int64_t	nValue	= doc[pName].asInt64();
+					if( nValue < nMinimum )	return nMinimum;
+					if( nValue > nMaximum )	return nMaximum;
+					return nValue;
+				}
 				else if (doc[pName].isInt())
 					return doc[pName].asInt();
 				else if (doc[pName].isString())

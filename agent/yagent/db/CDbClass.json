@@ -3,6 +3,7 @@
 		"res": "IDR_PROCESS_ODB",
 		"name": "process",
 		"storage": "file",
+		"transaction": 300,
 		"persistent": false,
 		"key": {
 			"PUID2": {
@@ -77,6 +78,7 @@
 		"name": "process",
 		"storage": "file",
 		"persistent": false,
+		"transaction": 300,
 		"key": {
 			"PUID": {
 				"type": "INTEGER",
