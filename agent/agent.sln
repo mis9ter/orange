@@ -8,6 +8,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "driver", "driver", "{BC333447-E18F-46CB-BD53-6E94CA9024FC}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Service", "yagent\yagent.vcxproj", "{E52CC628-ED18-4D27-BF10-B16B44A47FA0}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A5EB33CE-AD6E-4926-932F-AB8F53686158} = {A5EB33CE-AD6E-4926-932F-AB8F53686158}
+		{0049B8CF-9324-4C06-B192-CAF5FCBD52E7} = {0049B8CF-9324-4C06-B192-CAF5FCBD52E7}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "yfilterctrl", "yfilterctrl\yfilterctrl.vcxproj", "{A5EB33CE-AD6E-4926-932F-AB8F53686158}"
 EndProject

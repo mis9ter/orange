@@ -12,6 +12,11 @@ typedef NTSTATUS(NTAPI* FN_NtQueryInformationThread)
 	ULONG           ThreadInformationLength,
 	PULONG          ReturnLength
 	);
+typedef NTSTATUS(NTAPI * FN_SeLocateProcessImageName)
+(
+	IN  PEPROCESS               pProcess,
+	OUT PUNICODE_STRING* ppProcessImageName
+);
 
 typedef enum _SYSTEM_INFORMATION_CLASS {
 	SystemBasicInformation = 0,
@@ -215,6 +220,7 @@ typedef struct CONFIG
 	bool							bThreadNotifyCallback;
 	bool							bThreadNotifyCallbackEx;
 	FN_ZwQueryInformationProcess	pZwQueryInformationProcess;
+	FN_SeLocateProcessImageName		pSeLocateProcessImageName;
 	FN_ZwTerminateProcess			pZwTerminateProcess;
 	FN_ObRegisterCallbacks			pObRegisterCallbacks;
 	FN_ObUnRegisterCallbacks		pObUnRegisterCallbacks;

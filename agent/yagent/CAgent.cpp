@@ -128,6 +128,9 @@ bool	CAgent::Initialize()
 		Log("%-32s CEventCallback::Initialize() failed.", __func__);
 		return false;
 	}
+
+	//	권한 설정
+	//
 	return (m_config.bInitialize = true);
 }
 void	CAgent::Destroy(PCSTR pCause)
@@ -155,6 +158,9 @@ void	CAgent::Destroy(PCSTR pCause)
 	}
 	Log("done");
 }
+bool	GetProcessModules(HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback);
+int		GetSystemModules(PVOID pContext, ModuleListCallback pCallback);
+
 bool	CAgent::Start()
 {
 	Log(__FUNCTION__);
@@ -211,6 +217,21 @@ bool	CAgent::Start()
 			Log("%s connect failure.", __FUNCTION__);
 		}
 
+		COMMAND_ENABLE	command = { 0, };
+		Y_REPLY		reply = { 0, };
+		command.dwCommand = Y_COMMAND_ENABLE_MODULE;
+		command.bEnable = true;
+		command.nSize	= sizeof(COMMAND_ENABLE);
+		if (CFilterCtrl::SendCommand2((PY_COMMAND)&command)) {
+			Log("%-32s %-20s %d", __func__, "Y_COMMAND_ENABLE_MODULE", command.bRet);
+		}
+		command.dwCommand = Y_COMMAND_ENABLE_THREAD;
+		command.bEnable = true;
+		command.bRet	= false;
+		if (CFilterCtrl::SendCommand2(&command)) {
+			Log("%-32s %-20s %d", __func__, "Y_COMMAND_ENABLE_THREAD", command.bRet);
+		}
+
 		CIPC::SetServiceCallback(IPCRecvCallback, this);
 		if( CIPC::Start(AGENT_SERVICE_PIPE_NAME, true) ) {
 			Log("%s ipc pipe created.", __FUNCTION__);
@@ -220,8 +241,35 @@ bool	CAgent::Start()
 		}
 		//	이제부터 비정상 종료시 SCM에 의해 되 살아납니다.
 		Service()->SetServiceRecoveryMode(false);
-
 		CFilterCtrl::SendCommand(Y_COMMAND_GET_PROCESS_LIST);
+
+
+		Log("---------------------------------------------------------------------------");
+		HANDLE	PID			= (HANDLE)5096;
+		HANDLE	hProcess	= NULL;
+
+		if ((HANDLE)4 == PID) {
+			GetSystemModules(this, [&](PVOID pContext, PMODULE p)->bool {
+
+				WCHAR	szPath[AGENT_PATH_SIZE] = L"";
+				if (false == CAppPath::GetFilePath(p->FullName, szPath, sizeof(szPath)))
+					StringCbCopy(szPath, sizeof(szPath), p->FullName);
+				Log("%-32s %p %ws", "System", p->ImageBase, szPath);
+				return true;
+			});
+		}
+		else {
+			if (KOpenProcess(PID, PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, &hProcess)) {
+				Log("%-32s KOpenProcess() succeeded. hProcess=%p", __func__, hProcess);
+
+				GetProcessModules(hProcess, this,
+					[&](PVOID pContext, PMODULE p)->bool {
+					Log("%-32s %p %ws", "Process", p->ImageBase, p->BaseName);
+					return true;
+				});
+				Log("%-32s CloseHandle()=%d", __func__, CloseHandle(hProcess));
+			}
+		}
 		m_config.bRun = true;
 	} while( false );
 	return m_config.bRun;

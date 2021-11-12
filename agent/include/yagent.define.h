@@ -213,7 +213,12 @@ namespace YFilter
 #define MAX_FILTER_MESSAGE_SIZE		(4 * 1024)		//	커널에서 전달 예상되는 최대 크기
 #define Y_COMMAND_START				0x00000001
 #define Y_COMMAND_STOP				0x00000000
+#define Y_COMMAND_OPENPROCESS		0x00000002
+
 #define Y_COMMAND_GET_PROCESS_LIST	0x00001000
+#define Y_COMMAND_ENABLE_MODULE		0x00002000
+#define Y_COMMAND_ENABLE_FILE		0x00003000
+#define Y_COMMAND_ENABLE_THREAD		0x00004000
 
 #if !defined(_NTDDK_) && !defined(_PHLIB_)
 
@@ -525,10 +530,26 @@ typedef struct YFILTER_MESSAGE {
 typedef struct Y_COMMAND
 {
 	DWORD			dwCommand;
+	bool			bRet;
+	short			nSize;
 } Y_COMMAND, * PY_COMMAND;
+
+typedef struct COMMAND_ENABLE : public Y_COMMAND
+{
+	bool			bEnable;
+} COMMAND_ENABLE, *PCOMMAND_ENABLE;
 
 typedef struct Y_REPLY
 {
 	bool			bRet;
 } Y_REPLY, *PY_REPLY;
+
+typedef struct COMMAND_OPENPROCESS : public Y_COMMAND
+{
+	PHANDLE			pOpenHandle;
+	ACCESS_MASK		DesiredAccess;
+	HANDLE			PID;
+	LONG			status;
+
+} COMMAND_OPENPROCESS, *PCOMMAND_OPENPROCESS;
 #pragma pack(pop)

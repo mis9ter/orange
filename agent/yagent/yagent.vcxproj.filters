@@ -129,9 +129,6 @@
     <ClInclude Include="CRegisryCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="undocumented.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="CStringTable.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -148,6 +145,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\CFilePath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="undocumented.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

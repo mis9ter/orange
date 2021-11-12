@@ -169,7 +169,8 @@ bool	CreateConfig(IN PUNICODE_STRING pRegistryPath)
 		pConfig->pLoadLibraryA				= (FN_LoadLibraryA)GetProcAddress(L"LoadLibraryA");
 		pConfig->pLoadLibraryW				= (FN_LoadLibraryW)GetProcAddress(L"LoadLibraryW");
 		pConfig->pZwQuerySystemInformation	= (FN_ZwQuerySystemInformation)GetProcAddress(L"ZwQuerySystemInformation");
-		
+		pConfig->pSeLocateProcessImageName	= (FN_SeLocateProcessImageName)GetProcAddress(L"SeLocateProcessImageName");
+
 		/*
 		__log("%s pZwQueryInformationProcess        %p", __FUNCTION__, pConfig->pZwQueryInformationProcess);
 		__log("%s pZwTerminateProcess               %p", __FUNCTION__, pConfig->pZwTerminateProcess);

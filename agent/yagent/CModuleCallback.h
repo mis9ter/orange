@@ -169,6 +169,27 @@ public:
 	virtual	CDB*		Db(PCWSTR pName) = NULL;
 	virtual	bool		AddModule(PROCUID PUID, PMODULE p)	= NULL;
 protected:
+	void	Message2Json(IN PY_MODULE_MESSAGE p, OUT Json::Value& doc) {
+
+		try {
+			doc["@name"]		= "module";
+			//doc["@crc"] = GetStringCRC16("module");
+			doc["Category"]		= p->category;
+			doc["SubType"]		= p->subType;
+			doc["DevicePath"]	= __utf8(p->DevicePath.pBuf);
+			doc["PID"]			= (int)p->PID;
+			doc["TID"]			= (int)p->TID;
+			doc["CTID"]			= (int)p->CTID;
+			doc["PPID"]			= (int)p->PPID;
+			doc["RPID"]			= (int)p->RPID;
+			doc["PUID"]			= (UID)p->PUID;
+			doc["ImageBase"]	= (uint64_t)p->ImageBase;
+			doc["ImageSize"]	= (uint64_t)p->ImageSize;
+		}
+		catch (std::exception& e) {
+			doc["@exception"] = e.what();
+		}
+	}
 	static	bool			Proc2
 	(
 		PY_HEADER			pMessage,
@@ -187,11 +208,20 @@ protected:
 		m.ImageSize		= p->ImageSize;
 		//pClass->m_log.Log("%p %ws %d", p->ImageBase, m.FullName, (int)p->ImageSize);
 
+		Json::Value		doc;
+		pClass->Message2Json(p, doc);
+
 		PCWSTR	pName	= _tcsrchr(m.FullName, L'\\');
 		if( pName )	pName++;
 		else 
 			pName	= m.FullName;
 		StringCbCopy(m.BaseName, sizeof(m.BaseName), pName);
+
+		doc["FilePath"]	= __utf8(m.FullName);
+		doc["FileName"]	= __utf8(m.BaseName);
+
+		JsonUtil::Json2File(doc, L"module.json");
+
 		pClass->AddModule(p->PUID, &m);
 		//pClass->m_log.Log("ImageBase: %p %d", m.ImageBase, (int)m.ImageSize);
 		//	

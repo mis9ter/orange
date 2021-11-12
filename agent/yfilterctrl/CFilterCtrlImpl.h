@@ -354,6 +354,20 @@ public:
 		}
 		return true;
 	}
+	bool	SendCommand2(PY_COMMAND pCommand)
+	{
+		Log("%-32s", __FUNCTION__);
+		DWORD		dwBytes;
+
+		if (S_OK == FilterSendMessage(m_driver.command.hPort, pCommand, pCommand->nSize,
+			NULL, 0, &dwBytes)) {
+			return true;
+		}
+		else {
+			Log("%-32s FilterSendMessage() failed.", __FUNCTION__);
+		}
+		return true;
+	}
 	bool	Connect()
 	{
 		Log(__FUNCTION__);

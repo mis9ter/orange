@@ -46,6 +46,7 @@ __interface IFilterCtrl
 	virtual bool	IsConnected()	= NULL;
 	virtual void	Disconnect()	= NULL;
 	virtual	bool	SendCommand(DWORD dwCommand)	= NULL;
+	virtual	bool	SendCommand2(PY_COMMAND pCommand)	= NULL;
 };
 IFilterCtrl *	__stdcall CreateInstance_CFilterCtrlImpl(IN LPVOID p1, LPVOID p2);
 
@@ -165,6 +166,10 @@ public:
 	bool	SendCommand(DWORD dwCommand) {
 		if( NULL == m_pInstance )	return false;
 		return m_pInstance->SendCommand(dwCommand);	
+	}
+	bool	SendCommand2(PY_COMMAND pCommand) {
+		if (NULL == m_pInstance)	return false;
+		return m_pInstance->SendCommand2(pCommand);
 	}
 private:
 	IFilterCtrl	*	m_pInstance;

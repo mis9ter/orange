@@ -154,6 +154,21 @@ public:
 		str	= Json::writeString(wbuilder, res);
 		Log(str.c_str());
 	}
+
+	bool			KOpenProcess(HANDLE PID, ACCESS_MASK desiredAccess, PHANDLE pProcessHandle) {
+		COMMAND_OPENPROCESS		command	= {0,};
+		command.dwCommand		= Y_COMMAND_OPENPROCESS;
+		command.DesiredAccess	= desiredAccess;
+		command.pOpenHandle		= pProcessHandle;
+		command.PID				= PID;
+		command.nSize			= sizeof(COMMAND_OPENPROCESS);
+		if (CFilterCtrl::SendCommand2(&command)) {
+			Log("%-32s %-20s %d", __func__, "Y_COMMAND_OPENPROCESS", command.bRet);
+			return (command.status == 0);
+		}
+		return false;
+	}
+
 private:
 	struct m_config {
 		bool				bInitialize;
