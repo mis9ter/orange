@@ -50,11 +50,14 @@ public:
 };
 
 typedef std::function<bool (PVOID,PMODULEENTRY32)>	ModuleListCallback2;
-typedef std::function<bool (PVOID,PMODULE)>			ModuleListCallback;
+typedef std::function<bool (ULONG, PVOID,PMODULE)>	ModuleListCallback;
 typedef std::shared_ptr<CModule>					ModulePtr;
 typedef std::map<PVOID, ModulePtr>					ModuleMap;
 
 bool	GetModules(DWORD PID, PVOID pContext, ModuleListCallback pCallback);
+
+int		GetSystemModules(PVOID pContext, ModuleListCallback pCallback);
+int		GetProcessModules(HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback);
 
 class CModuleCallback
 	:
@@ -72,28 +75,23 @@ public:
 	~CModuleCallback() {
 
 	}
-	bool		GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
-		HANDLE	hSnapshot	= CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32, PID);
-		if( INVALID_HANDLE_VALUE == hSnapshot ) {
-			CErrorMessage	err(GetLastError());
-			m_log.Log("%-32s PID:%d error:%d %s", __func__, PID, (DWORD)err, (PCSTR)err);
-			if( false == GetModules(PID, pContext, [&](PVOID pContext, PMODULE p)->bool {
-				m_log.Log("%p %ws", p->ImageBase, p->FullName);
-				return true;			
-			}) ) {
-				m_log.Log("GetModules1() failed.");
-			}
+	virtual	bool		KOpenProcess(DWORD PID, ACCESS_MASK desiredAccess, PHANDLE pProcessHandle)	= NULL;
+	bool				GetModules2(DWORD PID, PVOID pContext, ModuleListCallback pCallback) {
+		if( PID < 4 )
 			return false;
+		if (4 == PID) {
+			GetSystemModules(pContext, pCallback);
 		}
-		MODULEENTRY32	module;	
-		module.dwSize	= sizeof(module);
-		if( Module32First(hSnapshot, &module) ) {
-			do {
-				if( pCallback )			pCallback(pContext, &module);
+		else {
+			HANDLE	hProcess	= NULL;
+			if (KOpenProcess(PID, PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, &hProcess)) {
+				GetProcessModules(hProcess, pContext, pCallback);
+				CloseHandle(hProcess);
 			}
-			while( Module32Next(hSnapshot, &module));
-		}		
-		CloseHandle(hSnapshot);
+			else {
+				Log("%-32s KOpenProcess() succeeded. hProcess=%p", __func__, hProcess);
+			}
+		}
 		return true;
 	}
 	virtual	PCWSTR		UUID2String(IN UUID* p, PWSTR pValue, DWORD dwSize) = NULL;
@@ -220,7 +218,9 @@ protected:
 		doc["FilePath"]	= __utf8(m.FullName);
 		doc["FileName"]	= __utf8(m.BaseName);
 
-		JsonUtil::Json2File(doc, L"module.json");
+		JsonUtil::Json2String(doc, [&](std::string & str) {
+			pClass->m_log.Log("%ws\n%s", pName, str.c_str());
+		});
 
 		pClass->AddModule(p->PUID, &m);
 		//pClass->m_log.Log("ImageBase: %p %d", m.ImageBase, (int)m.ImageSize);

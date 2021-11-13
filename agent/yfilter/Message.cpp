@@ -25,7 +25,7 @@ void		CreateProcessMessage(
 	wStringSize	+= GetStringDataSize(&pEntry->Command);
 
 	PY_PROCESS_MESSAGE		pMsg	= NULL;
-
+	STATUS_UNSUCCESSFUL;
 	pMsg	= (PY_PROCESS_MESSAGE)CMemory::Allocate(PagedPool, wDataSize + wStringSize, TAG_PROCESS);
 	if( pMsg ) {
 		RtlZeroMemory(pMsg, wDataSize + wStringSize);
@@ -47,7 +47,7 @@ void		CreateProcessMessage(
 		pMsg->CTID		= (DWORD)pEntry->TID;
 		pMsg->TID		= (DWORD)pEntry->TID;
 		pMsg->registry	= pEntry->registry;
-
+		pMsg->bIsWow64	= pEntry->bIsWow64;
 
 		//__dlog("%-32s %d %d %d", __func__, sizeof(Y_PROCESS_DATA), pMsg->wDataSize, pMsg->wStringSize);
 

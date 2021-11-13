@@ -314,9 +314,6 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 
 		https://scorpiosoftware.net/2021/01/10/parent-process-vs-creator-process/
 	
-	*/
-
-	/*
 		윈도 파일명에 대한 탐구:
 		
 
@@ -355,8 +352,7 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				if( NT_SUCCESS(GetProcessImagePathByProcessId(CPID, &CProcPath)) ) {
 					__log("CPID:%d %wZ", CPID, CProcPath);
 					CMemory::Free(CProcPath);				
-				}	
-				
+				}					
 				if( CreateInfo->FileOpenNameAvailable && CreateInfo->ImageFileName )
 					__log(" %wZ", CreateInfo->ImageFileName);
 				if( CreateInfo->CommandLine )
@@ -390,7 +386,8 @@ void	__stdcall	ProcessNotifyCallbackRoutineEx(
 				}
 				*/
 				
-				__log("%wZ", CreateInfo->ImageFileName);
+				__log("%10s %wZ", CProcessTable::ProcessIsWow64(PID)? "WOW64":"NATIVE", 
+						CreateInfo->ImageFileName);
 				AddProcessToTable2(__func__, true, PID, NULL, NULL, NULL, 
 					true, &CPID, 
 					[](PVOID pContext, HANDLE PID, PROCUID PUID, 

@@ -25,8 +25,6 @@ using	pNtReadVirtualMemory	= NTSTATUS(NTAPI *)(
 );
 pNtReadVirtualMemory	NtReadVirtualMemory	= nullptr;
 
-
-
 #define PTR_ADD_OFFSET(Pointer, Offset) ((PVOID)((ULONG_PTR)(Pointer) + (ULONG_PTR)(Offset)))
 
 bool Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback)
@@ -67,7 +65,7 @@ bool Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 
 	LIST_ENTRY *pLdrListHead = (LIST_ENTRY *)pebLdrData.InLoadOrderModuleList.Flink;
 	LIST_ENTRY *pLdrCurrentNode = pebLdrData.InLoadOrderModuleList.Flink;
-	do
+	for( ULONG i = 0; i < 1024 ; i++ )
 	{
 		LDR_DATA_TABLE_ENTRY lstEntry = { 0 };
 		bRet = BOOLIFY(ReadProcessMemory(hProcess, (LPCVOID)pLdrCurrentNode, &lstEntry,
@@ -77,7 +75,6 @@ bool Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 			g_log.Log("Could not read list entry from LDR list. Error = %X\n", GetLastError());
 			return false;
 		}
-
 		pLdrCurrentNode = lstEntry.InLoadOrderLinks.Flink;
 
 		MODULE	module;
@@ -97,11 +94,12 @@ bool Modules(const HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback
 				module.ImageBase	= lstEntry.DllBase;
 				module.EntryPoint	= lstEntry.EntryPoint;
 				module.ImageSize	= lstEntry.SizeOfImage;
-				if( false == pCallback(pContext, &module) ) 
+				if( false == pCallback(i, pContext, &module) ) 
 					break;			
 			}
 		}
-	} while (pLdrListHead != pLdrCurrentNode);
+		if (pLdrListHead == pLdrCurrentNode)	break;
+	}
 	return true;
 }
 typedef struct _OBJECT_ATTRIBUTES
@@ -209,17 +207,16 @@ typedef struct _RTL_PROCESS_MODULES
 } RTL_PROCESS_MODULES, * PRTL_PROCESS_MODULES;
 
 #define STATUS_INFO_LENGTH_MISMATCH	0xC0000004
+#define STATUS_UNSUCCESSFUL         ((NTSTATUS)0xC0000001L)
 
 int		GetSystemModules(PVOID pContext, ModuleListCallback pCallback) {
-
-	NTSTATUS	status;
+	NTSTATUS	status	= STATUS_UNSUCCESSFUL;
 	PVOID		pBuffer	= NULL;
 	ULONG		nBufferSize	= 1024 * 64;
 
 	HMODULE hModule = GetModuleHandle(L"ntdll.dll");
 	NtQuerySystemInformation =
 		(pNtQuerySystemInformation)GetProcAddress(hModule, "NtQuerySystemInformation");
-
 
 	try {
 		pBuffer	= new char[nBufferSize];
@@ -234,14 +231,17 @@ int		GetSystemModules(PVOID pContext, ModuleListCallback pCallback) {
 				SystemModuleInformation, pBuffer, nBufferSize, &nBufferSize
 			);
 		}
-		if( !NT_SUCCESS(status))
+		if (NT_SUCCESS(status)) {
+
+		}
+		else {
 			g_log.Log("%-32s NtQuerySystemInformation() failed. status=%x", __func__, status);
+		}
 	}
 	catch (std::exception& e) {
 		g_log.Log("%-32s %s", __func__, e.what());
 	}
 	int			nCount	= 0;
-
 	if( NT_SUCCESS(status))	{
 		PRTL_PROCESS_MODULES	p	= (PRTL_PROCESS_MODULES)pBuffer;
 		g_log.Log("%-32s NumberOfModules:%d", __func__, p->NumberOfModules);
@@ -256,27 +256,23 @@ int		GetSystemModules(PVOID pContext, ModuleListCallback pCallback) {
 			m.ImageBase		= p->Modules[i].ImageBase;
 			m.ImageSize		= p->Modules[i].ImageSize;
 
-			if( pCallback )	pCallback(pContext, &m);
+			if( pCallback )	pCallback(i, pContext, &m);
 		}	
 	}
 	if( pBuffer )	delete pBuffer;
 	return nCount;
 }
-
-
-bool	GetProcessModules(HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback)
+int		GetProcessModules(HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback)
 {
 	HMODULE hModule = GetModuleHandle(L"ntdll.dll");
 	NtQueryInformationProcess =
 		(pNtQueryInformationProcess)GetProcAddress(hModule, "NtQueryInformationProcess");
 	NtReadVirtualMemory =
 		(pNtReadVirtualMemory)GetProcAddress(hModule, "NtReadVirtualMemory");
-
 	if (NtQueryInformationProcess == nullptr)
 	{
 		g_log.Log("NtQueryInformationProcess is null.");
-		return false;
+		return 0;
 	}
-	Modules(hProcess, pContext, pCallback);
-	return true;
+	return Modules(hProcess, pContext, pCallback);
 }

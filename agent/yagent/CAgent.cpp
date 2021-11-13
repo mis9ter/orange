@@ -158,7 +158,7 @@ void	CAgent::Destroy(PCSTR pCause)
 	}
 	Log("done");
 }
-bool	GetProcessModules(HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback);
+int		GetProcessModules(HANDLE hProcess, PVOID pContext, ModuleListCallback pCallback);
 int		GetSystemModules(PVOID pContext, ModuleListCallback pCallback);
 
 bool	CAgent::Start()
@@ -198,7 +198,6 @@ bool	CAgent::Start()
 			}
 		}
 		CIPCCommand::AddCommand("sqlite3.query", "unknown", this, Sqllite3QueryUnknown);
-
 		if (false == CFilterCtrl::Start2(
 				NULL, NULL, 
 				dynamic_cast<CEventCallback *>(this),
@@ -245,12 +244,11 @@ bool	CAgent::Start()
 
 
 		Log("---------------------------------------------------------------------------");
-		HANDLE	PID			= (HANDLE)5096;
+		DWORD	PID			= 4;
 		HANDLE	hProcess	= NULL;
 
-		if ((HANDLE)4 == PID) {
-			GetSystemModules(this, [&](PVOID pContext, PMODULE p)->bool {
-
+		if ( PID <= 4) {
+			GetSystemModules(this, [&](ULONG i, PVOID pContext, PMODULE p)->bool {
 				WCHAR	szPath[AGENT_PATH_SIZE] = L"";
 				if (false == CAppPath::GetFilePath(p->FullName, szPath, sizeof(szPath)))
 					StringCbCopy(szPath, sizeof(szPath), p->FullName);
@@ -261,9 +259,8 @@ bool	CAgent::Start()
 		else {
 			if (KOpenProcess(PID, PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, &hProcess)) {
 				Log("%-32s KOpenProcess() succeeded. hProcess=%p", __func__, hProcess);
-
 				GetProcessModules(hProcess, this,
-					[&](PVOID pContext, PMODULE p)->bool {
+					[&](ULONG i, PVOID pContext, PMODULE p)->bool {
 					Log("%-32s %p %ws", "Process", p->ImageBase, p->BaseName);
 					return true;
 				});

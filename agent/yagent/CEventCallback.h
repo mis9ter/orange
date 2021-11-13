@@ -183,7 +183,7 @@ public:
 		return CBootCallback::GetBootUID();	
 	}
 	virtual	CDB*	Db(PCWSTR pName) = NULL;
-	bool			GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback) {
+	bool			GetModules2(DWORD PID, PVOID pContext, ModuleListCallback pCallback) {
 		return CModuleCallback::GetModules2(PID, pContext, pCallback);	
 	}
 	void			Upsert(Json::Value& doc, bool bUpdateData = false) {

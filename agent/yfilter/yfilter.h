@@ -188,6 +188,11 @@ bool			OtRestore(IN POBJECT_TABLE pTable);
 ULONG			OtList(IN POBJECT_TABLE pTable);
 
 
+typedef enum PROCESS_ARCH {
+	
+	ProcessX86,
+	ProcessX64
+} PROCESS_ARCH;
 typedef struct PROCESS_ENTRY
 {
 	HANDLE				PID;				//	나의 핸들
@@ -198,6 +203,7 @@ typedef struct PROCESS_ENTRY
 	HANDLE				CPID;				//	나를 생성한 프로세스의 핸들
 											//	나를 생성한 프로세스 != 부모 프로세스
 	ULONG				SID;				//	프로세스 세션 ID
+	bool				bIsWow64;
 	UNICODE_STRING		DevicePath;
 	UNICODE_STRING		Command;
 

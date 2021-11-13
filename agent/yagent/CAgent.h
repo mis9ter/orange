@@ -154,8 +154,7 @@ public:
 		str	= Json::writeString(wbuilder, res);
 		Log(str.c_str());
 	}
-
-	bool			KOpenProcess(HANDLE PID, ACCESS_MASK desiredAccess, PHANDLE pProcessHandle) {
+	bool			KOpenProcess(DWORD PID, ACCESS_MASK desiredAccess, PHANDLE pProcessHandle) {
 		COMMAND_OPENPROCESS		command	= {0,};
 		command.dwCommand		= Y_COMMAND_OPENPROCESS;
 		command.DesiredAccess	= desiredAccess;

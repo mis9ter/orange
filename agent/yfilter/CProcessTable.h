@@ -74,13 +74,51 @@ public:
 		}
 		Unlock(irql);
 	}
+	static	bool	ProcessIsWow64(HANDLE PID) {
+		NTSTATUS	status;
+		ULONG_PTR	wow64;
+		bool		bIsWow64	= false;
+
+		//	_M_IX86
+		//	_M_AMD64
+		if (Config() && Config()->pZwQueryInformationProcess) {
+
+			HANDLE				hProcess = NULL;
+			OBJECT_ATTRIBUTES	oa = { 0 };
+			CLIENT_ID			cid = { 0 };
+
+			__try
+			{
+				oa.Length = sizeof(OBJECT_ATTRIBUTES);
+				InitializeObjectAttributes(&oa, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+				cid.UniqueProcess	= PID;
+
+				status = ZwOpenProcess(&hProcess, PROCESS_QUERY_INFORMATION, &oa, &cid);
+				if (!NT_SUCCESS(status)) {
+					__dlog("%-32s ZwOpenProcess(%d) failed.", __func__, (DWORD)PID);
+					__leave;
+				}
+				status = Config()->pZwQueryInformationProcess(hProcess, ProcessWow64Information, &wow64, sizeof(ULONG_PTR), NULL);
+				if (NT_SUCCESS(status)) {
+					bIsWow64	= wow64? true : false;
+				}
+				else {
+					__log("%-32s ZwQueryInformationProcess() failed. status=%x", __func__, status);
+				}
+			}
+			__finally {
+				if( hProcess )	ZwClose(hProcess);
+			}
+		}
+		return bIsWow64;
+	}
 	bool		Add
 	(
 		IN bool				bByCallback,		// 1 콜백에 의해 수집 0 직접 수집
-		IN HANDLE			PID, 
-		IN HANDLE			PPID,
-		IN HANDLE			CPID,
-		IN PROCUID			PUID,
+		IN HANDLE				PID, 
+		IN HANDLE				PPID,
+		IN HANDLE				CPID,
+		IN PROCUID				PUID,
 		IN PROCUID				PPUID,
 		IN PCUNICODE_STRING		pProcPath, 
 		IN PCUNICODE_STRING		pCommand,
@@ -110,6 +148,8 @@ public:
 		entry.bCallback	= bByCallback;
 		entry.PUID		= PUID;
 		entry.PPUID		= PPUID;
+		entry.bIsWow64	= ProcessIsWow64(PID);
+
 		if( pTimes )
 			RtlCopyMemory(&entry.times, pTimes, sizeof(entry.times));
 		CWSTRBuffer		procPath;
@@ -428,7 +468,6 @@ bool			IsRegisteredProcess(IN HANDLE h);
 bool			RegisterProcess(IN HANDLE h);
 bool			DeregisterProcess(IN HANDLE h);
 NTSTATUS		KillProcess(HANDLE pid);
-
 bool			AddProcessToTable2(
 	PCSTR				pCause,
 	bool				bDetectByCallback,		//	process notify callback에 의해 실시간 수집 여부

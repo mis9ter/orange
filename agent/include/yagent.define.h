@@ -352,6 +352,7 @@ typedef struct Y_PROCESS_DATA
 	ULONG						SID;
 	REG_COUNT					registry;
 	//bool						bIsSystem;
+	bool						bIsWow64;
 } Y_PROCESS_DATA, *PY_PROCESS_DATA;
 
 typedef struct Y_PROCESS_STRING
@@ -548,7 +549,7 @@ typedef struct COMMAND_OPENPROCESS : public Y_COMMAND
 {
 	PHANDLE			pOpenHandle;
 	ACCESS_MASK		DesiredAccess;
-	HANDLE			PID;
+	DWORD			PID;
 	LONG			status;
 
 } COMMAND_OPENPROCESS, *PCOMMAND_OPENPROCESS;

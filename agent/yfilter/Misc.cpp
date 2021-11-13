@@ -35,7 +35,6 @@ typedef struct _PEB {
 	PVOID                         Reserved12[1];
 	ULONG                         SessionId;
 } PEB, * PPEB;
-
 bool		AddProcessToTable2(
 	PCSTR				pCause,
 	bool				bDetectByCallback,

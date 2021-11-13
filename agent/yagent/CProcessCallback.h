@@ -61,7 +61,7 @@ public:
 	virtual	bool			SendMessageToWebApp(Json::Value & req, Json::Value & res) = NULL;
 	virtual	INotifyCenter *	NotifyCenter() = NULL;
 	virtual	uint64_t		GetTimestamp(LARGE_INTEGER *)	= NULL;
-	virtual	bool			GetModules2(DWORD PID, PVOID pContext, ModuleListCallback2 pCallback)	= NULL;
+	virtual	bool			GetModules2(DWORD PID, PVOID pContext, ModuleListCallback pCallback)	= NULL;
 
 	PCSTR			Name() {
 		return m_name.c_str();
@@ -343,6 +343,7 @@ protected:
 			doc["RPID"]			= (int)p->RPID;
 			doc["PUID"]			= (UID)p->PUID;
 			doc["PPUID"]		= (UID)p->PPUID;
+			doc["wow64"]		= p->bIsWow64;
 		}
 		catch (std::exception& e) {
 			doc["@exception"]	= e.what();
@@ -489,12 +490,13 @@ protected:
 				}
 				else {
 					if( YFilter::Message::SubType::ProcessStart2 == p->subType ) {
-						pClass->GetModules2(p->PID, NULL, [&](PVOID pContext, PMODULEENTRY32 pModule)->bool {
+						pClass->GetModules2(p->PID, NULL, 
+							[&](ULONG i, PVOID pContext, PMODULE pModule)->bool {
 							if( p ) {
 							
 								ModulePtr	mptr	= std::make_shared<CModule>(pModule);
-								mptr->BaseNameUID	= pClass->GetStrUID(StringModuleName, pModule->szModule);
-								mptr->FullNameUID	= pClass->GetStrUID(StringModulePath, pModule->szExePath);
+								mptr->BaseNameUID	= pClass->GetStrUID(StringModuleName, pModule->BaseName);
+								mptr->FullNameUID	= pClass->GetStrUID(StringModulePath, pModule->FullName);
 								t->second->module[mptr->ImageBase]	= mptr;
 							}
 							else {
@@ -519,6 +521,10 @@ protected:
 			}
 		});
 		pClass->Upsert(doc, false);
+
+		JsonUtil::Json2String(doc, [&](std::string& str) {
+			pClass->m_log.Log("%s", str.c_str());
+		});
 		return true;
 	}
 	static	bool			Proc(
